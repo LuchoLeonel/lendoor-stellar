@@ -33,6 +33,7 @@ Today the front uses wagmi/viem (EVM). Swap for:
 - Keep the DB persistence, wallet (SIWE-style) auth, and email/phone verification as-is.
 
 ## Minimal demo path (testnet)
+0. **Mock the exchange identity** — stand in for being embedded in Bitso: a fake "exchange directory" hands the app a KYC-verified identity (a random name), so the user starts already verified (no re-KYC). This mirrors the live Lemon `authenticate()` → `lemon-profile` flow.
 1. Underwriter sets a wallet's score/limit (simulates the risk model writing on-chain).
 2. Borrower connects Freighter → sees the limit.
 3. Borrower borrows USDC (no collateral) → wallet receives USDC, loan persisted in DB.

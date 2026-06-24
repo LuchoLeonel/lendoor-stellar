@@ -25,12 +25,14 @@ Same thesis (embedded credit for the credit-invisible), swapped to the rails whe
 
 ## How it works
 
-1. A user connects through the wallet (Bitso, web companion, etc.).
+1. **Identity comes from the exchange, not from us.** Because Lendoor is embedded inside the wallet/exchange, it **leverages the exchange's KYC**: the user is already identity-verified, so there is no separate onboarding/KYC step. The exchange passes verified identity claims (name, etc.) to the credit layer. (The live version already does this via Lemon's `authenticate()`; the Stellar version does it via the exchange, e.g. Bitso.)
 2. The protocol issues a small **uncollateralized** USDC loan on Stellar, sized by the user's on-chain credit limit.
 3. Repaying on time **raises the limit** — a credit ladder ($1 → larger tickets) that compounds trust.
 4. The repayment history becomes a **portable on-chain score** that travels with the user across integrations.
 
-The hard, defensible part is not the lending pool. It is **underwriting the invisible without collateral** and owning the **portable repayment data**.
+The hard, defensible part is not the lending pool. It is **underwriting the invisible without collateral**, riding the exchange's KYC for frictionless onboarding, and owning the **portable repayment data**.
+
+> **For the demo:** we mock being embedded inside an exchange — it hands the credit layer a KYC-verified identity (e.g. a random name pulled from a fake exchange directory), so the loan flow starts from an already-verified user, exactly as it would inside Bitso. No re-KYC, no forms.
 
 ## Stellar integration (load-bearing, not on a slide)
 
