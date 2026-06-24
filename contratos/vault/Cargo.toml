@@ -1,0 +1,23 @@
+[package]
+name = "lendoor-vault"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+doctest = false
+
+[features]
+testutils = ["soroban-sdk/testutils"]
+
+[dependencies]
+soroban-sdk = { workspace = true }
+
+# Only a dev-dependency: tests register the real loan-manager contract. The vault
+# itself calls it through a local interface client (see lib.rs) so their exported
+# wasm symbols never collide.
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+lendoor-loan-manager = { path = "../loan-manager", features = ["testutils"] }

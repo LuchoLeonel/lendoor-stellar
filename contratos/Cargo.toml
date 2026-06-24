@@ -1,0 +1,32 @@
+# Lendoor on Soroban — Cargo workspace.
+#
+# Two contracts (see the porting report):
+#   - loan-manager : credit limits, offers, loan lifecycle, default, late fees
+#                    (the Soroban port of LoanManagerV3). Operator-gated.
+#   - vault        : share vault for LP USDC + borrow/repay/write-off. The
+#                    uncollateralized credit check is INLINE (no separate
+#                    RiskManager, no EVC needed: Soroban calls are atomic).
+#
+# Patterns follow Blend Capital (storage/TTL/auth/token) and OpenZeppelin
+# stellar-contracts (vault math, ownable, upgradeable).
+[workspace]
+resolver = "2"
+members = ["loan-manager", "vault"]
+
+[workspace.dependencies]
+soroban-sdk = "26"
+
+# Aggressive wasm optimization (same profile Blend / OZ ship).
+[profile.release]
+opt-level = "z"
+overflow-checks = true # do NOT remove: prevents silent i128 over/underflow
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true
+
+[profile.release-with-logs]
+inherits = "release"
+debug-assertions = true
