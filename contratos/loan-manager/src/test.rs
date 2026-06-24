@@ -412,3 +412,182 @@ fn mark_default_requires_owner_auth() {
     let user = Address::generate(&e);
     assert!(c.try_mark_default(&user).is_err());
 }
+
+#[test]
+fn close_loan_requires_vault_auth() {
+    let (e, _owner, _vault, c) = setup_no_mock();
+    let user = Address::generate(&e);
+    assert!(c.try_close_loan(&user, &0).is_err());
+}
+
+#[test]
+fn set_loan_offer_requires_owner_auth() {
+    let (e, _owner, _vault, c) = setup_no_mock();
+    let user = Address::generate(&e);
+    let now = e.ledger().timestamp();
+    assert!(c
+        .try_set_loan_offer(&user, &7, &500, &(now + DAY), &(25 * USDC))
+        .is_err());
+}
+
+#[test]
+fn set_premium_config_requires_owner_auth() {
+    let (e, _owner, _vault, c) = setup_no_mock();
+    let user = Address::generate(&e);
+    assert!(c.try_set_premium_config(&user, &0, &1).is_err());
+}
+
+// ─────────────────────────── input validation ──────────────────────────────
+
+#[test]
+fn set_loan_offer_rejects_bad_params() {
+    let (e, _owner, _vault, c) = setup();
+    let user = Address::generate(&e);
+    let now = e.ledger().timestamp();
+    // tenor 0
+    assert_eq!(
+        c.try_set_loan_offer(&user, &0, &500, &(now + DAY), &(25 * USDC)),
+        Err(Ok(Error::InvalidParam.into()))
+    );
+    // fee 0
+    assert_eq!(
+        c.try_set_loan_offer(&user, &7, &0, &(now + DAY), &(25 * USDC)),
+        Err(Ok(Error::InvalidParam.into()))
+    );
+    // max_amount 0
+    assert_eq!(
+        c.try_set_loan_offer(&user, &7, &500, &(now + DAY), &0),
+        Err(Ok(Error::InvalidParam.into()))
+    );
+    // already-expired validity
+    assert_eq!(
+        c.try_set_loan_offer(&user, &7, &500, &now, &(25 * USDC)),
+        Err(Ok(Error::OfferExpired.into()))
+    );
+}
+
+#[test]
+fn set_premium_config_rejects_negative() {
+    let (e, _owner, _vault, c) = setup();
+    let user = Address::generate(&e);
+    assert_eq!(
+        c.try_set_premium_config(&user, &(-1), &0),
+        Err(Ok(Error::InvalidParam.into()))
+    );
+    assert_eq!(
+        c.try_set_premium_config(&user, &0, &(-1)),
+        Err(Ok(Error::InvalidParam.into()))
+    );
+}
+
+#[test]
+fn open_loan_rejects_zero_principal() {
+    let (e, _owner, _vault, c) = setup();
+    let user = Address::generate(&e);
+    // ZeroPrincipal is checked right after the vault-auth gate, before any state.
+    assert_eq!(
+        c.try_open_loan(&user, &0, &7, &500),
+        Err(Ok(Error::ZeroPrincipal.into()))
+    );
+}
+
+// ─────────────────────────── amount_due math ───────────────────────────────
+
+#[test]
+fn amount_due_is_floor_rounded() {
+    let (e, _owner, _vault, c) = setup();
+    let user = Address::generate(&e);
+    let now = e.ledger().timestamp();
+    c.set_user_risk(&user, &600, &true, &0, &(25 * USDC));
+    c.set_loan_offer(&user, &7, &500, &(now + DAY), &(25 * USDC));
+    // 199 * 10500 / 10000 = 208.95 -> floor 208 (never over-charges the borrower).
+    c.open_loan(&user, &199, &7, &500);
+    let l = c.get_loan(&user);
+    assert_eq!(l.amount_due, 208);
+    assert!(l.amount_due >= l.principal);
+}
+
+// ─────────────────────────── grace / cooldown config ───────────────────────
+
+#[test]
+fn grace_period_is_snapshotted_at_open() {
+    let (e, _owner, _vault, c) = setup();
+    let user = Address::generate(&e);
+    let now = e.ledger().timestamp();
+    c.set_user_risk(&user, &600, &true, &0, &(25 * USDC));
+    c.set_loan_offer(&user, &7, &500, &(now + 100 * DAY), &(25 * USDC));
+    c.open_loan(&user, &(10 * USDC), &7, &500);
+    // Default grace is 1 day; the active loan snapshots it.
+    assert_eq!(c.get_loan(&user).grace_period, DAY);
+    // Changing the default does NOT retroactively touch the active loan.
+    c.set_default_grace_period(&(3 * DAY));
+    assert_eq!(c.get_loan(&user).grace_period, DAY);
+}
+
+#[test]
+fn custom_min_hold_extends_cooldown() {
+    let (e, _owner, _vault, c) = setup();
+    let user = Address::generate(&e);
+    let now = e.ledger().timestamp();
+    c.set_min_hold_for_tenor(&7, &10); // 10-day hold for the 7d tenor
+    c.set_user_risk(&user, &600, &true, &0, &(25 * USDC));
+    c.set_loan_offer(&user, &7, &500, &(now + 100 * DAY), &(25 * USDC));
+    let start = e.ledger().timestamp();
+    c.open_loan(&user, &(10 * USDC), &7, &500);
+    let due = c.get_loan(&user).amount_due;
+    c.close_loan(&user, &due);
+    assert_eq!(c.next_borrow_time(&user), start + 10 * DAY);
+}
+
+#[test]
+fn repay_after_min_hold_adds_no_extra_cooldown() {
+    let (e, _owner, _vault, c) = setup();
+    let user = Address::generate(&e);
+    let now = e.ledger().timestamp();
+    c.set_user_risk(&user, &600, &true, &0, &(25 * USDC));
+    c.set_loan_offer(&user, &7, &500, &(now + 100 * DAY), &(25 * USDC));
+    c.open_loan(&user, &(10 * USDC), &7, &500);
+    let due = c.get_loan(&user).amount_due;
+    // Repay well after the 4d min-hold: next_borrow collapses to "now", no penalty.
+    advance(&e, 20 * DAY);
+    let now2 = e.ledger().timestamp();
+    c.close_loan(&user, &due);
+    assert_eq!(c.next_borrow_time(&user), now2);
+}
+
+// ─────────────────────────── late-fee mechanics ────────────────────────────
+
+#[test]
+fn accrue_late_on_inactive_loan_is_noop() {
+    let (e, _owner, _vault, c) = setup();
+    let user = Address::generate(&e);
+    // No loan at all -> must not panic, stays inactive.
+    c.accrue_late(&user);
+    assert!(!c.get_loan(&user).active);
+}
+
+#[test]
+fn late_fees_compound_across_accruals() {
+    let (e, _owner, _vault, c) = setup();
+    let user = Address::generate(&e);
+    let now = e.ledger().timestamp();
+    c.set_user_risk(&user, &600, &true, &0, &(25 * USDC));
+    c.set_loan_offer(&user, &7, &500, &(now + DAY), &(25 * USDC));
+    c.set_premium_config(&user, &0, &11_574_000_000);
+    c.open_loan(&user, &(10 * USDC), &7, &500);
+    let base = c.get_loan(&user).amount_due;
+
+    // First accrual window (5d past late-start).
+    advance(&e, 8 * DAY + 5 * DAY);
+    c.accrue_late(&user);
+    let due1 = c.get_loan(&user).amount_due;
+    let delta1 = due1 - base;
+    assert!(delta1 > 0);
+
+    // Second identical window — but the base is now larger, so the delta is larger.
+    advance(&e, 5 * DAY);
+    c.accrue_late(&user);
+    let due2 = c.get_loan(&user).amount_due;
+    let delta2 = due2 - due1;
+    assert!(delta2 > delta1); // compounding on the materialized amount_due
+}
