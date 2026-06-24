@@ -7,3 +7,8 @@ build/
 !.env.example
 *.log
 .DS_Store
+
+# Rust / Soroban build artifacts (contratos/ — built in a separate terminal)
+target/
+**/target/
+*.rs.bk
