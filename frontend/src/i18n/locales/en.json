@@ -1,0 +1,941 @@
+{
+  "borrow": {
+    "achievements": {
+      "badge": "New achievement",
+      "xpTitle": "You gained experience",
+      "xpDescription": "Milestones recognize your activity on Lendoor.",
+      "extraUnlocked": "You also unlocked {{count}} more achievement:",
+      "extraUnlocked_plural": "You also unlocked {{count}} more achievements:",
+      "ctaContinue": "Keep building"
+    },
+    "repGain": {
+      "badge": "Your progress",
+      "titleKeepGrowing": "You're growing",
+      "titleGroupChange": "You reached {{group}}!",
+      "subtitleKeepGrowing": "Every on-time loan builds your reputation.",
+      "subtitleGroupChange": "Your track record unlocked a new level.",
+      "pointsTitle": "Points earned",
+      "pointsUnit": "points",
+      "pointsDescription": "Your reputation keeps climbing with every repay.",
+      "ctaContinue": "Continue"
+    },
+    "market": {
+      "loading": "Loading your credit line…",
+      "outstandingLabel": "OUTSTANDING BALANCE:",
+      "viewTerms": "View Terms & Conditions",
+      "greeting": "My account",
+      "subtitleDebt": "Your credit status",
+      "subtitleNoDebt": "Your credit line",
+      "creditAvailable": "Available credit",
+      "requestCta": "Request",
+      "repayCta": "Repay →",
+      "requestCtaArrow": "Request →",
+      "depositCta": "Deposit",
+      "repayProcessed": "REPAYMENT PROCESSED",
+      "nextCreditIn": "Your next credit will be available in",
+      "creditActive": "ACTIVE CREDIT",
+      "creditOverdue": "⚠️ OVERDUE CREDIT",
+      "statusOverdue": "CREDIT OVERDUE",
+      "payNow": "Pay now",
+      "viewTermsLink": "View details",
+      "dueInDays": "Due in {{days}} days",
+      "dueInLessDay": "Due in less than 1 day",
+      "dueToday": "Due today",
+      "overdueDays": "Overdue by {{days}} days",
+      "interestLabel": "Interest {{rate}}%",
+      "earlyUserBadge": "✦ Early user",
+      "scoreTooltip": "Your reputation score. Goes up with every on-time repayment."
+    },
+    "cooldown": {
+      "header": "NEXT LOAN",
+      "title": "Your credit line is on pause between this loan and the next one.",
+      "description": "We leave a short cooldown between loans. As soon as this period ends, you'll be able to borrow again.",
+      "countdownHeader": "TIME UNTIL NEXT LOAN",
+      "timerSuffix": "min : sec",
+      "readyMessage": "You're ready to borrow again.",
+      "unitDay": "day",
+      "unitDayPlural": "days",
+      "unitHourShort": "h",
+      "unitMinuteShort": "min",
+      "unitSecondShort": "s"
+    },
+    "performance": {
+      "loans": "Loans",
+      "onTime": "On time",
+      "achievements": "Achievements"
+    },
+    "score": {
+      "header": "LENDOOR SCORE",
+      "description": "Every on-time repayment raises your reputation score.",
+      "earlyUserBadge": "Early user",
+      "loadingXp": "Loading...",
+      "xpSummary": ""
+    },
+    "term": {
+      "header": "LOAN STATUS",
+      "timeRemainingDays_one": "{{count}} day remaining",
+      "timeRemainingDays_other": "{{count}} days remaining",
+      "timeRemainingLessThanOne": "Less than 1 day remaining",
+      "timeDueToday": "Due today",
+      "timeOverdueDays_one": "Overdue by {{count}} day",
+      "timeOverdueDays_other": "Overdue by {{count}} days",
+      "statusOverdue": "Overdue",
+      "statusOnTime": "On time",
+      "progressLabel": "Term progress",
+      "progressStart": "START",
+      "progressOverdue": "OVERDUE"
+    },
+    "miniAppFunds": {
+      "header": "YOUR FUNDS",
+      "depositCta": "Add",
+      "withdrawCta": "Withdraw",
+      "description": "Loans are credited to your account. To transfer funds to your main account, use \"Withdraw\". To load balance, use \"Add\".",
+      "depositDescription": "Load balance to use for your loans.",
+      "withdrawDescription": "Transfer funds to your main account."
+    },
+    "pull": {
+      "scoreLabel": "SCORE {{score}}",
+      "title": "How much do you need?",
+      "subtitle": "Your limit grows with every on-time payment. Choose the amount with the slider and continue to see the rates.",
+      "amountHeader": "AMOUNT TO BORROW",
+      "amountHelper": "Available now based on your credit line.",
+      "sliderMinLabel": "1 USDC",
+      "sliderMaxLabel": "{{max}} USDC",
+      "selectedAmount": "Selected amount: {{amount}} USDC",
+      "limitLabel": "Available limit: {{amount}} USDC",
+      "noCredit": "You don't have credit available yet. Repay your current loan or wait for your line to refresh.",
+      "termsTitle": "Choose your loan term",
+      "termDays": "{{days}} days",
+      "termInterest": "Estimated interest: {{rate}}% (~{{amount}} USDC)",
+      "termRepayLabel": "You will repay",
+      "termsExplanation": "Rates are calculated based on your reputation and Lendoor score. Repayment amounts already include principal and interest.",
+      "confirmProcessing": "Processing…",
+      "confirmAndContinue": "Confirm and continue",
+      "back": "Back",
+      "changeAmount": "Change amount",
+      "termPopular": "Most popular",
+      "termsAmountSubtitle": "Requested amount",
+      "termsInfoNote": "Interest is calculated on the total amount and applied at the end of the selected term. No hidden fees.",
+      "termRepayPrefix": "You repay",
+      "termInterestRate": "{{rate}}% interest",
+      "rateBase": "Base rate",
+      "ratePreferential": "Your rate",
+      "ratePreferentialBadge": "Preferential",
+      "rateCalculatedOnRequest": "Your rate is calculated when you request a loan"
+    },
+    "repay": {
+      "header": "Repay your loan",
+      "subtitle": "Total outstanding balance",
+      "fullPaymentNote": "This payment cancels the total amount of your current loan.",
+      "depositButton": "Deposit USDC",
+      "connectHint": "You need to connect your wallet to repay your loan.",
+      "noDebt": "You don't have any outstanding balance at the moment.",
+      "insufficientBalance": "You don't have enough USDC to fully repay this loan.",
+      "insufficientBalanceWithAmount": "You don't have enough USDC to fully repay this loan. We suggest depositing at least {{amount}} USDC.",
+      "ctaConnect": "Connect wallet",
+      "ctaPaying": "Paying…",
+      "ctaPay": "Pay",
+      "depositDescription": "Load balance to use for your loans.",
+      "withdrawDescription": "Transfer your available balance to your main account.",
+      "lateFeeNote": "(includes late fee)",
+      "depositFundsLink": "Deposit funds →",
+      "connectLink": "Connect →",
+      "totalLabel": "Total to pay",
+      "detailHeader": "Details",
+      "interestRow": "Interest",
+      "balanceRow": "Your balance",
+      "missingRow": "Shortfall",
+      "progressStart": "Day 1",
+      "termProgressLabel": "Credit term",
+      "termProgressEnd": "Deadline",
+      "depositAmountCta": "Add {{amount}} USDC to pay",
+      "payWithBalance": "Pay with available balance"
+    }
+  },
+  "common": {
+    "errorBoundary": {
+      "toastTitle": "Something went wrong",
+      "uiTitle": "Something went wrong",
+      "uiBody": "This might be a temporary issue. Try reloading the page.",
+      "reloadCta": "Reload"
+    },
+    "appGate": {
+      "loading": "Loading…"
+    },
+    "back": "Back",
+    "globalErrors": {
+      "uncaughtErrorTitle": "Something went wrong",
+      "unhandledRejectionTitle": "Something went wrong"
+    },
+    "connectionError": "Couldn't connect. Try again in a few seconds.",
+    "setupError": "Something went wrong setting up your account. Try again.",
+    "initError": "Something went wrong. Try again.",
+    "genericError": "Something went wrong. Try again.",
+    "auth": {
+      "signInCancelled": "Sign-in cancelled",
+      "signInFailed": "Couldn't sign in. Try again."
+    },
+    "lend": {
+      "withdraw": {
+        "setupError": "Something went wrong. Try again.",
+        "invalidAmount": "Enter a valid amount.",
+        "insufficientBalance": "You don't have enough balance to withdraw that amount.",
+        "submitting": "Processing withdrawal…",
+        "confirmed": "Withdrawal confirmed",
+        "failed": "Withdrawal failed. Try again."
+      },
+      "deposit": {
+        "setupError": "Something went wrong. Try again.",
+        "greaterThanZero": "Enter an amount greater than 0.",
+        "invalidFormat": "Invalid amount.",
+        "insufficientBalance": "You don't have enough balance for this deposit.",
+        "submitting": "Processing deposit…",
+        "approvalConfirmed": "Approval confirmed",
+        "confirmed": "Deposit confirmed",
+        "failed": "Deposit failed. Try again."
+      }
+    },
+    "nav": {
+      "borrow": "Borrow",
+      "lend": "Lend",
+      "stats": "Stats"
+    },
+    "headerUsdc": {
+      "dialogTitle": "Your balance",
+      "dialogDescription": "This is your available balance for loans and transactions.",
+      "depositCta": "Add funds",
+      "withdrawCta": "Withdraw funds",
+      "explanation": "\"Add funds\": load balance to use for your loans.\n\"Withdraw funds\": transfer your available balance to your main account.",
+      "depositDescription": "Load balance to use for your loans.",
+      "withdrawDescription": "Transfer your available balance to your main account."
+    },
+    "infoTip": {
+      "ariaLabel": "More info"
+    },
+    "lemonFundsDialogs": {
+      "op": {
+        "deposit": "Deposit",
+        "withdraw": "Withdrawal"
+      },
+      "unknownResult": "Unknown {{op}} result",
+      "success": "{{op}} successful",
+      "failed": "{{op}} failed",
+      "operationFailed": "The operation failed",
+      "cancelledTitle": "Operation cancelled",
+      "cancelledByUser": "{{op}} cancelled by the user",
+      "depositErrorTitle": "Error adding funds",
+      "withdrawErrorTitle": "Error withdrawing funds",
+      "invalidAmountFallback": "Invalid amount",
+      "errors": {
+        "empty": "Enter an amount.",
+        "invalidFormat": "Invalid format. Use numbers and , or . as decimal separator.",
+        "invalidAmount": "Invalid amount.",
+        "nonPositive": "Enter an amount greater than 0.",
+        "insufficientWithdrawBalance": "You don't have enough balance to withdraw that amount",
+        "insufficientWithdrawBalanceDetailed": "You can't withdraw more than your available balance ({{balance}} USDC)."
+      },
+      "depositTitle": "Add funds",
+      "withdrawTitle": "Withdraw funds",
+      "depositDescription": "Enter the amount you want to add to your credit account.",
+      "withdrawDescription": "Enter the amount you want to transfer to your main account.",
+      "amountLabel": "Amount",
+      "amountPlaceholder": "0.00",
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "processing": "Processing…"
+    },
+    "confirmDialog": {
+      "cancel": "Cancel",
+      "borrow": {
+        "title": "Confirm loan",
+        "description": "Review the details before confirming your loan.",
+        "labelAmount": "Amount to receive",
+        "labelTenor": "Term",
+        "labelRate": "Interest rate",
+        "labelTotalRepay": "Total to repay",
+        "labelDays": "{{days}} days",
+        "confirm": "Confirm loan"
+      },
+      "repay": {
+        "title": "Confirm repayment",
+        "description": "You will repay the full outstanding balance of your active loan.",
+        "labelAmount": "Amount to pay",
+        "confirm": "Pay"
+      },
+      "deposit": {
+        "title": "Confirm deposit",
+        "description": "Review the amount before continuing.",
+        "labelAmount": "Amount to deposit",
+        "confirm": "Deposit"
+      },
+      "withdraw": {
+        "title": "Confirm withdrawal",
+        "description": "Review the amount before continuing.",
+        "labelAmount": "Amount to withdraw",
+        "confirm": "Withdraw"
+      }
+    },
+    "webGuard": {
+      "badgeMiniApp": "MINI-APP",
+      "title": "Open Lendoor from Lemon Cash",
+      "description": "The web version is disabled. To use Lendoor, open our mini-app inside Lemon Cash.",
+      "qrHelp": "Scan this code with your camera or Lemon Cash to go straight to the mini-app.",
+      "openInLemonCta": "Open Lendoor in Lemon Cash",
+      "footerHelp": "If you're on desktop, scan the QR with your phone.\nIf you're already on your phone with Lemon installed, tap the button to open the mini-app."
+    }
+  },
+  "kpi": {
+    "availableToWithdraw": {
+      "label": "Available to withdraw",
+      "tooltip": {
+        "title": "Available to withdraw",
+        "line1": "Amount you can withdraw right now from the market.",
+        "line2": "Subject to real-time reserves and any withdrawal queues.",
+        "line3": "Some tranches (e.g. Junior) may include cooldowns or delays."
+      }
+    },
+    "backingTvv": {
+      "label": "Backing TVV",
+      "tooltip": {
+        "title": "Backing TVV",
+        "line1": "Total verified value backing the Lendoor credit lines.",
+        "line2": "Includes verified on-chain DeFi assets and off-chain bank assets.",
+        "line3": "Represents backing capacity and overall market health."
+      }
+    },
+    "usdcRate": {
+      "label": "{{base}}/{{quote}}",
+      "tooltip": {
+        "line1": "Conversion derived from the ERC-4626 share price (EVault).",
+        "line2": "Shows how many {{quote}} you get for 1 {{base}}.",
+        "line3": "Excludes gas/fees and any redemption rules."
+      }
+    },
+    "srApy": {
+      "label": "SR APY",
+      "tokenLabel": "sUSDC (Senior)",
+      "tooltip": {
+        "title": "SR APY — {{tokenLabel}}",
+        "line1": "Lower-risk senior tranche.",
+        "line2": "USDC → sUSDC (ERC-4626).",
+        "line3": "APY computed from IRM rate or psSeniorRay drift."
+      }
+    },
+    "susdcBalance": {
+      "label": "{{token}}",
+      "tooltip": {
+        "title": "{{token}} balance",
+        "line1": "Amount of {{token}} you currently hold (senior tranche).",
+        "line2": "Lower risk; senior claim on interest repayments from the pool.",
+        "line3": "Permissionless deposits: USDC → {{token}} (ERC-4626 vault).",
+        "line4": "Real-time liquidity is subject to market reserves and conditions."
+      }
+    }
+  },
+  "lend": {
+    "centeredAmountInput": {
+      "placeholder": "0",
+      "ariaLabel": "Amount"
+    },
+    "market": {
+      "cta": {
+        "connect": "Connect wallet",
+        "submitting": "Submitting…",
+        "deposit": "Deposit USDC",
+        "withdraw": "Withdraw USDC"
+      },
+      "yourShares": "Your shares",
+      "sharesLabel": "{{shares}} shares",
+      "sharesZero": "0 shares",
+      "totalAssets": "Total assets",
+      "sharePriceLabel": "Share price: ${{price}}",
+      "manageShares": "Manage shares",
+      "tabDeposit": "Deposit",
+      "tabWithdraw": "Withdraw",
+      "amountLabel": "Amount",
+      "balanceLabel": "Balance: {{balance}} USDC",
+      "availableLabel": "Available: {{available}} USDC",
+      "processing": "Processing…",
+      "supplyCapCopy": "Supply cap ${{cap}}. Liquidity is withdrawable anytime, subject to pool balance.",
+      "vaultTitle": "Vault",
+      "vaultSubtitle": "Deposit USDC and earn yield",
+      "vaultActivity": "Vault activity",
+      "vaultActivityEmpty": "Coming soon"
+    },
+    "supply": {
+      "cta": {
+        "connect": "Connect wallet",
+        "supply": "Supply liquidity"
+      },
+      "headerEarnByLending": "EARN BY LENDING",
+      "supplyCapDefault": "SUPPLY CAP {{amount}}",
+      "txCostLabel": "TX Cost",
+      "txCostTooltip": "Estimated gas for supplying.",
+      "liquidityInfo": {
+        "title": "Liquidity Info",
+        "assetsLabel": "ASSETS",
+        "assetsPair": "USDC / sUSDC",
+        "poolBacked": "Pool-backed"
+      }
+    },
+    "withdraw": {
+      "cta": {
+        "connect": "Connect wallet",
+        "withdraw": "Withdraw liquidity"
+      },
+      "headerManageLiquidity": "MANAGE LIQUIDITY",
+      "availableDefault": "AVAILABLE: {{symbol}}",
+      "txCostLabel": "TX Cost",
+      "txCostTooltip": "Estimated gas for withdrawing.",
+      "info": {
+        "title": "Withdrawal Info",
+        "body": "Real-time liquidity depends on market reserves; some tranches (e.g. jUSDC) may have cooldown periods."
+      }
+    }
+  },
+  "stats": {
+    "pageTitle": "Protocol Statistics",
+    "pageSubtitle": "Real-time vault data and lending activity.",
+    "totalAssets": "Total assets",
+    "capitalTurnover": {
+      "title": "Capital turnover",
+      "hint": "Total borrowed / Total assets"
+    },
+    "loansOriginated": "Loans originated",
+    "loansOriginatedHint": "Count of borrow events",
+    "loadError": "Failed to load stats",
+    "activityTitle": "Borrow & repay activity",
+    "activity": {
+      "timeAgo": {
+        "sec": "{{count}}s ago",
+        "min": "{{count}}m ago",
+        "hour": "{{count}}h ago",
+        "day": "{{count}}d ago"
+      },
+      "loading": "Loading activity…",
+      "loadingBorrowRepay": "Loading borrow & repay…",
+      "loadMore": "Loading more…",
+      "failed": "Failed to load activity: {{error}}",
+      "empty": "No recent borrows/repays",
+      "type": {
+        "borrow": "BORROW",
+        "repay": "REPAY",
+        "default": "DEFAULT"
+      },
+      "interest": "Interest"
+    },
+    "cumulative": {
+      "metric": {
+        "loansOriginated": {
+          "title": "Loans originated",
+          "subtitle": "Cumulative borrow events"
+        },
+        "uniqueBorrowers": {
+          "title": "Unique borrowers",
+          "subtitle": "Cumulative new borrowers"
+        }
+      },
+      "tooltip": {
+        "label": "Cumulative"
+      },
+      "errors": {
+        "failedDailyStats": "Failed to load daily stats"
+      }
+    },
+    "vaultPanel": {
+      "totalAssets": "Total assets",
+      "loansOriginated": "Loans originated",
+      "borrowEventsCount": "Count of borrow events",
+      "borrowRepayActivity": "Borrow & repay activity",
+      "errors": {
+        "failedProtocolStats": "Failed to load protocol stats: {{error}}"
+      }
+    },
+    "utilization": {
+      "title": "Utilization",
+      "loading": "Loading…",
+      "formula": "Borrows / (Cash + Borrows)",
+      "errors": {
+        "failed": "Failed to load utilization: {{error}}"
+      }
+    }
+  },
+  "onboarding": {
+    "error": {
+      "title": "Couldn't connect",
+      "body": "This might be a connection issue. Try again in a few seconds.",
+      "retryCta": "Retry"
+    },
+    "initAccount": {
+      "badge": "EARLY ACCESS",
+      "step1": {
+        "title": "Get in among the first users.",
+        "body1": "If you continue now, you'll be among the first {{limit}} users and you'll be able to request your first USDC credit line.",
+        "body2": "We'll send you a code by email and you'll enter it here to activate your account."
+      },
+      "email": {
+        "placeholder": "you@email.com",
+        "helperWithExisting": "You can use this email or change it.",
+        "helper": "We'll use this email to send you your access code.",
+        "suggestionPrefix": "Did you mean",
+        "invalid": "Please enter a valid email."
+      },
+      "cta": {
+        "sending": "Sending code…",
+        "send": "Send code by email"
+      },
+      "step3": {
+        "button": {
+          "loading": "Initializing your account…",
+          "ready": "Start building my reputation"
+        }
+      }
+    },
+    "joinWaitlist": {
+      "badge": "EARLY ACCESS",
+      "full": "Waitlist full",
+      "step1": {
+        "title": "Get in early",
+        "body": "If you continue now, you'll reserve your spot for the next batch (up to 250 spots). The sooner you join, the sooner we'll grant you access."
+      },
+      "email": {
+        "placeholder": "you@email.com",
+        "invalid": "Please enter a valid email.",
+        "suggestionPrefix": "Did you mean"
+      },
+      "cta": {
+        "sending": "Sending code…",
+        "send": "Send code by email"
+      },
+      "step3": {
+        "button": {
+          "loading": "Joining…",
+          "ready": "Confirm and join the waitlist"
+        }
+      }
+    },
+    "notAvailable": {
+      "badge": "ACCESS STATUS",
+      "soon": "Coming soon",
+      "title": "Access is not available yet",
+      "body": "We're still finishing the rollout for new users. Please try again later."
+    },
+    "notLoggedIn": {
+      "badge": "EARLY ACCESS",
+      "title": "Connect your wallet",
+      "body": "Connect your wallet to become one of our first users and request your USDC credit line.",
+      "cta": "Connect wallet"
+    },
+    "onWaitlist": {
+      "title": "Your profile is on the waitlist",
+      "subtitle": "Access is enabled in batches. Nothing else to do, the notification will arrive by email.",
+      "step1": "Registration complete",
+      "step2": "Profile under review",
+      "step3": "Access enabled",
+      "notify": "The notification will be sent to {{email}}"
+    },
+    "otpStep": {
+      "title": {
+        "earlyAccess": "Check your email and continue here.",
+        "waitlist": "Confirm your email"
+      },
+      "body": {
+        "line1": "We sent a 6-digit code to {{email}}.",
+        "earlyAccess": "Paste the code below to continue.",
+        "waitlist": "Enter it below to continue.",
+        "checkSpam": "If you can't find it, check your spam or junk folder."
+      },
+      "input": {
+        "placeholder": "6-digit code"
+      },
+      "cta": {
+        "continue": "Continue",
+        "next": "Next",
+        "changeEmail": "Change email"
+      }
+    },
+    "selfFarcaster": {
+      "toast": {
+        "authFailed": "We couldn't check your Self verification.",
+        "notYetVisible": "We don't see your Self verification yet. Please try again in a few seconds.",
+        "verified": "Identity verified with Self",
+        "notConfirmed": "Your Self verification isn't confirmed yet. Wait a few seconds and try again.",
+        "syncError": "Error while syncing your Self verification.",
+        "qrError": "Self QR error."
+      },
+      "loading": "Loading Self verification module…",
+      "badge": "FARCASTER • SELF ID",
+      "title": "Verify your identity with Self to continue",
+      "body1": "We use Self to verify your identity in a secure and privacy-preserving way. This step is required to enable your credit profile in Lendoor.",
+      "body2": "Make sure you have the Self app installed and your passport or ID document loaded before starting verification.",
+      "cta": {
+        "iphone": "Open Self on iPhone",
+        "android": "Open Self on Android",
+        "checking": "Checking verification…",
+        "completed": "Verification completed",
+        "doneInSelf": "I finished in Self, continue"
+      }
+    },
+    "workType": {
+      "title": "What do you do for work?",
+      "body": "This is only to better understand our community. It does not affect your score or your credit line.",
+      "options": {
+        "app_driver": "Rideshare / app driver",
+        "app_delivery": "Delivery app rider",
+        "creator": "Streamer / content creator",
+        "freelance_cripto": "Freelancer / crypto",
+        "other_job": "Other job",
+        "no_job": "I'm not working right now"
+      }
+    },
+    "phoneVerification": {
+      "badge": "PHONE VERIFICATION",
+      "step1": {
+        "title": "Verify your phone number",
+        "body": "We'll send you a one-time code to confirm your number. Choose how you'd like to receive it."
+      },
+      "step2": {
+        "title": "Enter the code",
+        "titleVerified": "Phone verified",
+        "body": "We sent a code to {{phone}}. Enter it below to continue.",
+        "verifiedMessage": "Your phone number has been verified."
+      },
+      "input": {
+        "countryAriaLabel": "Select country code",
+        "numberPlaceholder": "Phone number",
+        "otpPlaceholder": "6-digit code"
+      },
+      "cta": {
+        "sending": "Sending…",
+        "sendWhatsApp": "Send code via WhatsApp",
+        "verifying": "Verifying…",
+        "verify": "Verify",
+        "changeNumber": "Change phone number"
+      },
+      "resend": {
+        "countdown": "Resend available in {{seconds}}s",
+        "whatsapp": "Resend via WhatsApp"
+      },
+      "errors": {
+        "invalidNumber": "Please enter a valid phone number (7–12 digits)."
+      },
+      "countries": {
+        "AR": "Argentina",
+        "BR": "Brazil",
+        "MX": "Mexico",
+        "CO": "Colombia",
+        "PE": "Peru",
+        "CL": "Chile",
+        "UY": "Uruguay",
+        "EC": "Ecuador",
+        "BO": "Bolivia",
+        "PY": "Paraguay"
+      }
+    }
+  },
+  "pages": {
+    "terms": {
+      "title": "Terms & Conditions"
+    },
+    "privacy": {
+      "title": "Privacy Policy"
+    },
+    "borrow": {
+      "loading": {
+        "accessCheck": "Checking your access…",
+        "noJourney": "Loading…",
+        "initAccount": "Initializing your account…",
+        "updatingCredit": "Updating your credit status…"
+      },
+      "error": {
+        "noJourney": "We couldn't resolve your user state."
+      }
+    },
+    "home": {
+      "hero": {
+        "title": "Uncollateralized credit",
+        "subtitle": "We turn your digital reputation into credit power. Your score grows with every repayment.",
+        "cta": "Apply for credit",
+        "rotating": ["that grows with you.", "reputation-based.", "in minutes.", "24/7.", "from your phone.", "for LATAM."]
+      },
+      "stats": {
+        "protocol": "Blockchain",
+        "protocolValue": "Celo",
+        "collateral": "Collateral",
+        "collateralValue": "0%",
+        "currency": "Currency",
+        "currencyValue": "USDC",
+        "region": "Region",
+        "regionValue": "LATAM"
+      },
+      "howItWorks": {
+        "title": "How it works",
+        "subtitle": "Credit based on your reputation. No collateral. Fully on-chain.",
+        "step1Title": "Build your reputation",
+        "step1Desc": "Verify your identity and start with a microloan. Every on-time repayment raises your score, unlocks higher limits, and builds your on-chain credit profile.",
+        "step2Title": "Borrow USDC",
+        "step2Desc": "Choose the amount and term (7, 14, or 21 days). No collateral, no paperwork. Receive USDC directly to your wallet.",
+        "step3Title": "Deposit and earn yield",
+        "step3Desc": "Lenders deposit USDC into the vault. Loan interest generates real, non-inflationary yield."
+      },
+      "mission": "Your effort exists. Your credit history doesn't. | Every repayment builds your credit on-chain. | A new credit standard has arrived in LATAM.",
+      "bottomCta": {
+        "title": "Get started",
+        "subtitle": "Connect your wallet, verify your identity, and access your first loan in minutes.",
+        "borrowCta": "Apply for credit",
+        "statsCta": "View statistics"
+      },
+      "cards": {
+        "borrowers": {
+          "title": "Borrowers",
+          "body": "Access instant credit based on your reputation without traditional collateral requirements.",
+          "limitLabel": "Limit:",
+          "limitValue": "$1000",
+          "speedLabel": "Speed:",
+          "speedValue": "Instant"
+        },
+        "lenders": {
+          "title": "Lenders",
+          "body": "Supply liquidity to earn competitive yields while powering the future of decentralized credit markets.",
+          "limitLabel": "Limit:",
+          "limitValue": "$10,000",
+          "statusLabel": "Status:",
+          "statusValue": "Active"
+        }
+      }
+    },
+    "debtors": {
+      "title": "Debtors",
+      "subtitle": "Addresses with active debt (amounts in {{token}}).",
+      "total": {
+        "label": "Total outstanding"
+      },
+      "filter": {
+        "placeholder": "Filter by address…",
+        "aria": "Filter by address"
+      },
+      "sort": {
+        "aria": "Toggle sort order",
+        "desc": "Order: highest → lowest",
+        "asc": "Order: lowest → highest"
+      },
+      "empty": "No debtors found.",
+      "status": {
+        "default": "In default"
+      },
+      "copy": {
+        "aria": "Copy address"
+      }
+    }
+  },
+  "txProgress": {
+    "pending": "Processing transaction...",
+    "confirmed": "Payment confirmed",
+    "confirmedSubtitle": "Your loan was closed successfully",
+    "failed": "Transaction failed",
+    "dismiss": "Dismiss"
+  },
+  "tabs": {
+    "inicio": "Home",
+    "prestar": "Lend",
+    "pagar": "Repay",
+    "progreso": "Progress",
+    "config": "Account",
+    "configScreen": {
+      "title": "Your account",
+      "subtitle": "Personal info and settings",
+      "email": "Email",
+      "phone": "Phone",
+      "notSet": "Not set",
+      "phoneVerified": "Verified",
+      "legal": "Legal"
+    }
+  },
+  "hooks": {
+    "useBorrow": {
+      "validation": {
+        "enterAmount": "Enter an amount.",
+        "invalidAmount": "Invalid amount.",
+        "greaterThanZero": "Amount must be greater than 0.",
+        "exceedsCapacity": "Amount exceeds your available capacity."
+      },
+      "toast": {
+        "missingSetup": {
+          "title": "Something went wrong",
+          "desc": "Couldn't process your credit. Try again."
+        },
+        "walletNotReady": {
+          "title": "Couldn't connect",
+          "desc": "Try again in a few seconds."
+        },
+        "invalidAmount": {
+          "title": "Invalid amount",
+          "fallback": "Check the value you entered."
+        },
+        "submitting": "Processing credit…",
+        "confirmed": {
+          "title": "Credit confirmed",
+          "desc": "Funds have been transferred to your account."
+        },
+        "failed": {
+          "title": "Credit failed. Try again."
+        },
+        "syncPending": {
+          "title": "Credit confirmed",
+          "desc": "Your funds are safe. We're processing your credit."
+        },
+        "syncRecovered": {
+          "title": "Credit synced",
+          "desc": "Your credit has been successfully recorded."
+        }
+      },
+      "errors": {
+        "insufficientCash": "No funds available right now. Try again later.",
+        "unknownCustom": "Something went wrong processing your credit. Try again."
+      }
+    },
+    "useCreditLine": {
+      "errors": {
+        "clmUnavailable": "Your credit line isn't available right now.",
+        "readFailed": "Couldn't load your credit line. Try again."
+      }
+    },
+    "useRepay": {
+      "validation": {
+        "enterAmount": "Enter an amount.",
+        "greaterThanZero": "Amount must be greater than 0.",
+        "invalidFormat": "Invalid amount format."
+      },
+      "toast": {
+        "missingSetup": {
+          "title": "Something went wrong",
+          "desc": "Couldn't process your payment. Try again."
+        },
+        "submitting": "Processing payment…",
+        "insufficientBalance": {
+          "title": "Insufficient balance",
+          "desc": "You need {{humanAmount}} USDC and have {{humanBal}} USDC."
+        },
+        "confirmedBatch": {
+          "title": "Payment confirmed",
+          "desc": "Your credit was paid successfully."
+        },
+        "confirmed": {
+          "title": "Payment confirmed",
+          "desc": "Your credit was paid successfully."
+        },
+        "failed": {
+          "title": "Payment failed. Try again."
+        },
+        "preflightFailed": {
+          "title": "We couldn't refresh the latest debt right now. We'll proceed with the amount shown on screen."
+        },
+        "syncPending": {
+          "title": "Payment confirmed",
+          "desc": "Your funds are safe. We're processing your payment."
+        },
+        "syncRecovered": {
+          "title": "Payment synced",
+          "desc": "Your payment has been successfully recorded."
+        },
+        "syncFailed": {
+          "title": "Processing payment",
+          "desc": "Your payment was processed. We're syncing your account."
+        }
+      },
+      "errors": {
+        "sessionInvalid": "We couldn't validate your session. Close and reopen the app or reconnect your account."
+      }
+    },
+    "usePullPanel": {
+      "errors": {
+        "walletMissing": "We couldn't read your account. Please reconnect.",
+        "sessionInvalid": "We couldn't validate your session. Close and reopen the app or reconnect your account.",
+        "loadTermsFailed": "Failed to load term options.",
+        "termsNotAvailable": "We couldn't fetch term options.",
+        "noTermsForAmount": "No term options available for this amount. Try a smaller amount.",
+        "chooseValidAmount": "Choose a valid amount to borrow.",
+        "authorizeBorrowFailed": "We couldn't authorize the loan. Please try again.",
+        "borrowFailed": "Borrow failed. Please try again."
+      },
+      "toast": {
+        "genericError": "Something went wrong.",
+        "termsTitle": "We couldn't fetch term options.",
+        "authorizeTitle": "We couldn't authorize the loan. Please try again.",
+        "borrowFailedTitle": "Borrow failed. Please try again.",
+        "borrowSuccess": "Borrow executed successfully."
+      },
+      "cta": {
+        "preparingSession": "Preparing session...",
+        "verifying": "Verifying…",
+        "connectWallet": "Connect wallet",
+        "gettingRates": "Getting rates...",
+        "simulate": "Simulate loan",
+        "noLimit": "No available limit"
+      }
+    },
+    "usePhoneVerification": {
+      "errors": {
+        "sessionInvalid": "We couldn't validate your session. Close and reopen the app or reconnect your account.",
+        "sendFailed": "Failed to send the verification code.",
+        "phoneDuplicate": "This phone number is already linked to another account.",
+        "sendHttpError": "Couldn't send the code. Try again.",
+        "verifyFailed": "Failed to verify the code.",
+        "invalidCode": "The code is invalid or has expired. Please request a new one.",
+        "verifyHttpError": "Couldn't verify the code. Try again.",
+        "resendFailed": "Failed to resend the code.",
+        "rateLimit": "Too many attempts. Please wait before trying again.",
+        "resendHttpError": "Couldn't resend the code. Try again.",
+        "resendCooldown": "Please wait {{seconds}}s before resending."
+      },
+      "toast": {
+        "sendFailedTitle": "We couldn't send you the code",
+        "otpAlreadySent": "A code is already on its way — check your messages.",
+        "otpSent": "Code sent! Check your messages.",
+        "otpResent": "Code resent! Check your messages.",
+        "verifyFailedTitle": "We couldn't verify your code",
+        "verified": "Phone verified successfully"
+      }
+    },
+    "useOnBoardingFlow": {
+      "errors": {
+        "sessionInvalid": "We couldn't validate your session. Close and reopen the app or reconnect your account.",
+        "connectWallet": "Connect your account to continue.",
+        "userStateNotFound": "Couldn't load your information. Try again.",
+        "journeyLoadFailed": "Couldn't load your information. Try again.",
+        "journeyHttp": "Couldn't load your information. Try again.",
+        "enterEmail": "Enter your email to receive the code.",
+        "sendCodeError": "Failed to send the code.",
+        "sendCodeNetwork": "Couldn't send the code. Check your connection.",
+        "sendOtpHttp": "Couldn't send the code. Try again.",
+        "verifyCodeNetwork": "Couldn't verify the code. Check your connection.",
+        "verifyOtpHttp": "Couldn't verify the code. Try again.",
+        "otpFirstSend": "First request your code by tapping \"Send code by email\".",
+        "otpEnter": "Enter the code you received by email.",
+        "workTypeRequired": "Tell us what you do for work to continue.",
+        "acceptTermsError": "Failed to accept Terms & Conditions.",
+        "acceptTermsHttp": "Couldn't save your acceptance. Try again.",
+        "verifyAccessError": "Failed to verify your access.",
+        "accessNotVerified": "We couldn't verify your access."
+      },
+      "toast": {
+        "genericError": "Something went wrong.",
+        "codeSent": "We sent you a code by email",
+        "sendCodeFailedTitle": "We couldn't send you the code",
+        "verifyCodeFailedTitle": "We couldn't verify your code",
+        "verifyAccessFailedTitle": "We had an issue verifying your access.",
+        "acceptTermsFailedTitle": "We couldn't save your acceptance",
+        "acceptTermsSuccess": "Done — you accepted the Terms & Conditions.",
+        "accessVerifiedTitle": "Access verified",
+        "accessVerifiedDesc": "Your session is ready to use your credit line.",
+        "accessVerifiedWaitlistDesc": "Your early access is ready to borrow.",
+        "waitlistJoined": "You've been added to the waitlist"
+      },
+      "loading": {
+        "app": "Loading the app…",
+        "session": "Preparing your session…",
+        "accessCheck": "Checking your access…"
+      }
+    }
+  }
+}

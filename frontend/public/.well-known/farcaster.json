@@ -1,0 +1,18 @@
+{
+  "accountAssociation": {
+    "header": "eyJmaWQiOjE1NTMwNzUsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHhEZjZmOTZBMWE2MDE2YUIzNzMzNjVkQTQ5ZWE4YzMxRmIyMEFiQkY5In0",
+    "payload": "eyJkb21haW4iOiJsZW5kb29yLnh5eiJ9",
+    "signature": "RluUGCXO4veib4PAtdCJCBqVl1kBHewcNJEV5MJteAgBDmAEbdxLIsEDxqc6h3/CU9QPgYohAOQ+khSmtqL//Bw="
+  },
+  "frame": {
+    "version": "1",
+    "name": "Lendoor",
+    "iconUrl": "https://lendoor.xyz/icon.png",
+    "homeUrl": "https://lendoor.xyz/borrow",
+    "imageUrl": "https://lendoor.xyz/image.png",
+    "buttonTitle": "Check this out",
+    "splashImageUrl": "https://lendoor.xyz/splash.png",
+    "splashBackgroundColor": "#eeccff",
+    "webhookUrl": "https://lendoor.xyz/api/webhook"
+  }
+}

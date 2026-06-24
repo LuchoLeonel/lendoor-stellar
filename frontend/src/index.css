@@ -1,0 +1,623 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+
+@import "@fontsource-variable/inter";
+@import "@fontsource/jetbrains-mono";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Block iOS swipe-back gesture inside mini-app webview */
+html, body {
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Lock horizontal scroll and overscroll bounce on the document */
+html, body {
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: none;
+  touch-action: pan-y;
+}
+
+/* #root is the vertical scroll container — keeps page at top on load */
+#root {
+  overflow-x: hidden;
+  overflow-y: auto;
+  height: 100vh;
+  height: 100dvh;
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mini-app UX: deshabilita selección de texto y el callout iOS (los handles
+   azules al hacer long-press sobre labels/montos). Se ve como app nativa.
+   El botón "Copiar link" NO depende de esto (copia por navigator.clipboard),
+   así que sigue funcionando. Inputs/textarea SÍ permiten selección (abajo). */
+html {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Re-habilitar selección donde el usuario SÍ necesita escribir/seleccionar:
+   inputs, textareas y contenido editable (auth, formularios, etc.). */
+input,
+textarea,
+[contenteditable="true"],
+[data-selectable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+
+:root {
+  --tab-bar-h: calc(60px + env(safe-area-inset-bottom, 0px));
+
+  /* Fuentes */
+  --font-jetbrains-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-geist-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Terminal/crypto-native design tokens for Lendoor landing page */
+  --background: #ffffff;
+  --foreground: #1f2937;
+  --card: #f8fafc;
+  --card-foreground: #1f2937;
+  --popover: #ffffff;
+  --popover-foreground: #1f2937;
+  --primary: #F97415; /* bright orange for buttons and highlights */
+  --primary-foreground: #ffffff;
+  --secondary: #6b7280;
+  --secondary-foreground: #ffffff;
+  --muted: #f1f5f9;
+  --muted-foreground: #6b7280;
+  --accent: #F97415; /* bright orange accent */
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #e5e7eb;
+  --input: #f8fafc;
+  --ring: rgba(249, 116, 21, 0.3);
+  --chart-1: #F97415;
+  --chart-2: #f97316;
+  --chart-3: #1f2937;
+  --chart-4: #6b7280;
+  --chart-5: #dc2626;
+  --radius: 0.25rem;
+  --sidebar: #f8fafc;
+  --sidebar-foreground: #1f2937;
+  --sidebar-primary: #F97415;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #6b7280;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #e5e7eb;
+  --sidebar-ring: rgba(249, 116, 21, 0.3);
+}
+
+.dark {
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+  --card: #1e293b;
+  --card-foreground: #f1f5f9;
+  --popover: #0f172a;
+  --popover-foreground: #f1f5f9;
+  --primary: #f97316;
+  --primary-foreground: #ffffff;
+  --secondary: #64748b;
+  --secondary-foreground: #ffffff;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #f97316;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #334155;
+  --input: #1e293b;
+  --ring: rgba(249, 115, 22, 0.3);
+  --chart-1: #f97316;
+  --chart-2: #fb923c;
+  --chart-3: #f1f5f9;
+  --chart-4: #94a3b8;
+  --chart-5: #dc2626;
+  --sidebar: #0f172a;
+  --sidebar-foreground: #f1f5f9;
+  --sidebar-primary: #f97316;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #64748b;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #334155;
+  --sidebar-ring: rgba(249, 115, 22, 0.3);
+}
+
+@theme inline {
+  --font-sans: "InterVariable", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  --font-mono: var(--font-jetbrains-mono);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* Base */
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  body {
+    @apply bg-background text-foreground;
+    font-family: "InterVariable", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  }
+}
+
+
+/* Hide all scrollbars globally */
+* {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+*::-webkit-scrollbar {
+  display: none !important;
+}
+
+/* Override: show a thin scrollbar on specific containers */
+.show-scrollbar {
+  scrollbar-width: thin !important;
+  -ms-overflow-style: auto !important;
+}
+.show-scrollbar::-webkit-scrollbar {
+  display: block !important;
+  width: 6px !important;
+}
+.show-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background-color: var(--border);
+}
+.show-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+
+/* Terminal-style animations */
+@keyframes terminal-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes data-stream {
+  0% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+}
+
+@keyframes glitch {
+  0% {
+    transform: translate(0);
+  }
+  20% {
+    transform: translate(-2px, 2px);
+  }
+  40% {
+    transform: translate(-2px, -2px);
+  }
+  60% {
+    transform: translate(2px, 2px);
+  }
+  80% {
+    transform: translate(2px, -2px);
+  }
+  100% {
+    transform: translate(0);
+  }
+}
+
+.terminal-cursor::after {
+  content: "_";
+  animation: terminal-blink 1s infinite;
+  color: var(--primary);
+}
+
+.data-stream {
+  animation: data-stream 8s linear infinite;
+}
+
+.glitch-effect:hover {
+  animation: glitch 0.3s ease-in-out;
+}
+
+/* Terminal-style background patterns */
+.terminal-grid {
+  background-image:
+    repeating-linear-gradient(0deg, rgba(234, 88, 12, 0.12) 0 2px, transparent 2px 20px),
+    repeating-linear-gradient(90deg, rgba(234, 88, 12, 0.12) 0 2px, transparent 2px 20px);
+  background-size: 20px 20px;
+  background-repeat: repeat;
+  /* background-attachment: fixed;   <-- lo dejamos, pero lo sobreescribimos con [background-attachment:local] en el div */
+}
+.code-pattern {
+  background-image: radial-gradient(circle at 2px 2px, rgba(234, 88, 12, 0.1) 1px, transparent 0);
+  background-size: 40px 40px;
+}
+
+/* Monospace styling utilities */
+.mono-text {
+  font-family: "Courier New", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+  letter-spacing: 0.05em;
+}
+
+.terminal-green {
+  color: #10b981;
+}
+
+.terminal-red {
+  color: #ef4444;
+}
+
+.terminal-yellow {
+  color: #f59e0b;
+}
+
+.terminal-blue {
+  color: var(--primary);
+}
+
+/* Hover effects for terminal aesthetic */
+.terminal-hover {
+  transition: all 0.2s ease;
+}
+
+.terminal-hover:hover {
+  background-color: rgba(234, 88, 12, 0.05);
+  transform: translateX(4px);
+}
+
+.data-card {
+  border: 1px solid rgba(234, 88, 12, 0.2);
+  background: rgba(248, 250, 252, 0.8);
+  backdrop-filter: blur(10px);
+}
+
+.data-card:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 20px rgba(234, 88, 12, 0.1);
+}
+
+
+@keyframes qr-shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@layer utilities {
+  /* Contenedor */
+  .qr-skeleton {
+    @apply relative overflow-hidden rounded-md border border-border/70 bg-muted/30;
+  }
+
+  /* Banda animada */
+  .qr-skeleton-band {
+    @apply absolute inset-0 bg-gradient-to-r from-transparent to-transparent;
+    /* 3) Gradiente explícito para el “shimmer” */
+    background-image: linear-gradient(
+      to right,
+      transparent,
+      rgba(255,255,255,0),
+      rgba(255,255,255,0.40),
+      transparent
+    );
+    animation: qr-shimmer 1.1s linear infinite;
+    will-change: transform;
+  }
+
+  /* Si tu modo oscuro es por clase .dark (no por prefers-color-scheme) */
+  .dark .qr-skeleton-band {
+    background-image: linear-gradient(
+      to right,
+      transparent,
+      rgba(255,255,255,0),
+      rgba(255,255,255,0.15),
+      transparent
+    );
+  }
+
+  /* Respeto a reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .qr-skeleton-band { animation: none; display: none; }
+  }
+}
+:root {
+  --btn-hover-bg: color-mix(in srgb, var(--primary) 90%, transparent);
+  --btn-active-bg: color-mix(in srgb, var(--primary) 85%, transparent);
+}
+
+.cta-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .25rem .55rem;
+  font-size: .625rem; /* ~10px */
+  font-weight: 700;
+  line-height: 1;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-radius: 9999px;
+  box-shadow: 0 0 0 0 var(--ring);
+  animation: ring-pulse 1.8s infinite;
+  cursor: pointer;
+  transition:
+    background-color .2s ease,
+    transform .12s ease,
+    box-shadow .2s ease,
+    filter .2s ease;
+}
+
+/* ===== Shared hover con el link /borrow ===== */
+@supports (selector(:has(*))) {
+  /* Hover/Focus del link: badge usa MISMO color que el botón (bg-primary/90) */
+  nav:has(a[href="/borrow"]:hover) .cta-badge,
+  nav:has(a[href="/borrow"]:focus-visible) .cta-badge {
+    background: var(--btn-hover-bg);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px -6px var(--ring);
+    animation-play-state: paused;
+  }
+  /* Active del link: badge usa MISMO color que el botón (bg-primary/85) */
+  nav:has(a[href="/borrow"]:active) .cta-badge {
+    background: var(--btn-active-bg);
+    transform: translateY(0);
+    box-shadow: 0 4px 12px -8px var(--ring);
+  }
+
+  /* Nudge de flecha cuando el link está en hover */
+  nav:has(a[href="/borrow"]:hover) .cta-badge .cta-nudge {
+    animation-duration: .8s;
+    transform: translateX(2px);
+  }
+}
+
+/* ===== Fallback sin :has() (el <a href="/borrow"> debe ser hermano inmediato) ===== */
+@supports not (selector(:has(*))) {
+  a[href="/borrow"]:hover + .cta-badge,
+  a[href="/borrow"]:focus-visible + .cta-badge {
+    background: var(--btn-hover-bg);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px -6px var(--ring);
+    animation-play-state: paused;
+  }
+  a[href="/borrow"]:active + .cta-badge {
+    background: var(--btn-active-bg);
+    transform: translateY(0);
+    box-shadow: 0 4px 12px -8px var(--ring);
+  }
+  a[href="/borrow"]:hover + .cta-badge .cta-nudge {
+    animation-duration: .8s;
+    transform: translateX(2px);
+  }
+}
+
+/* Focus accesible directo en el badge */
+.cta-badge:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring), 0 6px 18px -8px var(--ring);
+}
+
+/* Flechita */
+.cta-nudge {
+  display: inline-block;
+  transform: translateX(0);
+  animation: nudgeX 1.2s ease-in-out infinite;
+}
+@keyframes nudgeX {
+  0%, 100% { transform: translateX(0); }
+  50%      { transform: translateX(2px); }
+}
+
+/* Ajuste específico para el modal de logros */
+.achievement-dialog {
+  /* Centro real del viewport */
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+}
+
+/* En mobile si lo querés apenas más arriba podés jugar con esto: */
+@media (max-width: 640px) {
+  .achievement-dialog {
+    top: 48% !important; /* un pelito más arriba que el centro */
+  }
+}
+
+/* ===== Dialog premium animations ===== */
+
+/* Slide-in-from-bottom companion for dialog open/close */
+@keyframes dialogSlideIn {
+  from { transform: translate(-50%, calc(-50% + 16px)); }
+  to   { transform: translate(-50%, -50%); }
+}
+@keyframes dialogSlideOut {
+  from { transform: translate(-50%, -50%); }
+  to   { transform: translate(-50%, calc(-50% + 16px)); }
+}
+
+/* These classes are toggled by data-[state] via Radix — applied alongside animate-in/out */
+.dialog-slide-in  { animation: dialogSlideIn  300ms cubic-bezier(0.32, 0.72, 0, 1) forwards; }
+.dialog-slide-out { animation: dialogSlideOut 300ms cubic-bezier(0.32, 0.72, 0, 1) forwards; }
+
+/* Dialogs that use translate-y-[-55%] on mobile need their own slide variant */
+@keyframes dialogSlideIn55 {
+  from { transform: translate(-50%, calc(-55% + 16px)); }
+  to   { transform: translate(-50%, -55%); }
+}
+@keyframes dialogSlideOut55 {
+  from { transform: translate(-50%, -55%); }
+  to   { transform: translate(-50%, calc(-55% + 16px)); }
+}
+
+/* ===== Staggered content entrance animations ===== */
+
+@keyframes staggerFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stagger-1 { animation: staggerFadeUp 300ms ease-out 75ms  both; }
+.stagger-2 { animation: staggerFadeUp 300ms ease-out 100ms both; }
+.stagger-3 { animation: staggerFadeUp 300ms ease-out 150ms both; }
+.stagger-4 { animation: staggerFadeUp 300ms ease-out 200ms both; }
+.stagger-5 { animation: staggerFadeUp 300ms ease-out 300ms both; }
+
+/* ===== Success state scale-in animation ===== */
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ===== Fullscreen bottom-sheet slide animations ===== */
+
+@keyframes slideUpFull {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes slideDownFull {
+  from { transform: translateY(0); }
+  to   { transform: translateY(100%); }
+}
+
+@keyframes star-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes termPulse {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(0.965); }
+  70%  { transform: scale(1.012); }
+  100% { transform: scale(1); }
+}
+
+/* ── Spec 084 companion: success check + feedback (lk = link page) ───────── */
+/* Pop-in con un toque de overshoot (spring) para el círculo del tilde. */
+@keyframes lk-pop {
+  0%   { transform: scale(0.4); opacity: 0; }
+  55%  { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.lk-pop { animation: lk-pop 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Dibuja el check (stroke) de izquierda a derecha. */
+@keyframes lk-draw {
+  to { stroke-dashoffset: 0; }
+}
+.lk-draw {
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: lk-draw 0.4s 0.16s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+}
+
+/* Halo verde que late una vez detrás del tilde. */
+@keyframes lk-ring {
+  0%   { transform: scale(0.6); opacity: 0.55; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+.lk-ring { animation: lk-ring 0.9s 0.1s ease-out forwards; }
+
+/* Shake corto para código incorrecto. */
+@keyframes lk-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(7px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(3px); }
+}
+.lk-shake { animation: lk-shake 0.4s ease-in-out both; }
+
+/* Fade + subida suave al cambiar de paso. */
+@keyframes lk-step-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.lk-step-in { animation: lk-step-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .dialog-slide-in,
+  .dialog-slide-out,
+  .stagger-1,
+  .stagger-2,
+  .stagger-3,
+  .stagger-4,
+  .stagger-5,
+  .lk-pop,
+  .lk-draw,
+  .lk-ring,
+  .lk-shake,
+  .lk-step-in {
+    animation: none;
+  }
+  /* Sin animación, el check igual tiene que quedar dibujado. */
+  .lk-draw { stroke-dashoffset: 0; }
+}

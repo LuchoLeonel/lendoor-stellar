@@ -1,0 +1,19 @@
+.app-container {
+  font-family: Arial, sans-serif;
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.hero {
+  margin-bottom: 20px;
+}
+
+.proofs-page,
+.merkle-tree-page {
+  padding: 20px;
+}
+
+

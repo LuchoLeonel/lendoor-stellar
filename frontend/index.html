@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en" class="antialiased">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover" />
+
+    <!-- Experimento: tintar la barra superior del host (status bar / chrome del
+         WebView de Lemon) en negro con contenido claro. Muchos webviews leen
+         theme-color para pintar su barra; si Lemon NO lo respeta, el título
+         "Lendoor" + menú + flecha son su chrome nativo (se ajusta de su lado). -->
+    <meta name="theme-color" content="#000000" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <!-- Google Fonts — Instrument Serif (italic con personalidad para wordmarks
+         tipo 3jane/Mirror), Inter para body. Step B identidad visual. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800&display=swap"
+    />
+
+    <script>if('scrollRestoration' in history)history.scrollRestoration='manual';</script>
+    <script>
+      // Lemon Comlink shield (inline para correr antes que cualquier módulo).
+      // Evita que payloads que no son del SDK de Lemon lleguen a su bridge
+      // y disparen su modal de "actualizar app".
+      (function () {
+        try {
+          var rn = window.ReactNativeWebView;
+          if (!rn || typeof rn.postMessage !== 'function') return;
+          var LEMON = { IS_LEMON_WEBVIEW:1, AUTHENTICATE:1, DEPOSIT:1, WITHDRAW:1, CALL_SMART_CONTRACT:1 };
+          var orig = rn.postMessage.bind(rn);
+          var stats = { installed:true, version:'inline-2', dropped:0, passed:0, lastDropPreview:'' };
+          window.__lemonShield = stats;
+          rn.postMessage = function (msg) {
+            if (typeof msg !== 'string') { try { orig(msg); } catch (e) {} return; }
+            try {
+              var p = JSON.parse(msg);
+              if (p && typeof p === 'object' && typeof p.action === 'string' && LEMON[p.action]) {
+                stats.passed += 1; orig(msg); return;
+              }
+            } catch (e) {}
+            stats.dropped += 1;
+            stats.lastDropPreview = msg.length > 200 ? msg.slice(0, 200) + '…' : msg;
+            if (stats.dropped <= 5) {
+              try { console.warn('[lemon-shield/inline] dropped #' + stats.dropped, stats.lastDropPreview); } catch (e) {}
+            }
+          };
+          try { console.log('[lemon-shield/inline] installed'); } catch (e) {}
+        } catch (e) {
+          try { console.warn('[lemon-shield/inline] install failed', e); } catch (e2) {}
+        }
+      })();
+    </script>
+    <title>Lendoor</title>
+    <meta
+      name="description"
+      content="Lendoor is a zero-knowledge-powered platform for uncollateralized crypto lending. Prove your creditworthiness privately, borrow instantly, no collateral required."
+    />
+    <meta
+      name="fc:miniapp"
+      content='{
+        "version":"1",
+        "imageUrl":"%VITE_APP_BASE_URL%/preview.png",
+        "button":{
+          "title":"Open Lendoor",
+          "action":{
+            "type":"launch_miniapp",
+            "name":"Lendoor",
+            "url":"%VITE_APP_BASE_URL%/borrow/",
+            "splashImageUrl":"%VITE_APP_BASE_URL%/splash.png",
+            "splashBackgroundColor":"#000000"
+          } 
+        }
+      }'
+    />
+
+    <meta
+      name="fc:frame"
+      content='{
+        "version":"1",
+        "imageUrl":"%VITE_APP_BASE_URL%/splash.png",
+        "button":{
+          "title":"Open Lendoor",
+          "action":{
+            "type":"launch_frame",
+            "name":"Lendoor",
+            "url":"%VITE_APP_BASE_URL%/borrow/",
+            "splashImageUrl":"%VITE_APP_BASE_URL%/splash.png",
+            "splashBackgroundColor":"#000000"
+          }
+        }
+      }'
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+     <script type="module" src="/src/main.tsx">
+      import { Buffer } from 'buffer';
+      window.Buffer = Buffer;
+    </script>
+  </body>
+</html>

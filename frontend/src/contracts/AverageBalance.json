@@ -1,0 +1,585 @@
+{
+  "abi": [
+    {
+      "type": "constructor",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "contract IERC20"
+        },
+        {
+          "name": "_startBlockNo",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "_endingBlockNo",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        { "name": "_step", "type": "uint256", "internalType": "uint256" }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "ENDING_BLOCK",
+      "inputs": [],
+      "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "STARTING_BLOCK",
+      "inputs": [],
+      "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "STEP",
+      "inputs": [],
+      "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "TOKEN",
+      "inputs": [],
+      "outputs": [
+        { "name": "", "type": "address", "internalType": "contract IERC20" }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "averageBalanceOf",
+      "inputs": [
+        { "name": "_owner", "type": "address", "internalType": "address" }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "internalType": "struct Proof",
+          "components": [
+            {
+              "name": "seal",
+              "type": "tuple",
+              "internalType": "struct Seal",
+              "components": [
+                {
+                  "name": "verifierSelector",
+                  "type": "bytes4",
+                  "internalType": "bytes4"
+                },
+                {
+                  "name": "seal",
+                  "type": "bytes32[8]",
+                  "internalType": "bytes32[8]"
+                },
+                {
+                  "name": "mode",
+                  "type": "uint8",
+                  "internalType": "enum ProofMode"
+                }
+              ]
+            },
+            {
+              "name": "callGuestId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            { "name": "length", "type": "uint256", "internalType": "uint256" },
+            {
+              "name": "callAssumptions",
+              "type": "tuple",
+              "internalType": "struct CallAssumptions",
+              "components": [
+                {
+                  "name": "proverContractAddress",
+                  "type": "address",
+                  "internalType": "address"
+                },
+                {
+                  "name": "functionSelector",
+                  "type": "bytes4",
+                  "internalType": "bytes4"
+                },
+                {
+                  "name": "settleChainId",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                },
+                {
+                  "name": "settleBlockNumber",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                },
+                {
+                  "name": "settleBlockHash",
+                  "type": "bytes32",
+                  "internalType": "bytes32"
+                }
+              ]
+            }
+          ]
+        },
+        { "name": "", "type": "address", "internalType": "address" },
+        { "name": "", "type": "uint256", "internalType": "uint256" }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "proof",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "internalType": "struct Proof",
+          "components": [
+            {
+              "name": "seal",
+              "type": "tuple",
+              "internalType": "struct Seal",
+              "components": [
+                {
+                  "name": "verifierSelector",
+                  "type": "bytes4",
+                  "internalType": "bytes4"
+                },
+                {
+                  "name": "seal",
+                  "type": "bytes32[8]",
+                  "internalType": "bytes32[8]"
+                },
+                {
+                  "name": "mode",
+                  "type": "uint8",
+                  "internalType": "enum ProofMode"
+                }
+              ]
+            },
+            {
+              "name": "callGuestId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            { "name": "length", "type": "uint256", "internalType": "uint256" },
+            {
+              "name": "callAssumptions",
+              "type": "tuple",
+              "internalType": "struct CallAssumptions",
+              "components": [
+                {
+                  "name": "proverContractAddress",
+                  "type": "address",
+                  "internalType": "address"
+                },
+                {
+                  "name": "functionSelector",
+                  "type": "bytes4",
+                  "internalType": "bytes4"
+                },
+                {
+                  "name": "settleChainId",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                },
+                {
+                  "name": "settleBlockNumber",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                },
+                {
+                  "name": "settleBlockHash",
+                  "type": "bytes32",
+                  "internalType": "bytes32"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "stateMutability": "pure"
+    },
+    {
+      "type": "function",
+      "name": "setBlock",
+      "inputs": [
+        { "name": "blockNo", "type": "uint256", "internalType": "uint256" }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setChain",
+      "inputs": [
+        { "name": "chainId", "type": "uint256", "internalType": "uint256" },
+        { "name": "blockNo", "type": "uint256", "internalType": "uint256" }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    }
+  ],
+  "bytecode": {
+    "object": "0x610100604052348015610010575f5ffd5b5060405161086338038061086383398101604081905261002f9161004e565b6001600160a01b0390931660805260a09190915260c05260e052610095565b5f5f5f5f60808587031215610061575f5ffd5b84516001600160a01b0381168114610077575f5ffd5b60208601516040870151606090970151919890975090945092505050565b60805160a05160c05160e0516107816100e25f395f818160ea01526102b301525f818161016501526101df01525f8181608e01526101bd01525f8181610111015261022c01526107815ff3fe608060405234801561000f575f5ffd5b5060043610610085575f3560e01c806387cea3ae1161005857806387cea3ae1461014b578063d3d2e88e14610160578063faf924cf14610187578063ffbc56381461019c575f5ffd5b80630d2d0b9e14610089578063278f4b88146100c357806353d0f255146100e557806382bfefc81461010c575b5f5ffd5b6100b07f000000000000000000000000000000000000000000000000000000000000000081565b6040519081526020015b60405180910390f35b6100d66100d136600461056d565b6101af565b6040516100ba93929190610660565b6100b07f000000000000000000000000000000000000000000000000000000000000000081565b6101337f000000000000000000000000000000000000000000000000000000000000000081565b6040516001600160a01b0390911681526020016100ba565b61015e61015936600461068b565b610302565b005b6100b07f000000000000000000000000000000000000000000000000000000000000000081565b61018f6103c9565b6040516100ba91906106a2565b61015e6101aa3660046106b7565b6103de565b6101b76104c0565b5f8080807f00000000000000000000000000000000000000000000000000000000000000005b7f000000000000000000000000000000000000000000000000000000000000000081116102df5761020d81610302565b6040516370a0823160e01b81526001600160a01b0388811660048301527f000000000000000000000000000000000000000000000000000000000000000016906370a0823190602401602060405180830381865afa158015610271573d5f5f3e3d5ffd5b505050506040513d601f19601f8201168201806040525081019061029591906106d7565b61029f90846106ee565b92506102ac6001836106ee565b91506102d87f0000000000000000000000000000000000000000000000000000000000000000826106ee565b90506101dd565b506102e86103c9565b866102f3838561070d565b94509450945050509193909250565b6040516343e751d760e11b8152600481018290527376dc9aa45aa006a0f63942d8f9f21bd4537972a3906387cea3ae906024016020604051808303815f875af1158015610351573d5f5f3e3d5ffd5b505050506040513d601f19601f82011682018060405250810190610375919061072c565b6103c65760405162461bcd60e51b815260206004820152601b60248201527f4661696c6564206368656174636f646520696e766f636174696f6e000000000060448201526064015b60405180910390fd5b50565b6103d16104c0565b6103d96104ab565b905090565b60405160016208753960e31b0319815260048101839052602481018290527376dc9aa45aa006a0f63942d8f9f21bd4537972a39063ffbc5638906044016020604051808303815f875af1158015610437573d5f5f3e3d5ffd5b505050506040513d601f19601f8201168201806040525081019061045b919061072c565b6104a75760405162461bcd60e51b815260206004820152601b60248201527f4661696c6564206368656174636f646520696e766f636174696f6e000000000060448201526064016103bd565b5050565b6104b36104c0565b6104bb6104c0565b919050565b60405180608001604052806104d3610529565b81526020015f81526020015f81526020016105246040518060a001604052805f6001600160a01b031681526020015f6001600160e01b03191681526020015f81526020015f81526020015f81525090565b905290565b60408051606081019091525f81526020810161054361054e565b81526020015f905290565b6040518061010001604052806008906020820280368337509192915050565b5f6020828403121561057d575f5ffd5b81356001600160a01b0381168114610593575f5ffd5b9392505050565b805180516001600160e01b03191683526020808201519084015f5b60088110156105d45782518252602092830192909101906001016105b5565b50505060400151600281106105f757634e487b7160e01b5f52602160045260245ffd5b61012083015260208181015161014084015260408083015161016085015260609283015180516001600160a01b0316610180860152918201516001600160e01b0319166101a08501528101516101c0840152908101516101e08301526080015161020090910152565b610260810161066f828661059a565b6001600160a01b03939093166102208201526102400152919050565b5f6020828403121561069b575f5ffd5b5035919050565b61022081016106b1828461059a565b92915050565b5f5f604083850312156106c8575f5ffd5b50508035926020909101359150565b5f602082840312156106e7575f5ffd5b5051919050565b808201808211156106b157634e487b7160e01b5f52601160045260245ffd5b5f8261072757634e487b7160e01b5f52601260045260245ffd5b500490565b5f6020828403121561073c575f5ffd5b81518015158114610593575f5ffdfea264697066735822122051b6c917bf09a46b0ed2eb0cb51a231a2fd66600f236ee9c2aace25b6aef83e264736f6c634300081c0033",
+    "sourceMap": "230:867:71:-:0;;;429:221;;;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;-1:-1:-1;;;;;528:14:71;;;;;552:30;;;;;592:29;;631:12;;230:867;;14:645:76;126:6;134;142;150;203:3;191:9;182:7;178:23;174:33;171:53;;;220:1;217;210:12;171:53;246:16;;-1:-1:-1;;;;;291:31:76;;281:42;;271:70;;337:1;334;327:12;271:70;431:2;416:18;;410:25;527:2;512:18;;506:25;623:2;608:18;;;602:25;360:5;;410:25;;-1:-1:-1;602:25:76;;-1:-1:-1;14:645:76;-1:-1:-1;;;14:645:76:o;:::-;230:867:71;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;",
+    "linkReferences": {}
+  },
+  "deployedBytecode": {
+    "object": "0x608060405234801561000f575f5ffd5b5060043610610085575f3560e01c806387cea3ae1161005857806387cea3ae1461014b578063d3d2e88e14610160578063faf924cf14610187578063ffbc56381461019c575f5ffd5b80630d2d0b9e14610089578063278f4b88146100c357806353d0f255146100e557806382bfefc81461010c575b5f5ffd5b6100b07f000000000000000000000000000000000000000000000000000000000000000081565b6040519081526020015b60405180910390f35b6100d66100d136600461056d565b6101af565b6040516100ba93929190610660565b6100b07f000000000000000000000000000000000000000000000000000000000000000081565b6101337f000000000000000000000000000000000000000000000000000000000000000081565b6040516001600160a01b0390911681526020016100ba565b61015e61015936600461068b565b610302565b005b6100b07f000000000000000000000000000000000000000000000000000000000000000081565b61018f6103c9565b6040516100ba91906106a2565b61015e6101aa3660046106b7565b6103de565b6101b76104c0565b5f8080807f00000000000000000000000000000000000000000000000000000000000000005b7f000000000000000000000000000000000000000000000000000000000000000081116102df5761020d81610302565b6040516370a0823160e01b81526001600160a01b0388811660048301527f000000000000000000000000000000000000000000000000000000000000000016906370a0823190602401602060405180830381865afa158015610271573d5f5f3e3d5ffd5b505050506040513d601f19601f8201168201806040525081019061029591906106d7565b61029f90846106ee565b92506102ac6001836106ee565b91506102d87f0000000000000000000000000000000000000000000000000000000000000000826106ee565b90506101dd565b506102e86103c9565b866102f3838561070d565b94509450945050509193909250565b6040516343e751d760e11b8152600481018290527376dc9aa45aa006a0f63942d8f9f21bd4537972a3906387cea3ae906024016020604051808303815f875af1158015610351573d5f5f3e3d5ffd5b505050506040513d601f19601f82011682018060405250810190610375919061072c565b6103c65760405162461bcd60e51b815260206004820152601b60248201527f4661696c6564206368656174636f646520696e766f636174696f6e000000000060448201526064015b60405180910390fd5b50565b6103d16104c0565b6103d96104ab565b905090565b60405160016208753960e31b0319815260048101839052602481018290527376dc9aa45aa006a0f63942d8f9f21bd4537972a39063ffbc5638906044016020604051808303815f875af1158015610437573d5f5f3e3d5ffd5b505050506040513d601f19601f8201168201806040525081019061045b919061072c565b6104a75760405162461bcd60e51b815260206004820152601b60248201527f4661696c6564206368656174636f646520696e766f636174696f6e000000000060448201526064016103bd565b5050565b6104b36104c0565b6104bb6104c0565b919050565b60405180608001604052806104d3610529565b81526020015f81526020015f81526020016105246040518060a001604052805f6001600160a01b031681526020015f6001600160e01b03191681526020015f81526020015f81526020015f81525090565b905290565b60408051606081019091525f81526020810161054361054e565b81526020015f905290565b6040518061010001604052806008906020820280368337509192915050565b5f6020828403121561057d575f5ffd5b81356001600160a01b0381168114610593575f5ffd5b9392505050565b805180516001600160e01b03191683526020808201519084015f5b60088110156105d45782518252602092830192909101906001016105b5565b50505060400151600281106105f757634e487b7160e01b5f52602160045260245ffd5b61012083015260208181015161014084015260408083015161016085015260609283015180516001600160a01b0316610180860152918201516001600160e01b0319166101a08501528101516101c0840152908101516101e08301526080015161020090910152565b610260810161066f828661059a565b6001600160a01b03939093166102208201526102400152919050565b5f6020828403121561069b575f5ffd5b5035919050565b61022081016106b1828461059a565b92915050565b5f5f604083850312156106c8575f5ffd5b50508035926020909101359150565b5f602082840312156106e7575f5ffd5b5051919050565b808201808211156106b157634e487b7160e01b5f52601160045260245ffd5b5f8261072757634e487b7160e01b5f52601260045260245ffd5b500490565b5f6020828403121561073c575f5ffd5b81518015158114610593575f5ffdfea264697066735822122051b6c917bf09a46b0ed2eb0cb51a231a2fd66600f236ee9c2aace25b6aef83e264736f6c634300081c0033",
+    "sourceMap": "230:867:71:-:0;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;305:39;;;;;;;;160:25:76;;;148:2;133:18;305:39:71;;;;;;;;656:439;;;;;;:::i;:::-;;:::i;:::-;;;;;;;;;:::i;393:29::-;;;;;270;;;;;;;;-1:-1:-1;;;;;2603:32:76;;;2585:51;;2573:2;2558:18;270:29:71;2424:218:76;676:125:57;;;;;;:::i;:::-;;:::i;:::-;;350:37:71;;;;;964:97:57;;;:::i;:::-;;;;;;;:::i;807:151::-;;;;;;:::i;:::-;;:::i;656:439:71:-;714:12;;:::i;:::-;728:7;;;;846:14;823:205;873:12;862:7;:23;823:205;;918:17;927:7;918:8;:17::i;:::-;965:23;;-1:-1:-1;;;965:23:71;;-1:-1:-1;;;;;2603:32:76;;;965:23:71;;;2585:51:76;965:5:71;:15;;;;2558:18:76;;965:23:71;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;949:39;;;;:::i;:::-;;-1:-1:-1;1002:15:71;1016:1;1002:15;;:::i;:::-;;-1:-1:-1;887:15:71;898:4;887:15;;:::i;:::-;;;823:205;;;;1045:7;:5;:7::i;:::-;1054:6;1062:25;1077:10;1062:12;:25;:::i;:::-;1037:51;;;;;;;;656:439;;;;;:::o;676:125:57:-;736:26;;-1:-1:-1;;;736:26:57;;;;;160:25:76;;;736:17:57;;;;133:18:76;;736:26:57;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;728:66;;;;-1:-1:-1;;;728:66:57;;4807:2:76;728:66:57;;;4789:21:76;4846:2;4826:18;;;4819:30;4885:29;4865:18;;;4858:57;4932:18;;728:66:57;;;;;;;;;676:125;:::o;964:97::-;1002:12;;:::i;:::-;1033:21;:19;:21::i;:::-;1026:28;;964:97;:::o;807:151::-;884:35;;-1:-1:-1;;;;;;884:35:57;;;;;5135:25:76;;;5176:18;;;5169:34;;;884:17:57;;;;5108:18:76;;884:35:57;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;876:75;;;;-1:-1:-1;;;876:75:57;;4807:2:76;876:75:57;;;4789:21:76;4846:2;4826:18;;;4819:30;4885:29;4865:18;;;4858:57;4932:18;;876:75:57;4605:351:76;876:75:57;807:151;;:::o;766:116:56:-;811:12;;:::i;:::-;835:18;;:::i;:::-;870:5;766:116;-1:-1:-1;766:116:56:o;-1:-1:-1:-;;;;;;;;;;;:::i;:::-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;:::o;:::-;;;;;;;;;;;;;;;;;;:::i;:::-;;;;;;;;;:::o;:::-;;;;;;;;;;;;;;;;;;;;;;;;:::o;196:286:76:-;255:6;308:2;296:9;287:7;283:23;279:32;276:52;;;324:1;321;314:12;276:52;350:23;;-1:-1:-1;;;;;402:31:76;;392:42;;382:70;;448:1;445;438:12;382:70;471:5;196:286;-1:-1:-1;;;196:286:76:o;1001:1000::-;1070:12;;1107:9;;-1:-1:-1;;;;;;1103:36:76;1091:49;;1183:4;1175:13;;;1169:20;;1211:14;;1301:1;1311:177;1325:4;1322:1;1319:11;1311:177;;;1386:13;;1372:28;;1433:4;1461:17;;;;1422:16;;;;1345:1;1338:9;1311:177;;;-1:-1:-1;;;1533:4:76;1525:13;1519:20;1577:1;1558:21;;1548:152;;1622:10;1617:3;1613:20;1610:1;1603:31;1657:4;1654:1;1647:15;1685:4;1682:1;1675:15;1548:152;1725:6;1716:16;;1709:40;1800:4;1789:16;;;1783:23;1774:6;1765:16;;1758:49;1858:4;1847:16;;;1841:23;1832:6;1823:16;;1816:49;1913:4;1902:16;;;1896:23;704:12;;-1:-1:-1;;;;;700:38:76;1987:6;1978:16;;688:51;781:16;;;775:23;-1:-1:-1;;;;;;771:50:76;755:14;;;748:74;860:16;;854:23;838:14;;;831:47;916:16;;;910:23;894:14;;;887:47;983:4;972:16;966:23;950:14;;;;943:47;1001:1000::o;2006:413::-;2244:3;2229:19;;2257:42;2233:9;2281:6;2257:42;:::i;:::-;-1:-1:-1;;;;;2336:32:76;;;;2330:3;2315:19;;2308:61;2400:3;2385:19;2378:35;2006:413;;-1:-1:-1;2006:413:76:o;2647:226::-;2706:6;2759:2;2747:9;2738:7;2734:23;2730:32;2727:52;;;2775:1;2772;2765:12;2727:52;-1:-1:-1;2820:23:76;;2647:226;-1:-1:-1;2647:226:76:o;2878:243::-;3060:3;3045:19;;3073:42;3049:9;3097:6;3073:42;:::i;:::-;2878:243;;;;:::o;3126:346::-;3194:6;3202;3255:2;3243:9;3234:7;3230:23;3226:32;3223:52;;;3271:1;3268;3261:12;3223:52;-1:-1:-1;;3316:23:76;;;3436:2;3421:18;;;3408:32;;-1:-1:-1;3126:346:76:o;3685:184::-;3755:6;3808:2;3796:9;3787:7;3783:23;3779:32;3776:52;;;3824:1;3821;3814:12;3776:52;-1:-1:-1;3847:16:76;;3685:184;-1:-1:-1;3685:184:76:o;3874:222::-;3939:9;;;3960:10;;;3957:133;;;4012:10;4007:3;4003:20;4000:1;3993:31;4047:4;4044:1;4037:15;4075:4;4072:1;4065:15;4101:217;4141:1;4167;4157:132;;4211:10;4206:3;4202:20;4199:1;4192:31;4246:4;4243:1;4236:15;4274:4;4271:1;4264:15;4157:132;-1:-1:-1;4303:9:76;;4101:217::o;4323:277::-;4390:6;4443:2;4431:9;4422:7;4418:23;4414:32;4411:52;;;4459:1;4456;4449:12;4411:52;4491:9;4485:16;4544:5;4537:13;4530:21;4523:5;4520:32;4510:60;;4566:1;4563;4556:12",
+    "linkReferences": {},
+    "immutableReferences": {
+      "49722": [
+        { "start": 273, "length": 32 },
+        { "start": 556, "length": 32 }
+      ],
+      "49724": [
+        { "start": 142, "length": 32 },
+        { "start": 445, "length": 32 }
+      ],
+      "49726": [
+        { "start": 357, "length": 32 },
+        { "start": 479, "length": 32 }
+      ],
+      "49728": [
+        { "start": 234, "length": 32 },
+        { "start": 691, "length": 32 }
+      ]
+    }
+  },
+  "methodIdentifiers": {
+    "ENDING_BLOCK()": "d3d2e88e",
+    "STARTING_BLOCK()": "0d2d0b9e",
+    "STEP()": "53d0f255",
+    "TOKEN()": "82bfefc8",
+    "averageBalanceOf(address)": "278f4b88",
+    "proof()": "faf924cf",
+    "setBlock(uint256)": "87cea3ae",
+    "setChain(uint256,uint256)": "ffbc5638"
+  },
+  "rawMetadata": "{\"compiler\":{\"version\":\"0.8.28+commit.7893614a\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"contract IERC20\",\"name\":\"_token\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"_startBlockNo\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"_endingBlockNo\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"_step\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[],\"name\":\"ENDING_BLOCK\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"STARTING_BLOCK\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"STEP\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"TOKEN\",\"outputs\":[{\"internalType\":\"contract IERC20\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_owner\",\"type\":\"address\"}],\"name\":\"averageBalanceOf\",\"outputs\":[{\"components\":[{\"components\":[{\"internalType\":\"bytes4\",\"name\":\"verifierSelector\",\"type\":\"bytes4\"},{\"internalType\":\"bytes32[8]\",\"name\":\"seal\",\"type\":\"bytes32[8]\"},{\"internalType\":\"enum ProofMode\",\"name\":\"mode\",\"type\":\"uint8\"}],\"internalType\":\"struct Seal\",\"name\":\"seal\",\"type\":\"tuple\"},{\"internalType\":\"bytes32\",\"name\":\"callGuestId\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"length\",\"type\":\"uint256\"},{\"components\":[{\"internalType\":\"address\",\"name\":\"proverContractAddress\",\"type\":\"address\"},{\"internalType\":\"bytes4\",\"name\":\"functionSelector\",\"type\":\"bytes4\"},{\"internalType\":\"uint256\",\"name\":\"settleChainId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"settleBlockNumber\",\"type\":\"uint256\"},{\"internalType\":\"bytes32\",\"name\":\"settleBlockHash\",\"type\":\"bytes32\"}],\"internalType\":\"struct CallAssumptions\",\"name\":\"callAssumptions\",\"type\":\"tuple\"}],\"internalType\":\"struct Proof\",\"name\":\"\",\"type\":\"tuple\"},{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"proof\",\"outputs\":[{\"components\":[{\"components\":[{\"internalType\":\"bytes4\",\"name\":\"verifierSelector\",\"type\":\"bytes4\"},{\"internalType\":\"bytes32[8]\",\"name\":\"seal\",\"type\":\"bytes32[8]\"},{\"internalType\":\"enum ProofMode\",\"name\":\"mode\",\"type\":\"uint8\"}],\"internalType\":\"struct Seal\",\"name\":\"seal\",\"type\":\"tuple\"},{\"internalType\":\"bytes32\",\"name\":\"callGuestId\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"length\",\"type\":\"uint256\"},{\"components\":[{\"internalType\":\"address\",\"name\":\"proverContractAddress\",\"type\":\"address\"},{\"internalType\":\"bytes4\",\"name\":\"functionSelector\",\"type\":\"bytes4\"},{\"internalType\":\"uint256\",\"name\":\"settleChainId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"settleBlockNumber\",\"type\":\"uint256\"},{\"internalType\":\"bytes32\",\"name\":\"settleBlockHash\",\"type\":\"bytes32\"}],\"internalType\":\"struct CallAssumptions\",\"name\":\"callAssumptions\",\"type\":\"tuple\"}],\"internalType\":\"struct Proof\",\"name\":\"\",\"type\":\"tuple\"}],\"stateMutability\":\"pure\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"blockNo\",\"type\":\"uint256\"}],\"name\":\"setBlock\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"blockNo\",\"type\":\"uint256\"}],\"name\":\"setChain\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"kind\":\"dev\",\"methods\":{},\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"version\":1}},\"settings\":{\"compilationTarget\":{\"src/vlayer/AverageBalance.sol\":\"AverageBalance\"},\"evmVersion\":\"cancun\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":true,\"runs\":200},\"remappings\":[\":@openzeppelin-contracts-5.0.1/=dependencies/@openzeppelin-contracts-5.0.1/\",\":forge-std-1.9.4/src/=dependencies/forge-std-1.9.4/src/\",\":forge-std/=dependencies/forge-std-1.9.4/src/\",\":openzeppelin-contracts/=dependencies/@openzeppelin-contracts-5.0.1/\",\":risc0-ethereum-2.0.0/=dependencies/risc0-ethereum-2.0.0/\",\":vlayer-0.1.0/=dependencies/vlayer-1.0.2/src/\",\":vlayer-1.0.2/=dependencies/vlayer-1.0.2/src/\"]},\"sources\":{\"dependencies/@openzeppelin-contracts-5.0.1/token/ERC20/IERC20.sol\":{\"keccak256\":\"0xc6a8ff0ea489379b61faa647490411b80102578440ab9d84e9a957cc12164e70\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://0ea104e577e63faea3b69c415637e99e755dcbf64c5833d7140c35a714d6d90c\",\"dweb:/ipfs/Qmau6x4Ns9XdyynRCNNp3RhLqijJjFm7z5fyZazfYFGYdq\"]},\"dependencies/vlayer-1.0.2/src/CallAssumptions.sol\":{\"keccak256\":\"0x885a1ca11344a3154d3cb3b2cc18a77ec981f098701298d787a5173808cc3af7\",\"license\":\"Apache-2.0\",\"urls\":[\"bzz-raw://ddba86e136c60bc4199af9c5971819ad3a3f06c699dee46cf2923b8dbeb4e426\",\"dweb:/ipfs/QmPwkGk8h8NkR6DUnDimn5HeweWgbvpsr9wf1VgmXYEPRB\"]},\"dependencies/vlayer-1.0.2/src/Proof.sol\":{\"keccak256\":\"0x32db566314f73f696e2ff0839ca7a41c9f04d74c96f2d8604c53f92dccfa3a43\",\"license\":\"UNLICENSED\",\"urls\":[\"bzz-raw://2ea032ed2a364dd97eeebe7df93cf252913284ea76a1fa1478d9436a916a83f3\",\"dweb:/ipfs/QmW873QftHexSzpEqmAVJ9vUd1cJD584qTa7mzqkhhipMZ\"]},\"dependencies/vlayer-1.0.2/src/Prover.sol\":{\"keccak256\":\"0xfb37590b476c80fac54541200393800b2f9d9c0492c464a997a086ddf3886a51\",\"license\":\"UNLICENSED\",\"urls\":[\"bzz-raw://77f3dc3f0421df14a2ce8bb68f9cd0f570c5d941917fe3e76b10835371b0f5f8\",\"dweb:/ipfs/QmagH76wBdUqXmmd4dVBufYTMTmGFWv1Uksga1BdJ53FW1\"]},\"dependencies/vlayer-1.0.2/src/Seal.sol\":{\"keccak256\":\"0xa61c6146260bd3006392ec7b91bfb46c1d73493ff5a01c9ce702b8c90f1a392c\",\"license\":\"UNLICENSED\",\"urls\":[\"bzz-raw://ebf725dc623c0b6d3f8e74c2eb625d662303c22ba646fab710a4fbdf20d5e3c3\",\"dweb:/ipfs/Qmat3kzvD19kLMHRmomknHzJnDdQfyU5pQDbhP5BsZTSvg\"]},\"src/vlayer/AverageBalance.sol\":{\"keccak256\":\"0x8ddc9ffea28c604a44f24466984b5a8dccec258a3f8f983923d76ecf94f00a33\",\"license\":\"UNLICENSED\",\"urls\":[\"bzz-raw://93214f5ea55d4bedf2041c5f29ce79cef288f22374609a85860e2fb5b1bff9cb\",\"dweb:/ipfs/QmSnhCChWVTzGthABnrzrtxjZAV49hNsHShodoBwbur3it\"]}},\"version\":1}",
+  "metadata": {
+    "compiler": { "version": "0.8.28+commit.7893614a" },
+    "language": "Solidity",
+    "output": {
+      "abi": [
+        {
+          "inputs": [
+            {
+              "internalType": "contract IERC20",
+              "name": "_token",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "_startBlockNo",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "_endingBlockNo",
+              "type": "uint256"
+            },
+            { "internalType": "uint256", "name": "_step", "type": "uint256" }
+          ],
+          "stateMutability": "nonpayable",
+          "type": "constructor"
+        },
+        {
+          "inputs": [],
+          "stateMutability": "view",
+          "type": "function",
+          "name": "ENDING_BLOCK",
+          "outputs": [
+            { "internalType": "uint256", "name": "", "type": "uint256" }
+          ]
+        },
+        {
+          "inputs": [],
+          "stateMutability": "view",
+          "type": "function",
+          "name": "STARTING_BLOCK",
+          "outputs": [
+            { "internalType": "uint256", "name": "", "type": "uint256" }
+          ]
+        },
+        {
+          "inputs": [],
+          "stateMutability": "view",
+          "type": "function",
+          "name": "STEP",
+          "outputs": [
+            { "internalType": "uint256", "name": "", "type": "uint256" }
+          ]
+        },
+        {
+          "inputs": [],
+          "stateMutability": "view",
+          "type": "function",
+          "name": "TOKEN",
+          "outputs": [
+            { "internalType": "contract IERC20", "name": "", "type": "address" }
+          ]
+        },
+        {
+          "inputs": [
+            { "internalType": "address", "name": "_owner", "type": "address" }
+          ],
+          "stateMutability": "nonpayable",
+          "type": "function",
+          "name": "averageBalanceOf",
+          "outputs": [
+            {
+              "internalType": "struct Proof",
+              "name": "",
+              "type": "tuple",
+              "components": [
+                {
+                  "internalType": "struct Seal",
+                  "name": "seal",
+                  "type": "tuple",
+                  "components": [
+                    {
+                      "internalType": "bytes4",
+                      "name": "verifierSelector",
+                      "type": "bytes4"
+                    },
+                    {
+                      "internalType": "bytes32[8]",
+                      "name": "seal",
+                      "type": "bytes32[8]"
+                    },
+                    {
+                      "internalType": "enum ProofMode",
+                      "name": "mode",
+                      "type": "uint8"
+                    }
+                  ]
+                },
+                {
+                  "internalType": "bytes32",
+                  "name": "callGuestId",
+                  "type": "bytes32"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "length",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "struct CallAssumptions",
+                  "name": "callAssumptions",
+                  "type": "tuple",
+                  "components": [
+                    {
+                      "internalType": "address",
+                      "name": "proverContractAddress",
+                      "type": "address"
+                    },
+                    {
+                      "internalType": "bytes4",
+                      "name": "functionSelector",
+                      "type": "bytes4"
+                    },
+                    {
+                      "internalType": "uint256",
+                      "name": "settleChainId",
+                      "type": "uint256"
+                    },
+                    {
+                      "internalType": "uint256",
+                      "name": "settleBlockNumber",
+                      "type": "uint256"
+                    },
+                    {
+                      "internalType": "bytes32",
+                      "name": "settleBlockHash",
+                      "type": "bytes32"
+                    }
+                  ]
+                }
+              ]
+            },
+            { "internalType": "address", "name": "", "type": "address" },
+            { "internalType": "uint256", "name": "", "type": "uint256" }
+          ]
+        },
+        {
+          "inputs": [],
+          "stateMutability": "pure",
+          "type": "function",
+          "name": "proof",
+          "outputs": [
+            {
+              "internalType": "struct Proof",
+              "name": "",
+              "type": "tuple",
+              "components": [
+                {
+                  "internalType": "struct Seal",
+                  "name": "seal",
+                  "type": "tuple",
+                  "components": [
+                    {
+                      "internalType": "bytes4",
+                      "name": "verifierSelector",
+                      "type": "bytes4"
+                    },
+                    {
+                      "internalType": "bytes32[8]",
+                      "name": "seal",
+                      "type": "bytes32[8]"
+                    },
+                    {
+                      "internalType": "enum ProofMode",
+                      "name": "mode",
+                      "type": "uint8"
+                    }
+                  ]
+                },
+                {
+                  "internalType": "bytes32",
+                  "name": "callGuestId",
+                  "type": "bytes32"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "length",
+                  "type": "uint256"
+                },
+                {
+                  "internalType": "struct CallAssumptions",
+                  "name": "callAssumptions",
+                  "type": "tuple",
+                  "components": [
+                    {
+                      "internalType": "address",
+                      "name": "proverContractAddress",
+                      "type": "address"
+                    },
+                    {
+                      "internalType": "bytes4",
+                      "name": "functionSelector",
+                      "type": "bytes4"
+                    },
+                    {
+                      "internalType": "uint256",
+                      "name": "settleChainId",
+                      "type": "uint256"
+                    },
+                    {
+                      "internalType": "uint256",
+                      "name": "settleBlockNumber",
+                      "type": "uint256"
+                    },
+                    {
+                      "internalType": "bytes32",
+                      "name": "settleBlockHash",
+                      "type": "bytes32"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "inputs": [
+            { "internalType": "uint256", "name": "blockNo", "type": "uint256" }
+          ],
+          "stateMutability": "nonpayable",
+          "type": "function",
+          "name": "setBlock"
+        },
+        {
+          "inputs": [
+            { "internalType": "uint256", "name": "chainId", "type": "uint256" },
+            { "internalType": "uint256", "name": "blockNo", "type": "uint256" }
+          ],
+          "stateMutability": "nonpayable",
+          "type": "function",
+          "name": "setChain"
+        }
+      ],
+      "devdoc": { "kind": "dev", "methods": {}, "version": 1 },
+      "userdoc": { "kind": "user", "methods": {}, "version": 1 }
+    },
+    "settings": {
+      "remappings": [
+        "@openzeppelin-contracts-5.0.1/=dependencies/@openzeppelin-contracts-5.0.1/",
+        "forge-std-1.9.4/src/=dependencies/forge-std-1.9.4/src/",
+        "forge-std/=dependencies/forge-std-1.9.4/src/",
+        "openzeppelin-contracts/=dependencies/@openzeppelin-contracts-5.0.1/",
+        "risc0-ethereum-2.0.0/=dependencies/risc0-ethereum-2.0.0/",
+        "vlayer-0.1.0/=dependencies/vlayer-1.0.2/src/",
+        "vlayer-1.0.2/=dependencies/vlayer-1.0.2/src/"
+      ],
+      "optimizer": { "enabled": true, "runs": 200 },
+      "metadata": { "bytecodeHash": "ipfs" },
+      "compilationTarget": {
+        "src/vlayer/AverageBalance.sol": "AverageBalance"
+      },
+      "evmVersion": "cancun",
+      "libraries": {}
+    },
+    "sources": {
+      "dependencies/@openzeppelin-contracts-5.0.1/token/ERC20/IERC20.sol": {
+        "keccak256": "0xc6a8ff0ea489379b61faa647490411b80102578440ab9d84e9a957cc12164e70",
+        "urls": [
+          "bzz-raw://0ea104e577e63faea3b69c415637e99e755dcbf64c5833d7140c35a714d6d90c",
+          "dweb:/ipfs/Qmau6x4Ns9XdyynRCNNp3RhLqijJjFm7z5fyZazfYFGYdq"
+        ],
+        "license": "MIT"
+      },
+      "dependencies/vlayer-1.0.2/src/CallAssumptions.sol": {
+        "keccak256": "0x885a1ca11344a3154d3cb3b2cc18a77ec981f098701298d787a5173808cc3af7",
+        "urls": [
+          "bzz-raw://ddba86e136c60bc4199af9c5971819ad3a3f06c699dee46cf2923b8dbeb4e426",
+          "dweb:/ipfs/QmPwkGk8h8NkR6DUnDimn5HeweWgbvpsr9wf1VgmXYEPRB"
+        ],
+        "license": "Apache-2.0"
+      },
+      "dependencies/vlayer-1.0.2/src/Proof.sol": {
+        "keccak256": "0x32db566314f73f696e2ff0839ca7a41c9f04d74c96f2d8604c53f92dccfa3a43",
+        "urls": [
+          "bzz-raw://2ea032ed2a364dd97eeebe7df93cf252913284ea76a1fa1478d9436a916a83f3",
+          "dweb:/ipfs/QmW873QftHexSzpEqmAVJ9vUd1cJD584qTa7mzqkhhipMZ"
+        ],
+        "license": "UNLICENSED"
+      },
+      "dependencies/vlayer-1.0.2/src/Prover.sol": {
+        "keccak256": "0xfb37590b476c80fac54541200393800b2f9d9c0492c464a997a086ddf3886a51",
+        "urls": [
+          "bzz-raw://77f3dc3f0421df14a2ce8bb68f9cd0f570c5d941917fe3e76b10835371b0f5f8",
+          "dweb:/ipfs/QmagH76wBdUqXmmd4dVBufYTMTmGFWv1Uksga1BdJ53FW1"
+        ],
+        "license": "UNLICENSED"
+      },
+      "dependencies/vlayer-1.0.2/src/Seal.sol": {
+        "keccak256": "0xa61c6146260bd3006392ec7b91bfb46c1d73493ff5a01c9ce702b8c90f1a392c",
+        "urls": [
+          "bzz-raw://ebf725dc623c0b6d3f8e74c2eb625d662303c22ba646fab710a4fbdf20d5e3c3",
+          "dweb:/ipfs/Qmat3kzvD19kLMHRmomknHzJnDdQfyU5pQDbhP5BsZTSvg"
+        ],
+        "license": "UNLICENSED"
+      },
+      "src/vlayer/AverageBalance.sol": {
+        "keccak256": "0x8ddc9ffea28c604a44f24466984b5a8dccec258a3f8f983923d76ecf94f00a33",
+        "urls": [
+          "bzz-raw://93214f5ea55d4bedf2041c5f29ce79cef288f22374609a85860e2fb5b1bff9cb",
+          "dweb:/ipfs/QmSnhCChWVTzGthABnrzrtxjZAV49hNsHShodoBwbur3it"
+        ],
+        "license": "UNLICENSED"
+      }
+    },
+    "version": 1
+  },
+  "id": 71
+}

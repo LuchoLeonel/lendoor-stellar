@@ -1,0 +1,941 @@
+{
+  "borrow": {
+    "achievements": {
+      "badge": "Nuevo logro",
+      "xpTitle": "Ganaste experiencia",
+      "xpDescription": "Los hitos reconocen tu actividad en Lendoor.",
+      "extraUnlocked": "Además desbloqueaste {{count}} logro más:",
+      "extraUnlocked_plural": "Además desbloqueaste {{count}} logros más:",
+      "ctaContinue": "Seguir construyendo"
+    },
+    "repGain": {
+      "badge": "Tu progreso",
+      "titleKeepGrowing": "Seguís creciendo",
+      "titleGroupChange": "¡Alcanzaste {{group}}!",
+      "subtitleKeepGrowing": "Cada préstamo a tiempo suma reputación.",
+      "subtitleGroupChange": "Tu historial te dio un nuevo nivel.",
+      "pointsTitle": "Puntos ganados",
+      "pointsUnit": "puntos",
+      "pointsDescription": "Tu reputación sigue subiendo con cada repago.",
+      "ctaContinue": "Continuar"
+    },
+    "market": {
+      "loading": "Cargando tu línea de crédito…",
+      "outstandingLabel": "SALDO PENDIENTE:",
+      "viewTerms": "Ver Términos y Condiciones",
+      "greeting": "Mi cuenta",
+      "subtitleDebt": "Estado de tu crédito",
+      "subtitleNoDebt": "Tu línea de crédito",
+      "creditAvailable": "Crédito disponible",
+      "requestCta": "Solicitar",
+      "repayCta": "Repagar →",
+      "requestCtaArrow": "Solicitar →",
+      "depositCta": "Depositar",
+      "repayProcessed": "PAGO PROCESADO",
+      "nextCreditIn": "Tu próximo crédito estará disponible en",
+      "creditActive": "CRÉDITO ACTIVO",
+      "creditOverdue": "⚠️ CRÉDITO VENCIDO",
+      "statusOverdue": "CRÉDITO VENCIDO",
+      "payNow": "Pagar ahora",
+      "viewTermsLink": "Ver detalle",
+      "dueInDays": "Vence en {{days}} días",
+      "dueInLessDay": "Vence en menos de 1 día",
+      "dueToday": "Vence hoy",
+      "overdueDays": "Venció hace {{days}} días",
+      "interestLabel": "Interés {{rate}}%",
+      "earlyUserBadge": "✦ Usuario inicial",
+      "scoreTooltip": "Tu score de reputación. Sube con cada repago a tiempo."
+    },
+    "cooldown": {
+      "header": "PRÓXIMO CRÉDITO",
+      "title": "Tu línea está en pausa entre un crédito y el próximo.",
+      "description": "Entre un crédito y el siguiente dejamos un pequeño espacio. Apenas pase este período vas a poder volver a pedir.",
+      "countdownHeader": "FALTA PARA EL PRÓXIMO CRÉDITO",
+      "timerSuffix": "min : seg",
+      "readyMessage": "Ya estás listo para volver a pedir un crédito.",
+      "unitDay": "día",
+      "unitDayPlural": "días",
+      "unitHourShort": "h",
+      "unitMinuteShort": "min",
+      "unitSecondShort": "s"
+    },
+    "performance": {
+      "loans": "Créditos",
+      "onTime": "A tiempo",
+      "achievements": "Logros"
+    },
+    "score": {
+      "header": "LENDOOR SCORE",
+      "description": "Cada repago a tiempo sube tu score de reputación.",
+      "earlyUserBadge": "Usuario inicial",
+      "loadingXp": "Calculando...",
+      "xpSummary": ""
+    },
+    "term": {
+      "header": "ESTADO DEL CRÉDITO",
+      "timeRemainingDays_one": "Falta {{count}} día",
+      "timeRemainingDays_other": "Faltan {{count}} días",
+      "timeRemainingLessThanOne": "Falta menos de 1 día",
+      "timeDueToday": "Vencido hoy",
+      "timeOverdueDays_one": "Vencido hace {{count}} día",
+      "timeOverdueDays_other": "Vencido hace {{count}} días",
+      "statusOverdue": "Vencido",
+      "statusOnTime": "Al día",
+      "progressLabel": "Progreso del plazo",
+      "progressStart": "INICIO",
+      "progressOverdue": "LÍMITE SUPERADO"
+    },
+    "miniAppFunds": {
+      "header": "TUS FONDOS",
+      "depositCta": "Agregar",
+      "withdrawCta": "Retirar",
+      "description": "Los créditos se acreditan en tu cuenta. Para transferir fondos a tu cuenta principal, usá «Retirar». Para cargar saldo, usá «Agregar».",
+      "depositDescription": "Cargá saldo para operar con tus créditos.",
+      "withdrawDescription": "Transferí fondos a tu cuenta principal."
+    },
+    "pull": {
+      "scoreLabel": "SCORE {{score}}",
+      "title": "¿Cuánto necesitás?",
+      "subtitle": "Tu límite aumenta con cada pago a tiempo. Elegí el monto con la barra y seguí para ver las tasas.",
+      "amountHeader": "MONTO A PEDIR",
+      "amountHelper": "Disponible ahora según tu línea de crédito.",
+      "sliderMinLabel": "1 USDC",
+      "sliderMaxLabel": "{{max}} USDC",
+      "selectedAmount": "Monto seleccionado: {{amount}} USDC",
+      "limitLabel": "Límite disponible: {{amount}} USDC",
+      "noCredit": "Todavía no tenés crédito disponible. Pagá tu crédito actual o esperá a que se actualice tu línea.",
+      "termsTitle": "Elegí el plazo de tu crédito",
+      "termDays": "{{days}} días",
+      "termInterest": "Interés estimado: {{rate}}% (~{{amount}} USDC)",
+      "termRepayLabel": "Vas a devolver",
+      "termsExplanation": "Las tasas se calculan en función de tu reputación y tu score en Lendoor. Los montos a devolver ya incluyen capital e intereses.",
+      "confirmProcessing": "Procesando…",
+      "confirmAndContinue": "Confirmar y continuar",
+      "back": "Atrás",
+      "changeAmount": "Cambiar monto",
+      "termPopular": "Más popular",
+      "termsAmountSubtitle": "Monto a solicitar",
+      "termsInfoNote": "El interés se calcula sobre el monto total y se aplica al finalizar el plazo seleccionado. Sin costos ocultos.",
+      "termRepayPrefix": "Devolvés",
+      "termInterestRate": "{{rate}}% de interés",
+      "rateBase": "Tasa base",
+      "ratePreferential": "Tu tasa",
+      "ratePreferentialBadge": "Preferencial",
+      "rateCalculatedOnRequest": "Tu tasa se calcula al solicitar un crédito"
+    },
+    "repay": {
+      "header": "Pagá tu crédito",
+      "subtitle": "Saldo pendiente total",
+      "fullPaymentNote": "Este pago cancela el total de tu crédito actual.",
+      "depositButton": "Depositar USDC",
+      "connectHint": "Necesitás conectar tu billetera para poder pagar tu crédito.",
+      "noDebt": "No tenés saldo pendiente en este momento.",
+      "insufficientBalance": "No tenés saldo suficiente en USDC para cancelar este crédito.",
+      "insufficientBalanceWithAmount": "No tenés saldo suficiente en USDC para cancelar este crédito. Te sugerimos depositar al menos {{amount}} USDC.",
+      "ctaConnect": "Conectar billetera",
+      "ctaPaying": "Pagando…",
+      "ctaPay": "Pagar",
+      "depositDescription": "Cargá saldo para usar en tus créditos.",
+      "withdrawDescription": "Transferí tu saldo disponible a tu cuenta principal.",
+      "lateFeeNote": "Incluye mora",
+      "depositFundsLink": "Depositar fondos →",
+      "connectLink": "Conectar →",
+      "totalLabel": "Total a pagar",
+      "detailHeader": "Detalle",
+      "interestRow": "Interés",
+      "balanceRow": "Tu saldo",
+      "missingRow": "Faltante",
+      "progressStart": "Día 1",
+      "termProgressLabel": "Plazo del crédito",
+      "termProgressEnd": "Vencimiento",
+      "depositAmountCta": "Agregar {{amount}} USDC para pagar",
+      "payWithBalance": "Pagar con saldo disponible"
+    }
+  },
+  "common": {
+    "errorBoundary": {
+      "toastTitle": "Algo salió mal",
+      "uiTitle": "Algo salió mal",
+      "uiBody": "Puede ser un problema temporal. Intentá recargando la página.",
+      "reloadCta": "Recargar"
+    },
+    "appGate": {
+      "loading": "Cargando…"
+    },
+    "back": "Volver",
+    "globalErrors": {
+      "uncaughtErrorTitle": "Algo salió mal",
+      "unhandledRejectionTitle": "Algo salió mal"
+    },
+    "connectionError": "No pudimos conectarnos. Intentá de nuevo en unos segundos.",
+    "setupError": "Algo salió mal al preparar tu cuenta. Intentá de nuevo.",
+    "initError": "Algo salió mal al iniciar. Intentá de nuevo.",
+    "genericError": "Algo salió mal. Intentá de nuevo.",
+    "auth": {
+      "signInCancelled": "Inicio de sesión cancelado",
+      "signInFailed": "No pudimos iniciar sesión. Intentá de nuevo."
+    },
+    "lend": {
+      "withdraw": {
+        "setupError": "Algo salió mal. Intentá de nuevo.",
+        "invalidAmount": "Ingresá un monto válido.",
+        "insufficientBalance": "No tenés saldo suficiente para retirar ese monto.",
+        "submitting": "Procesando retiro…",
+        "confirmed": "Retiro confirmado",
+        "failed": "El retiro falló. Intentá de nuevo."
+      },
+      "deposit": {
+        "setupError": "Algo salió mal. Intentá de nuevo.",
+        "greaterThanZero": "Ingresá un monto mayor a 0.",
+        "invalidFormat": "Monto inválido.",
+        "insufficientBalance": "No tenés saldo suficiente para este depósito.",
+        "submitting": "Procesando depósito…",
+        "approvalConfirmed": "Aprobación confirmada",
+        "confirmed": "Depósito confirmado",
+        "failed": "El depósito falló. Intentá de nuevo."
+      }
+    },
+    "nav": {
+      "borrow": "Solicitar",
+      "lend": "Depositar",
+      "stats": "Estadísticas"
+    },
+    "headerUsdc": {
+      "dialogTitle": "Tu saldo",
+      "dialogDescription": "Este es el saldo disponible para tus créditos y operaciones.",
+      "depositCta": "Agregar fondos",
+      "withdrawCta": "Retirar fondos",
+      "explanation": "«Agregar fondos»: cargá saldo para usar en tus créditos.\n«Retirar fondos»: transferí tu saldo disponible a tu cuenta principal.",
+      "depositDescription": "Cargá saldo para usar en tus créditos.",
+      "withdrawDescription": "Transferí tu saldo disponible a tu cuenta principal."
+    },
+    "infoTip": {
+      "ariaLabel": "Más información"
+    },
+    "lemonFundsDialogs": {
+      "op": {
+        "deposit": "Depósito",
+        "withdraw": "Retiro"
+      },
+      "unknownResult": "Resultado del {{op}} desconocido",
+      "success": "{{op}} exitoso",
+      "failed": "{{op}} fallido",
+      "operationFailed": "La operación falló",
+      "cancelledTitle": "Operación cancelada",
+      "cancelledByUser": "{{op}} cancelado por el usuario",
+      "depositErrorTitle": "Error al agregar fondos",
+      "withdrawErrorTitle": "Error al retirar fondos",
+      "invalidAmountFallback": "Monto inválido",
+      "errors": {
+        "empty": "Ingresá un monto.",
+        "invalidFormat": "Formato inválido. Usá números y , o . como separador decimal.",
+        "invalidAmount": "Monto inválido.",
+        "nonPositive": "Ingresá un monto mayor a 0.",
+        "insufficientWithdrawBalance": "No tenés saldo suficiente para retirar ese monto",
+        "insufficientWithdrawBalanceDetailed": "No podés retirar más de tu saldo disponible ({{balance}} USDC)."
+      },
+      "depositTitle": "Agregar fondos",
+      "withdrawTitle": "Retirar fondos",
+      "depositDescription": "Ingresá el monto que querés agregar a tu cuenta de crédito.",
+      "withdrawDescription": "Ingresá el monto que querés transferir a tu cuenta principal.",
+      "amountLabel": "Monto",
+      "amountPlaceholder": "0,00",
+      "cancel": "Cancelar",
+      "confirm": "Confirmar",
+      "processing": "Procesando…"
+    },
+    "confirmDialog": {
+      "cancel": "Cancelar",
+      "borrow": {
+        "title": "Confirmar crédito",
+        "description": "Revisá los detalles antes de confirmar tu crédito.",
+        "labelAmount": "Monto a recibir",
+        "labelTenor": "Plazo",
+        "labelRate": "Tasa de interés",
+        "labelTotalRepay": "Total a devolver",
+        "labelDays": "{{days}} días",
+        "confirm": "Confirmar crédito"
+      },
+      "repay": {
+        "title": "Confirmar repago",
+        "description": "Vas a cancelar el total de tu crédito activo.",
+        "labelAmount": "Monto a pagar",
+        "confirm": "Pagar"
+      },
+      "deposit": {
+        "title": "Confirmar depósito",
+        "description": "Revisá el monto antes de continuar.",
+        "labelAmount": "Monto a depositar",
+        "confirm": "Depositar"
+      },
+      "withdraw": {
+        "title": "Confirmar retiro",
+        "description": "Revisá el monto antes de continuar.",
+        "labelAmount": "Monto a retirar",
+        "confirm": "Retirar"
+      }
+    },
+    "webGuard": {
+      "badgeMiniApp": "MINI-APP",
+      "title": "Abrí Lendoor desde Lemon Cash",
+      "description": "La versión web está deshabilitada. Para usar Lendoor, abrí nuestra mini-app dentro de Lemon Cash.",
+      "qrHelp": "Escaneá el código con la cámara o con Lemon Cash para entrar directo a la mini-app.",
+      "openInLemonCta": "Abrir Lendoor",
+      "footerHelp": "Si estás en compu, escaneá el QR con tu celu.\nSi ya estás en el celu con Lemon instalado, tocá el botón para abrir la mini-app."
+    }
+  },
+  "kpi": {
+    "availableToWithdraw": {
+      "label": "Disponible para retirar",
+      "tooltip": {
+        "title": "Disponible para retirar",
+        "line1": "Monto que podés retirar ahora mismo del mercado.",
+        "line2": "Depende de las reservas en tiempo real y cualquier cola de retiros.",
+        "line3": "Algunos tramos (por ejemplo, Junior) pueden tener cooldowns o demoras."
+      }
+    },
+    "backingTvv": {
+      "label": "Backing TVV",
+      "tooltip": {
+        "title": "Backing TVV",
+        "line1": "Valor verificado total que respalda las líneas de crédito de Lendoor.",
+        "line2": "Incluye activos DeFi on-chain verificados y activos bancarios off-chain.",
+        "line3": "Representa la capacidad de backing y la salud general del mercado."
+      }
+    },
+    "usdcRate": {
+      "label": "{{base}}/{{quote}}",
+      "tooltip": {
+        "line1": "Conversión derivada del precio por share ERC-4626 (EVault).",
+        "line2": "Muestra cuántos {{quote}} recibís por 1 {{base}}.",
+        "line3": "No incluye gas, comisiones ni reglas especiales de redención."
+      }
+    },
+    "srApy": {
+      "label": "SR APY",
+      "tokenLabel": "sUSDC (Senior)",
+      "tooltip": {
+        "title": "SR APY — {{tokenLabel}}",
+        "line1": "Tramo senior de menor riesgo.",
+        "line2": "USDC → sUSDC (vault ERC-4626).",
+        "line3": "APY calculada a partir de la tasa del IRM o el drift de psSeniorRay."
+      }
+    },
+    "susdcBalance": {
+      "label": "{{token}}",
+      "tooltip": {
+        "title": "Balance {{token}}",
+        "line1": "Cantidad de {{token}} que tenés actualmente (tramo senior).",
+        "line2": "Menor riesgo; prioridad senior sobre los intereses que paga el pool.",
+        "line3": "Depósitos permissionless: USDC → {{token}} (vault ERC-4626).",
+        "line4": "La liquidez en tiempo real depende de las reservas y condiciones del mercado."
+      }
+    }
+  },
+  "lend": {
+    "centeredAmountInput": {
+      "placeholder": "0",
+      "ariaLabel": "Monto"
+    },
+    "market": {
+      "cta": {
+        "connect": "Conectar billetera",
+        "submitting": "Enviando…",
+        "deposit": "Depositar USDC",
+        "withdraw": "Retirar USDC"
+      },
+      "yourShares": "Tus participaciones",
+      "sharesLabel": "{{shares}} participaciones",
+      "sharesZero": "0 participaciones",
+      "totalAssets": "Activos totales",
+      "sharePriceLabel": "Precio por participación: ${{price}}",
+      "manageShares": "Gestionar participaciones",
+      "tabDeposit": "Depositar",
+      "tabWithdraw": "Retirar",
+      "amountLabel": "Monto",
+      "balanceLabel": "Balance: {{balance}} USDC",
+      "availableLabel": "Disponible: {{available}} USDC",
+      "processing": "Procesando…",
+      "supplyCapCopy": "Límite de depósito: ${{cap}}. La liquidez se puede retirar en cualquier momento, sujeta al balance del pool.",
+      "vaultTitle": "Bóveda",
+      "vaultSubtitle": "Depositá USDC y ganá rendimiento",
+      "vaultActivity": "Actividad de la bóveda",
+      "vaultActivityEmpty": "Próximamente"
+    },
+    "supply": {
+      "cta": {
+        "connect": "Conectar billetera",
+        "supply": "Aportar liquidez"
+      },
+      "headerEarnByLending": "EARN BY LENDING",
+      "supplyCapDefault": "SUPPLY CAP {{amount}}",
+      "txCostLabel": "TX Cost",
+      "txCostTooltip": "Gas estimado para aportar liquidez.",
+      "liquidityInfo": {
+        "title": "Liquidity Info",
+        "assetsLabel": "ASSETS",
+        "assetsPair": "USDC / sUSDC",
+        "poolBacked": "Pool-backed"
+      }
+    },
+    "withdraw": {
+      "cta": {
+        "connect": "Conectar billetera",
+        "withdraw": "Retirar liquidez"
+      },
+      "headerManageLiquidity": "MANAGE LIQUIDITY",
+      "availableDefault": "AVAILABLE: {{symbol}}",
+      "txCostLabel": "TX Cost",
+      "txCostTooltip": "Gas estimado para retirar liquidez.",
+      "info": {
+        "title": "Withdrawal Info",
+        "body": "La liquidez en tiempo real depende de las reservas del mercado; algunos tramos (ej. jUSDC) pueden tener períodos de cooldown."
+      }
+    }
+  },
+   "stats": {
+    "pageTitle": "Estadísticas del protocolo",
+    "pageSubtitle": "Datos en tiempo real del vault y la actividad de créditos.",
+    "totalAssets": "Activos totales",
+    "capitalTurnover": {
+      "title": "Rotación de capital",
+      "hint": "Total prestado / Activos en el vault"
+    },
+    "loansOriginated": "Créditos emitidos",
+    "loansOriginatedHint": "Total de eventos de crédito",
+    "loadError": "Error al cargar estadísticas",
+    "activityTitle": "Actividad de créditos y pagos",
+    "activity": {
+      "timeAgo": {
+        "sec": "hace {{count}}s",
+        "min": "hace {{count}}m",
+        "hour": "hace {{count}}h",
+        "day": "hace {{count}}d"
+      },
+      "loading": "Cargando actividad…",
+      "loadingBorrowRepay": "Cargando créditos y pagos…",
+      "loadMore": "Cargando más…",
+      "failed": "No se pudo cargar la actividad: {{error}}",
+      "empty": "No hay créditos/pagos recientes",
+      "type": {
+        "borrow": "PRÉSTAMO",
+        "repay": "PAGO",
+        "default": "DEFAULT"
+      },
+      "interest": "Interés"
+    },
+    "cumulative": {
+      "metric": {
+        "loansOriginated": {
+          "title": "Créditos originados",
+          "subtitle": "Eventos de crédito acumulados"
+        },
+        "uniqueBorrowers": {
+          "title": "Prestatarios únicos",
+          "subtitle": "Nuevos prestatarios acumulados"
+        }
+      },
+      "tooltip": {
+        "label": "Acumulado"
+      },
+      "errors": {
+        "failedDailyStats": "No se pudieron cargar las métricas diarias"
+      }
+    },
+    "vaultPanel": {
+      "totalAssets": "Activos totales",
+      "loansOriginated": "Créditos originados",
+      "borrowEventsCount": "Cantidad de eventos de crédito",
+      "borrowRepayActivity": "Actividad de créditos y pagos",
+      "errors": {
+        "failedProtocolStats": "No se pudieron cargar las métricas del protocolo: {{error}}"
+      }
+    },
+    "utilization": {
+      "title": "Utilización",
+      "loading": "Cargando…",
+      "formula": "Créditos / (Cash + Créditos)",
+      "errors": {
+        "failed": "No se pudo cargar la utilización: {{error}}"
+      }
+    }
+  },
+  "onboarding": {
+    "error": {
+      "title": "No pudimos conectar",
+      "body": "Puede ser un problema de conexión. Intentá de nuevo en unos segundos.",
+      "retryCta": "Reintentar"
+    },
+    "initAccount": {
+      "badge": "ACCESO ANTICIPADO",
+      "step1": {
+        "title": "Entrá entre los primeros.",
+        "body1": "Si avanzás ahora, entrás entre los primeros {{limit}} usuarios y vas a poder pedir tu primer crédito en USDC.",
+        "body2": "Te mandamos un código por mail y lo ingresás acá para activar tu cuenta."
+      },
+      "email": {
+        "placeholder": "tu@email.com",
+        "helperWithExisting": "Podés usar este mail o cambiarlo.",
+        "helper": "Usamos este mail para enviarte el código de acceso.",
+        "suggestionPrefix": "¿Quisiste decir",
+        "invalid": "Ingresá un email válido."
+      },
+      "cta": {
+        "sending": "Enviando código…",
+        "send": "Enviar código por mail"
+      },
+      "step3": {
+        "button": {
+          "loading": "Inicializando cuenta…",
+          "ready": "Empezar a construir mi reputación"
+        }
+      }
+    },
+    "joinWaitlist": {
+      "badge": "ACCESO ANTICIPADO",
+      "full": "Cupo completo",
+      "step1": {
+        "title": "Entrá entre los primeros",
+        "body": "Si avanzás ahora, reservás tu lugar para la próxima tanda (hasta 250 cupos). Cuanto antes te anotes, antes te habilitamos el acceso."
+      },
+      "email": {
+        "placeholder": "tu@email.com",
+        "invalid": "Ingresá un email válido.",
+        "suggestionPrefix": "¿Quisiste decir"
+      },
+      "cta": {
+        "sending": "Enviando código…",
+        "send": "Enviar código por mail"
+      },
+      "step3": {
+        "button": {
+          "loading": "Uniéndote…",
+          "ready": "Confirmar y unirme a la lista"
+        }
+      }
+    },
+    "notAvailable": {
+      "badge": "ACCESS STATUS",
+      "soon": "Próximamente",
+      "title": "El acceso todavía no está disponible",
+      "body": "Estamos terminando de habilitar el acceso para nuevos usuarios. Probá de nuevo más adelante."
+    },
+    "notLoggedIn": {
+      "badge": "EARLY ACCESS",
+      "title": "Conectá tu wallet",
+      "body": "Conectá tu wallet para ser uno de nuestros primeros usuarios y solicitar tu crédito en USDC.",
+      "cta": "Conectar wallet"
+    },
+    "onWaitlist": {
+      "title": "Tu perfil está en la lista de espera",
+      "subtitle": "El acceso se habilita por tandas. No hace falta hacer nada más, el aviso llega por email.",
+      "step1": "Registro completado",
+      "step2": "Perfil en evaluación",
+      "step3": "Acceso habilitado",
+      "notify": "El aviso va a llegar a {{email}}"
+    },
+    "otpStep": {
+      "title": {
+        "earlyAccess": "Revisá tu mail y seguí acá.",
+        "waitlist": "Confirmá tu email"
+      },
+      "body": {
+        "line1": "Te enviamos un código de 6 dígitos a {{email}}.",
+        "earlyAccess": "Copiá el código acá abajo para seguir.",
+        "waitlist": "Ingresalo acá para seguir.",
+        "checkSpam": "Si no lo encontrás, revisá la carpeta de spam o correo no deseado."
+      },
+      "input": {
+        "placeholder": "Código de 6 dígitos"
+      },
+      "cta": {
+        "continue": "Continuar",
+        "next": "Siguiente",
+        "changeEmail": "Cambiar email"
+      }
+    },
+    "selfFarcaster": {
+      "toast": {
+        "authFailed": "No pudimos chequear tu verificación con Self.",
+        "notYetVisible": "Todavía no vemos tu verificación en Self. Probá de nuevo en unos segundos.",
+        "verified": "Identidad verificada con Self",
+        "notConfirmed": "Tu verificación Self todavía no está confirmada. Esperá unos segundos y volvé a chequear.",
+        "syncError": "Error al sincronizar tu verificación Self.",
+        "qrError": "Error en QR de Self."
+      },
+      "loading": "Cargando módulo de verificación Self…",
+      "badge": "FARCASTER • SELF ID",
+      "title": "Verificá tu identidad con Self para continuar",
+      "body1": "Usamos Self para verificar tu identidad de forma segura y privada. Es un paso obligatorio para habilitar tu perfil de crédito en Lendoor.",
+      "body2": "Asegurate de tener la app de Self instalada y tu pasaporte o documento de identidad cargado antes de continuar con la verificación.",
+      "cta": {
+        "iphone": "Abrir Self en iPhone",
+        "android": "Abrir Self en Android",
+        "checking": "Chequeando verificación…",
+        "completed": "Verificación completada",
+        "doneInSelf": "Ya terminé en Self, continuar"
+      }
+    },
+    "workType": {
+      "title": "¿De qué trabajás?",
+      "body": "Esto es solo para entender mejor a nuestra comunidad. No impacta tu score ni tu línea de crédito.",
+      "options": {
+        "app_driver": "Conductor de aplicación",
+        "app_delivery": "Repartidor de aplicación",
+        "creator": "Streamer / creador de contenido",
+        "freelance_cripto": "Freelance / cripto",
+        "other_job": "Trabajo de otra cosa",
+        "no_job": "No trabajo actualmente"
+      }
+    },
+    "phoneVerification": {
+      "badge": "VERIFICACIÓN DE TELÉFONO",
+      "step1": {
+        "title": "Verificá tu número de teléfono",
+        "body": "Te enviamos un código de un solo uso para confirmar tu número. Elegí cómo querés recibirlo."
+      },
+      "step2": {
+        "title": "Ingresá el código",
+        "titleVerified": "Teléfono verificado",
+        "body": "Te enviamos un código al {{phone}}. Ingresalo acá para continuar.",
+        "verifiedMessage": "Tu número de teléfono fue verificado."
+      },
+      "input": {
+        "countryAriaLabel": "Seleccioná el código de país",
+        "numberPlaceholder": "Ej: 11 2345 6789",
+        "otpPlaceholder": "Código de 6 dígitos"
+      },
+      "cta": {
+        "sending": "Enviando…",
+        "sendWhatsApp": "Continuar por WhatsApp",
+        "verifying": "Verificando…",
+        "verify": "Verificar",
+        "changeNumber": "Cambiar número"
+      },
+      "resend": {
+        "countdown": "Podés reenviar en {{seconds}}s",
+        "whatsapp": "Reenviar por WhatsApp"
+      },
+      "errors": {
+        "invalidNumber": "Ingresá un número de teléfono válido (7–12 dígitos)."
+      },
+      "countries": {
+        "AR": "Argentina",
+        "BR": "Brasil",
+        "MX": "México",
+        "CO": "Colombia",
+        "PE": "Perú",
+        "CL": "Chile",
+        "UY": "Uruguay",
+        "EC": "Ecuador",
+        "BO": "Bolivia",
+        "PY": "Paraguay"
+      }
+    }
+  },
+  "pages": {
+    "terms": {
+      "title": "Términos y Condiciones"
+    },
+    "privacy": {
+      "title": "Política de Privacidad"
+    },
+    "borrow": {
+      "loading": {
+        "accessCheck": "Chequeando tu acceso…",
+        "noJourney": "Cargando…",
+        "initAccount": "Inicializando tu cuenta…",
+        "updatingCredit": "Actualizando tu estado de crédito…"
+      },
+      "error": {
+        "noJourney": "No se pudo resolver tu estado de usuario."
+      }
+    },
+    "home": {
+      "hero": {
+        "title": "Crédito sin colateral",
+        "subtitle": "Convertimos tu reputación digital en poder crediticio. Tu crédito crece con cada repago.",
+        "cta": "Solicitar crédito",
+        "rotating": ["que crece con vos.", "basado en reputación.", "en minutos.", "las 24 horas.", "desde tu celular.", "para LATAM."]
+      },
+      "stats": {
+        "protocol": "Blockchain",
+        "protocolValue": "Celo",
+        "collateral": "Colateral",
+        "collateralValue": "0%",
+        "currency": "Moneda",
+        "currencyValue": "USDC",
+        "region": "Región",
+        "regionValue": "LATAM"
+      },
+      "howItWorks": {
+        "title": "Cómo funciona",
+        "subtitle": "Tu reputación es tu garantía. Así funciona el ciclo.",
+        "step1Title": "Construí tu reputación",
+        "step1Desc": "Verificá tu identidad y empezá con un microcrédito. Cada repago a tiempo fortalece tu crédito y desbloquea límites mayores.",
+        "step2Title": "Recibí USDC al instante",
+        "step2Desc": "Elegí el monto y el plazo (7, 14 o 21 días). Aprobación automática basada en tu reputación. USDC directo en tu cuenta.",
+        "step3Title": "Desbloqueá más crédito",
+        "step3Desc": "Repagás a tiempo y tu límite crece automáticamente. Tu historial queda registrado on-chain, portable y verificable."
+      },
+      "mission": "Tu esfuerzo existe. Tu historial, no. | Cada repago construye tu crédito on-chain. | Un nuevo estándar de crédito llegó a LATAM.",
+      "bottomCta": {
+        "title": "Empezá ahora",
+        "subtitle": "Abrí Lendoor dentro de Lemon Cash y pedí tu primer crédito.",
+        "borrowCta": "Solicitar crédito",
+        "statsCta": "Ver estadísticas"
+      },
+      "cards": {
+        "borrowers": {
+          "title": "Borrowers",
+          "body": "Accedé a crédito instantáneo basado en tu reputación, sin garantías tradicionales.",
+          "limitLabel": "Límite:",
+          "limitValue": "$1000",
+          "speedLabel": "Velocidad:",
+          "speedValue": "Instantáneo"
+        },
+        "lenders": {
+          "title": "Lenders",
+          "body": "Aportá liquidez para ganar rendimiento competitivo mientras impulsás el futuro del crédito descentralizado.",
+          "limitLabel": "Límite:",
+          "limitValue": "$10.000",
+          "statusLabel": "Estado:",
+          "statusValue": "Activo"
+        }
+      }
+    },
+    "debtors": {
+      "title": "Debtors",
+      "subtitle": "Addresses con crédito vigente (montos en {{token}}).",
+      "total": {
+        "label": "Total outstanding"
+      },
+      "filter": {
+        "placeholder": "Filtrar por address…",
+        "aria": "Filtrar por address"
+      },
+      "sort": {
+        "aria": "Cambiar orden de los deudores",
+        "desc": "Orden: mayor → menor",
+        "asc": "Orden: menor → mayor"
+      },
+      "empty": "No hay deudores.",
+      "status": {
+        "default": "En mora"
+      },
+      "copy": {
+        "aria": "Copiar address"
+      }
+    }
+  },
+  "txProgress": {
+    "pending": "Procesando transacción...",
+    "confirmed": "Pago confirmado",
+    "confirmedSubtitle": "Tu crédito se cerró exitosamente",
+    "failed": "Transacción fallida",
+    "dismiss": "Cerrar"
+  },
+  "tabs": {
+    "inicio": "Inicio",
+    "prestar": "Solicitar",
+    "pagar": "Pagar",
+    "progreso": "Progreso",
+    "config": "Cuenta",
+    "configScreen": {
+      "title": "Tu cuenta",
+      "subtitle": "Información personal y configuración",
+      "email": "Email",
+      "phone": "Teléfono",
+      "notSet": "No configurado",
+      "phoneVerified": "Verificado",
+      "legal": "Legal"
+    }
+  },
+  "hooks": {
+    "useBorrow": {
+      "validation": {
+        "enterAmount": "Ingresá un monto.",
+        "invalidAmount": "Monto inválido.",
+        "greaterThanZero": "El monto tiene que ser mayor que 0.",
+        "exceedsCapacity": "El monto supera tu límite disponible."
+      },
+      "toast": {
+        "missingSetup": {
+          "title": "Algo salió mal",
+          "desc": "No pudimos procesar tu crédito. Intentá de nuevo."
+        },
+        "walletNotReady": {
+          "title": "No pudimos conectar",
+          "desc": "Intentá de nuevo en unos segundos."
+        },
+        "invalidAmount": {
+          "title": "Monto inválido",
+          "fallback": "Revisá el valor ingresado."
+        },
+        "submitting": "Procesando crédito…",
+        "confirmed": {
+          "title": "Crédito confirmado",
+          "desc": "Los fondos fueron transferidos a tu cuenta."
+        },
+        "failed": {
+          "title": "El crédito falló. Intentá de nuevo."
+        },
+        "syncPending": {
+          "title": "Crédito confirmado",
+          "desc": "Tus fondos están seguros. Estamos procesando tu crédito."
+        },
+        "syncRecovered": {
+          "title": "Crédito sincronizado",
+          "desc": "Tu crédito fue registrado exitosamente."
+        }
+      },
+      "errors": {
+        "insufficientCash": "No hay fondos disponibles en este momento. Intentá más tarde.",
+        "unknownCustom": "Algo salió mal al procesar tu crédito. Intentá de nuevo."
+      }
+    },
+    "useCreditLine": {
+      "errors": {
+        "clmUnavailable": "Tu línea de crédito no está disponible en este momento.",
+        "readFailed": "No pudimos cargar tu línea de crédito. Intentá de nuevo."
+      }
+    },
+    "useRepay": {
+      "validation": {
+        "enterAmount": "Ingresá un monto.",
+        "greaterThanZero": "El monto tiene que ser mayor que 0.",
+        "invalidFormat": "Formato de monto inválido."
+      },
+      "toast": {
+        "missingSetup": {
+          "title": "Algo salió mal",
+          "desc": "No pudimos procesar tu pago. Intentá de nuevo."
+        },
+        "submitting": "Procesando pago…",
+        "insufficientBalance": {
+          "title": "Saldo insuficiente",
+          "desc": "Necesitás {{humanAmount}} USDC y tenés {{humanBal}} USDC."
+        },
+        "confirmedBatch": {
+          "title": "Pago confirmado",
+          "desc": "Tu crédito fue pagado exitosamente."
+        },
+        "confirmed": {
+          "title": "Pago confirmado",
+          "desc": "Tu crédito fue pagado exitosamente."
+        },
+        "failed": {
+          "title": "El pago falló. Intentá de nuevo."
+        },
+        "preflightFailed": {
+          "title": "No pudimos actualizar la deuda en este momento. Vamos a intentar el pago con el monto que ves en pantalla."
+        },
+        "syncPending": {
+          "title": "Pago confirmado",
+          "desc": "Tus fondos están seguros. Estamos procesando tu pago."
+        },
+        "syncRecovered": {
+          "title": "Pago sincronizado",
+          "desc": "Tu pago fue registrado exitosamente."
+        },
+        "syncFailed": {
+          "title": "Procesando pago",
+          "desc": "Tu pago fue procesado. Estamos sincronizando tu cuenta."
+        }
+      },
+      "errors": {
+        "sessionInvalid": "No pudimos validar tu sesión. Cerrá y volvé a abrir la app o reconectá tu cuenta."
+      }
+    },
+    "usePullPanel": {
+      "errors": {
+        "walletMissing": "No pudimos leer tu cuenta. Volvé a conectar.",
+        "sessionInvalid": "No pudimos validar tu sesión. Cerrá y volvé a abrir la app o reconectá tu cuenta.",
+        "loadTermsFailed": "Error al cargar las opciones de plazo.",
+        "termsNotAvailable": "No se pudieron obtener las opciones de plazo.",
+        "noTermsForAmount": "No hay opciones de plazo disponibles para este monto. Probá con un monto menor.",
+        "chooseValidAmount": "Elegí un monto válido para pedir.",
+        "authorizeBorrowFailed": "No se pudo autorizar el crédito. Probá de nuevo.",
+        "borrowFailed": "El crédito falló. Probá de nuevo."
+      },
+      "toast": {
+        "genericError": "Ocurrió un error.",
+        "termsTitle": "No se pudieron obtener las opciones de plazo.",
+        "authorizeTitle": "No se pudo autorizar el crédito. Probá de nuevo.",
+        "borrowFailedTitle": "El crédito falló. Probá de nuevo.",
+        "borrowSuccess": "Crédito ejecutado con éxito."
+      },
+      "cta": {
+        "preparingSession": "Preparando sesión...",
+        "verifying": "Verificando…",
+        "connectWallet": "Conectar billetera",
+        "gettingRates": "Obteniendo tasas...",
+        "simulate": "Simular crédito",
+        "noLimit": "Sin límite disponible"
+      }
+    },
+    "usePhoneVerification": {
+      "errors": {
+        "sessionInvalid": "No pudimos validar tu sesión. Cerrá y volvé a abrir la app o reconectá tu cuenta.",
+        "sendFailed": "Error al enviar el código de verificación.",
+        "phoneDuplicate": "Este número de teléfono ya está vinculado a otra cuenta.",
+        "sendHttpError": "No pudimos enviar el código. Intentá de nuevo.",
+        "verifyFailed": "Error al verificar el código.",
+        "invalidCode": "El código es inválido o expiró. Pedí uno nuevo.",
+        "verifyHttpError": "No pudimos verificar el código. Intentá de nuevo.",
+        "resendFailed": "Error al reenviar el código.",
+        "rateLimit": "Demasiados intentos. Esperá un momento antes de volver a intentar.",
+        "resendHttpError": "No pudimos reenviar el código. Intentá de nuevo.",
+        "resendCooldown": "Esperá {{seconds}}s antes de reenviar."
+      },
+      "toast": {
+        "sendFailedTitle": "No pudimos enviarte el código",
+        "otpAlreadySent": "Ya hay un código en camino — revisá tus mensajes.",
+        "otpSent": "¡Código enviado! Revisá tus mensajes.",
+        "otpResent": "¡Código reenviado! Revisá tus mensajes.",
+        "verifyFailedTitle": "No pudimos verificar tu código",
+        "verified": "Teléfono verificado exitosamente"
+      }
+    },
+    "useOnBoardingFlow": {
+      "errors": {
+        "sessionInvalid": "No pudimos validar tu sesión. Cerrá y volvé a abrir la app o reconectá tu cuenta.",
+        "connectWallet": "Conectá tu cuenta para continuar.",
+        "userStateNotFound": "No pudimos cargar tu información. Intentá de nuevo.",
+        "journeyLoadFailed": "No pudimos cargar tu información. Intentá de nuevo.",
+        "journeyHttp": "No pudimos cargar tu información. Intentá de nuevo.",
+        "enterEmail": "Ingresá tu email para enviarte el código.",
+        "sendCodeError": "Error al enviar el código.",
+        "sendCodeNetwork": "No pudimos enviar el código. Revisá tu conexión.",
+        "sendOtpHttp": "No pudimos enviar el código. Intentá de nuevo.",
+        "verifyCodeNetwork": "No pudimos verificar el código. Revisá tu conexión.",
+        "verifyOtpHttp": "No pudimos verificar el código. Intentá de nuevo.",
+        "otpFirstSend": "Primero pedí tu código tocando \"Enviar código por mail\".",
+        "otpEnter": "Ingresá el código que te llegó por mail.",
+        "workTypeRequired": "Contanos en qué trabajás para continuar.",
+        "acceptTermsError": "Error al aceptar los Términos y Condiciones.",
+        "acceptTermsHttp": "No pudimos guardar tu aceptación. Intentá de nuevo.",
+        "verifyAccessError": "Error al verificar tu acceso.",
+        "accessNotVerified": "No pudimos verificar tu acceso."
+      },
+      "toast": {
+        "genericError": "Ocurrió un error.",
+        "codeSent": "Te enviamos un código por mail",
+        "sendCodeFailedTitle": "No pudimos enviarte el código",
+        "verifyCodeFailedTitle": "No pudimos verificar tu código",
+        "verifyAccessFailedTitle": "Tuvimos un problema al verificar tu acceso.",
+        "acceptTermsFailedTitle": "No pudimos guardar tu aceptación",
+        "acceptTermsSuccess": "Listo, aceptaste los Términos y Condiciones.",
+        "accessVerifiedTitle": "Acceso verificado",
+        "accessVerifiedDesc": "Tu sesión quedó lista para usar tu línea de crédito.",
+        "accessVerifiedWaitlistDesc": "Tu acceso anticipado ya está listo para pedir crédito.",
+        "waitlistJoined": "Te sumamos a la lista de espera"
+      },
+      "loading": {
+        "app": "Cargando la app…",
+        "session": "Preparando tu sesión…",
+        "accessCheck": "Chequeando tu acceso…"
+      }
+    }
+  }
+}

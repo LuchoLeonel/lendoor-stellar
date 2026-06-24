@@ -1,0 +1,242 @@
+{
+  "_comment": "Addresses to exclude from 'orphan on-chain user' (Category U-F) checks. Documented in findings/2026-04-17-phase0-phase1a.md. Lowercased.",
+  "_added_2026_04_18": "Added 42 pre-launch / testing addresses from U-F audit finding. See specs/009-100-sync-audit/execution-log/. 4 had active on-chain loans at audit time — 'uf-active-pre-launch' label flags them for future review.",
+  "_added_2026_04_27": "Added 3 'uf-pre-launch-with-db-row' wallets (0x663dbe..., 0x80925caba..., 0xd15a84ec...). These borrowed pre-launch (2025-12-01/02) AND have a row in users table — registered as users for end-to-end testing. All loans closed. Identified during spec 023 Etapa 1 review.",
+  "wallets": [
+    {
+      "addr": "0x0502e8a31023f7a801040b3f1fb17ef9b3baf663",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-11-30. No current UX impact (chain inactive)."
+    },
+    {
+      "addr": "0x1423e472d19d80b71a7b4d43c5b4f03bd05d2baf",
+      "label": "uf-verified-only",
+      "reason": "Pre-launch wallet scored 1× but never borrowed. First seen 2025-12-08. Likely QA/testing of risk pipeline."
+    },
+    {
+      "addr": "0x177cbe209a11ab66d3aabcfe9028284f23578cfa",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-12-01. No current UX impact (chain inactive)."
+    },
+    {
+      "addr": "0x1978c4fea0463300db4626f851d63ba97153f2bc",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-12-09. No current UX impact (chain inactive)."
+    },
+    {
+      "addr": "0x2b6cfa08bde4536212fbd68b115cfcd4fcadd259",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-12-08. No current UX impact (chain inactive)."
+    },
+    {
+      "addr": "0x2e29412459ed77e02124e641a1e7720acfe6b741",
+      "label": "uf-verified-only",
+      "reason": "Pre-launch wallet scored 1× but never borrowed. First seen 2025-11-28. Likely QA/testing of risk pipeline."
+    },
+    {
+      "addr": "0x2e43e7bfb9016621ec1c39458630e539a689bb4e",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-12-02. No current UX impact (chain inactive)."
+    },
+    {
+      "addr": "0x31d186c31435c1004ea24f8ab5f77a88f4998106",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-12-08. No current UX impact (chain inactive)."
+    },
+    {
+      "addr": "0x31f7bbdfea50adb57d6cabfa57bf5cb49791b7e0",
+      "label": "uf-verified-only",
+      "reason": "Pre-launch wallet scored 3× but never borrowed. First seen 2026-01-06. Likely QA/testing of risk pipeline."
+    },
+    {
+      "addr": "0x47dce716e1613ee72726ce48aa8c6ff1ce2a79c7",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-11-30. No current UX impact (chain inactive)."
+    },
+    {
+      "addr": "0x4cc122dfb13ba7888363c964dc0e53cb7153e185",
+      "label": "loan-manager-owner",
+      "reason": "LoanManagerV3 owner/operator wallet — calls setUserRisk / setLoanOffer / setPremiumConfig. Not a product user."
+    },
+    {
+      "addr": "0x638b4c86643d820a8c5e7d63293c65d89bec845e",
+      "label": "uf-active-pre-launch",
+      "reason": "Pre-launch wallet with ACTIVE on-chain loan ($1.00) as of audit 2026-04-17. No DB user row. PROCESSED 2026-04-26: markDefault + manualWriteOff applied per spec 023 Etapa 1."
+    },
+    {
+      "addr": "0x663dbe4f7d1c8b7b009dd16bf67544197a6ee803",
+      "label": "uf-pre-launch-with-db-row",
+      "reason": "Pre-launch borrower (first borrow 2025-12-01) WITH a row in users table — registered as user for end-to-end testing before public launch (2025-12-04 Lemon). All loans closed. Added 2026-04-27 during spec 023 Etapa 1 review."
+    },
+    {
+      "addr": "0x80925caba69b169dfe611c91d7143a126f2e704c",
+      "label": "uf-pre-launch-with-db-row",
+      "reason": "Pre-launch borrower (first borrow 2025-12-01) WITH a row in users table — registered as user for end-to-end testing before public launch. All loans closed. Added 2026-04-27 during spec 023 Etapa 1 review."
+    },
+    {
+      "addr": "0xd15a84ec291a7afddb92df7e5422896c5efcff52",
+      "label": "uf-pre-launch-with-db-row",
+      "reason": "Pre-launch borrower (first borrow 2025-12-02) WITH a row in users table — registered as user for end-to-end testing before public launch. All loans closed. Added 2026-04-27 during spec 023 Etapa 1 review."
+    },
+    {
+      "addr": "0x64d4c6795fdfe795f509df45c1a0943c2816a94a",
+      "label": "uf-active-pre-launch",
+      "reason": "Pre-launch wallet with ACTIVE on-chain loan ($2.00) as of audit 2026-04-17. No DB user row. PROCESSED 2026-04-26: markDefault + manualWriteOff applied per spec 023 Etapa 1."
+    },
+    {
+      "addr": "0x67747ce2b51e9bdfa236739c60880149f5f6c55c",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-12-09. No current UX impact (chain inactive)."
+    },
+    {
+      "addr": "0x7065f13da363e8f44775563887d0abb06453bd28",
+      "label": "uf-verified-only",
+      "reason": "Pre-launch wallet scored 5× but never borrowed. First seen 2025-11-25. Likely QA/testing of risk pipeline."
+    },
+    {
+      "addr": "0x72dceb7bd634f4eb7c4cc0a1806d6a5cd7505617",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-11-30. No current UX impact (chain inactive)."
+    },
+    {
+      "addr": "0x739bad5dfab6fec59e5071cf34b5df1fef6fa52d",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-12-08. No current UX impact (chain inactive)."
+    },
+    {
+      "addr": "0x73a28ceec7642b578f710ea87bc8410462a74e74",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-12-08. No current UX impact (chain inactive)."
+    },
+    {
+      "addr": "0x74940f73cd4dfd117f5c5496e3de72130e5e80f8",
+      "label": "uf-verified-only",
+      "reason": "Pre-launch wallet scored 7× but never borrowed. First seen 2025-11-25. Likely QA/testing of risk pipeline."
+    },
+    {
+      "addr": "0x7e27a5e6700234b57a20815f68a3e7e0025f2227",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-11-30. No current UX impact (chain inactive)."
+    },
+    {
+      "addr": "0x84767da06559867813904260f61b05853d57ec9d",
+      "label": "uf-active-pre-launch",
+      "reason": "Pre-launch wallet with ACTIVE on-chain loan ($3.00) as of audit 2026-04-17. No DB user row. PROCESSED 2026-04-26: markDefault + manualWriteOff applied per spec 023 Etapa 1."
+    },
+    {
+      "addr": "0x88563683906949e1bb8589a730054dbb754b88b0",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-12-03. No current UX impact (chain inactive)."
+    },
+    {
+      "addr": "0x8b51b1a47b9025c0717937d7102c2cf05ad5c607",
+      "label": "uf-verified-only",
+      "reason": "Pre-launch wallet scored 1× but never borrowed. First seen 2025-12-01. Likely QA/testing of risk pipeline."
+    },
+    {
+      "addr": "0x8cbc1fe7f3596e37c8ea0225a3bd7ad3911fc182",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-12-02. No current UX impact (chain inactive)."
+    },
+    {
+      "addr": "0xa2cbf337990105ec468094a09e190a4813ecbd09",
+      "label": "uf-verified-only",
+      "reason": "Pre-launch wallet scored 1× but never borrowed. First seen 2025-12-03. Likely QA/testing of risk pipeline."
+    },
+    {
+      "addr": "0xa51dff7533ddf6644d657820dd347cc69f81de3c",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-11-30. No current UX impact (chain inactive)."
+    },
+    {
+      "addr": "0xa646e438091dc0c455dafa80de584201d9fecfdd",
+      "label": "loan-manager-impl",
+      "reason": "UUPS implementation address for LoanManagerV3. Contract, never a borrower."
+    },
+    {
+      "addr": "0xa68a0efa82bedc6ac403c83326cca743ed4de409",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-12-08. No current UX impact (chain inactive)."
+    },
+    {
+      "addr": "0xa7ae7966ce05578024f389f8a9cfda3c600780b7",
+      "label": "uf-active-pre-launch",
+      "reason": "Pre-launch wallet with ACTIVE on-chain loan ($1.00) as of audit 2026-04-17. No DB user row. PROCESSED 2026-04-26: markDefault + manualWriteOff applied per spec 023 Etapa 1."
+    },
+    {
+      "addr": "0xb43cd7da23dc0400d971e21d42ae44dd5a1a228a",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-12-02. No current UX impact (chain inactive)."
+    },
+    {
+      "addr": "0xb4a2668934138420eaa12833164d063dff85bae7",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-11-30. No current UX impact (chain inactive)."
+    },
+    {
+      "addr": "0xc08b67bdb9509ba0d4259c0fe8f4aeeea6cb4d14",
+      "label": "uf-verified-only",
+      "reason": "Pre-launch wallet scored 20× but never borrowed. First seen 2025-12-11. Likely QA/testing of risk pipeline."
+    },
+    {
+      "addr": "0xc1ac609d3e5b9d8bc21d38539d0064b678f80ba0",
+      "label": "uf-verified-only",
+      "reason": "Pre-launch wallet scored 1× but never borrowed. First seen 2025-12-09. Likely QA/testing of risk pipeline."
+    },
+    {
+      "addr": "0xc7fd10e5db2d9d760f8018f9a2bd3bea50bb8422",
+      "label": "uf-verified-only",
+      "reason": "Pre-launch wallet scored 4× but never borrowed. First seen 2025-11-25. Likely QA/testing of risk pipeline."
+    },
+    {
+      "addr": "0xcd7818fad161547d3caa1753abf6b5b6f12d2bab",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-12-01. No current UX impact (chain inactive)."
+    },
+    {
+      "addr": "0xd590e8e315795998886dbedbfdcd29b4f8cc7392",
+      "label": "uf-verified-only",
+      "reason": "Pre-launch wallet scored 1× but never borrowed. First seen 2025-12-03. Likely QA/testing of risk pipeline."
+    },
+    {
+      "addr": "0xe1a6db7ff4a99ff36defbc6403200c8af7f291d7",
+      "label": "uf-scoring-test-bot",
+      "reason": "6 UserRiskSet events — scoring pipeline test pattern. First seen 2025-11-28."
+    },
+    {
+      "addr": "0xe2024003aa546c31ed5eb48d9da0d45a507f4f5d",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-12-08. No current UX impact (chain inactive)."
+    },
+    {
+      "addr": "0xf3c365aa1b8a880a2b8d55caadcd71da8b9e354f",
+      "label": "uf-verified-only",
+      "reason": "Pre-launch wallet scored 1× but never borrowed. First seen 2025-12-09. Likely QA/testing of risk pipeline."
+    },
+    {
+      "addr": "0xf4f34dafe2c743cf9be7a0cc7b5deec488579b79",
+      "label": "uf-verified-only",
+      "reason": "Pre-launch wallet scored 1× but never borrowed. First seen 2025-11-30. Likely QA/testing of risk pipeline."
+    },
+    {
+      "addr": "0xf7ee2be7fda551a271b2d1512656777fa443727d",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-12-03. No current UX impact (chain inactive)."
+    },
+    {
+      "addr": "0xf9b833e908d7f8219c96b5debde0a6af829d5864",
+      "label": "uf-verified-only",
+      "reason": "Pre-launch wallet scored 1× but never borrowed. First seen 2025-11-28. Likely QA/testing of risk pipeline."
+    },
+    {
+      "addr": "0xfd93aded6e9002ca59f6be02014b7b6a494bc609",
+      "label": "uf-scoring-test-bot",
+      "reason": "4 UserRiskSet events — scoring pipeline test pattern. First seen 2025-11-30."
+    },
+    {
+      "addr": "0xff895e2ac35939ed1b26046bd81fb33a70b42f54",
+      "label": "uf-pre-launch-borrower",
+      "reason": "Pre-launch test borrower with 1 loan(s), all closed. First seen 2025-12-01. No current UX impact (chain inactive)."
+    }
+  ]
+}
