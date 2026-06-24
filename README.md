@@ -52,6 +52,8 @@ lendoor-stellar/
 └── specs/       # hackathon orientation: thesis, Stellar integration, customer discovery, submission checklist
 ```
 
+> **Doing the contract↔backend↔frontend wiring?** Start at [`specs/004-wiring-task.md`](specs/004-wiring-task.md) — it points you to the narrative, the product, and your exact task (the EVM→Soroban swap), plus the migration how-to in `contratos/`.
+
 ### frontend/
 The same mobile app front as Lendoor (Home, Borrow, Lend, Stats, Wallet Link). The wallet/contract layer currently targets EVM (wagmi/viem) and is the seam to re-point to Stellar (Freighter + Soroban).
 
