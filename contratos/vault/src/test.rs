@@ -1955,3 +1955,100 @@ fn past_due_repay_without_accrue_collects_only_base_no_mora() {
     assert_eq!(s.usdc.balance(&s.fee_recipient), 25);
     assert!(!s.lm.get_loan(&borrower).active);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  ROBUSTNESS / DoS-RESISTANCE — second-pass coverage audit
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── A pathological late_rate must NOT be able to lock a borrower's repayment ──
+#[test]
+fn repay_survives_pathological_late_rate_no_lock() {
+    // If a misconfigured (absurd) late_rate makes preview/accrue OVERFLOW, the
+    // borrower must still be able to repay and free the loan. repay reads the
+    // STORED amount_due and never calls owed_with_late, so the overflowing path
+    // is unreachable from repayment — no fund lock / DoS.
+    let s = setup();
+    let lp = Address::generate(&s.e);
+    let borrower = Address::generate(&s.e);
+    s.usdc_admin.mint(&lp, &100_000);
+    s.vault.deposit(&lp, &100_000);
+    grant(&s, &borrower, 25_000);
+    // Absurd rate: rate*t*amount_due overflows i128 in owed_with_late.
+    s.lm.set_premium_config(&borrower, &0, &(i128::MAX / 2));
+    s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
+    s.e.ledger().with_mut(|li| li.timestamp += 30 * DAY); // well past due+grace
+
+    // The ticker path (accrue/preview) traps on overflow...
+    assert!(s.lm.try_accrue_late(&borrower).is_err(), "accrue overflows on absurd rate");
+    assert!(s.lm.try_preview_owed(&borrower).is_err(), "preview overflows too");
+
+    // ...but the actual repay reads the stored base amount_due and SUCCEEDS.
+    s.usdc_admin.mint(&borrower, &500);
+    let paid = s.vault.repay(&borrower, &borrower);
+    assert_eq!(paid, 10_500, "repay must use stored amount_due, never the overflowing path");
+    assert!(!s.lm.get_loan(&borrower).active, "loan freed — no lock");
+}
+
+// ── withdraw EXACTLY the idle cash (boundary) must succeed ────────────────────
+#[test]
+fn withdraw_exactly_at_cash_boundary_succeeds() {
+    let s = setup();
+    let lp = Address::generate(&s.e);
+    let borrower = Address::generate(&s.e);
+    s.usdc_admin.mint(&lp, &100_000);
+    s.vault.deposit(&lp, &100_000);
+    grant(&s, &borrower, 60_000);
+    s.vault.borrow_with_term(&borrower, &60_000, &7, &500); // cash == 40_000 exactly
+    let burned = s.vault.withdraw(&lp, &40_000); // == cash boundary
+    assert!(burned > 0);
+    assert_eq!(s.usdc.balance(&lp), 40_000);
+}
+
+// ── manual_write_off: a non-owner signer must NOT be able to realize a loss ───
+#[test]
+fn manual_write_off_rejects_non_owner_signer() {
+    let s = setup();
+    let lp = Address::generate(&s.e);
+    let borrower = Address::generate(&s.e);
+    s.usdc_admin.mint(&lp, &100_000);
+    s.vault.deposit(&lp, &100_000);
+    grant(&s, &borrower, 25_000);
+    s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
+    s.e.ledger().with_mut(|li| li.timestamp += 24 * DAY);
+    s.lm.mark_default(&borrower);
+
+    let attacker = Address::generate(&s.e);
+    s.e.mock_auths(&[MockAuth {
+        address: &attacker,
+        invoke: &MockAuthInvoke {
+            contract: &s.vault.address,
+            fn_name: "manual_write_off",
+            args: (borrower.clone(), 10_000i128).into_val(&s.e),
+            sub_invokes: &[],
+        },
+    }]);
+    assert!(s.vault.try_manual_write_off(&borrower, &10_000).is_err(),
+        "only the owner may realize a write-off loss");
+    assert_eq!(s.vault.total_assets(), 100_000, "no loss realized by the attacker");
+}
+
+// ── existing LPs are NEVER locked by the donation DoS (they can still exit) ───
+#[test]
+fn donation_does_not_lock_existing_lp_funds() {
+    // The residual donation-DoS only blocks NEW deposits below the donated price.
+    // Existing LPs keep their shares and can still withdraw/redeem; borrowers can
+    // still repay. Proves the blast radius is "new deposits", never locked funds.
+    let s = setup();
+    let lp = Address::generate(&s.e);
+    let attacker = Address::generate(&s.e);
+    s.usdc_admin.mint(&lp, &100_000);
+    let sh = s.vault.deposit(&lp, &100_000);
+
+    // Attacker donates AFTER the LP is in.
+    s.usdc_admin.mint(&attacker, &500_000);
+    s.usdc.transfer(&attacker, &s.vault.address, &500_000);
+
+    // The existing LP can still fully redeem its shares (gets the donation too).
+    let out = s.vault.redeem(&lp, &sh);
+    assert!(out >= 100_000, "existing LP is not locked and even captures the donation");
+}

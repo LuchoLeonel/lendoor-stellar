@@ -1296,3 +1296,52 @@ fn accrue_late_no_overflow_at_realistic_max() {
     assert!(owed > big, "late fees accrue without overflow at realistic scale");
     c.accrue_late(&user); // materialize, also must not panic
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  ROBUSTNESS / DoS-RESISTANCE — second-pass coverage audit
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── grace config applies to the NEXT loan (only the "not active" half existed) ─
+#[test]
+fn set_default_grace_period_applies_to_next_loan() {
+    let (e, _o, _v, c) = setup();
+    let user = Address::generate(&e);
+    c.set_default_grace_period(&(3 * DAY)); // change BEFORE opening
+    let now = e.ledger().timestamp();
+    c.set_user_risk(&user, &600, &true, &0, &(25 * USDC));
+    c.set_loan_offer(&user, &7, &500, &(now + DAY), &(25 * USDC));
+    c.open_loan(&user, &(10 * USDC), &7, &500);
+    assert_eq!(c.get_loan(&user).grace_period, 3 * DAY,
+        "a new loan must snapshot the UPDATED default grace");
+}
+
+// ── amount_due math holds at a $1M principal (no i128 overflow) ───────────────
+#[test]
+fn amount_due_no_overflow_at_million_dollar_principal() {
+    let (e, _o, _v, c) = setup();
+    let user = Address::generate(&e);
+    let big: i128 = 1_000_000 * USDC; // $1,000,000
+    let now = e.ledger().timestamp();
+    c.set_user_risk(&user, &600, &true, &0, &big);
+    c.set_loan_offer(&user, &7, &500, &(now + DAY), &big);
+    c.open_loan(&user, &big, &7, &500); // principal*(10500)/10000 must not overflow
+    assert_eq!(c.get_loan(&user).amount_due, big * 10_500 / 10_000);
+}
+
+// ── offer is last-write-wins (re-offer overrides the prior terms) ─────────────
+#[test]
+fn set_loan_offer_overwrites_prior_offer() {
+    let (e, _o, _v, c) = setup();
+    let user = Address::generate(&e);
+    let now = e.ledger().timestamp();
+    c.set_user_risk(&user, &600, &true, &0, &(25 * USDC));
+    c.set_loan_offer(&user, &7, &500, &(now + 100 * DAY), &(25 * USDC)); // A
+    c.set_loan_offer(&user, &14, &300, &(now + 100 * DAY), &(20 * USDC)); // B overrides
+    // Opening with A's terms must now fail (offer B is the live one).
+    assert_eq!(c.try_open_loan(&user, &(10 * USDC), &7, &500), Err(Ok(Error::BadTenor.into())));
+    // Opening with B's terms works.
+    c.open_loan(&user, &(10 * USDC), &14, &300);
+    let l = c.get_loan(&user);
+    assert_eq!(l.tenor_days, 14);
+    assert_eq!(l.fee_bps, 300);
+}
