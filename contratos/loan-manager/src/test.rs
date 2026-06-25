@@ -1125,3 +1125,174 @@ fn close_loan_before_min_hold_sets_future_next_borrow() {
     c.close_loan(&user, &due);
     assert_eq!(c.next_borrow_time(&user), start + 4 * DAY);
 }
+// ═══════════════════════════════════════════════════════════════════════════
+//  ADVERSARIAL SUITE — "cagarlo a palos"
+//  Granular wrong-signer auth (mock a SPECIFIC attacker, not just "no auth"),
+//  owner-rotation revocation, permissionless accrue lock, exact late-fee value,
+//  overflow probes at realistic max.
+// ═══════════════════════════════════════════════════════════════════════════
+use soroban_sdk::{testutils::{MockAuth, MockAuthInvoke}, IntoVal};
+
+// ── Wrong signer cannot satisfy the OWNER gate ───────────────────────────────
+#[test]
+fn attacker_signature_cannot_satisfy_owner_gate_on_set_user_risk() {
+    // setup()'s mock_all_auths can't prove WHICH address the gate needs, and the
+    // existing no-mock tests can't tell "requires owner" from "requires caller".
+    // Here ONLY the attacker signs the exact invoke; the contract wants the OWNER,
+    // who is absent -> must fail. A regression to `account.require_auth()` (caller)
+    // would be satisfied by the attacker's sig and caught here.
+    let (e, _owner, _vault, c) = setup_no_mock();
+    let attacker = Address::generate(&e);
+    let user = Address::generate(&e);
+    e.mock_auths(&[MockAuth {
+        address: &attacker,
+        invoke: &MockAuthInvoke {
+            contract: &c.address,
+            fn_name: "set_user_risk",
+            args: (user.clone(), 500u32, true, 0u64, 25i128 * USDC).into_val(&e),
+            sub_invokes: &[],
+        },
+    }]);
+    assert!(c.try_set_user_risk(&user, &500, &true, &0, &(25 * USDC)).is_err());
+}
+
+#[test]
+fn only_owner_signature_satisfies_owner_gate() {
+    // Positive control: the LEGIT owner signing the exact invoke succeeds.
+    let (e, owner, _vault, c) = setup_no_mock();
+    let user = Address::generate(&e);
+    e.mock_auths(&[MockAuth {
+        address: &owner,
+        invoke: &MockAuthInvoke {
+            contract: &c.address,
+            fn_name: "set_user_risk",
+            args: (user.clone(), 500u32, true, 0u64, 25i128 * USDC).into_val(&e),
+            sub_invokes: &[],
+        },
+    }]);
+    c.set_user_risk(&user, &500, &true, &0, &(25 * USDC));
+    assert_eq!(c.get_user_risk(&user).limit, 25 * USDC);
+}
+
+// ── Wrong signer cannot satisfy the VAULT gate on open_loan ──────────────────
+#[test]
+fn attacker_signature_cannot_satisfy_vault_gate_on_open_loan() {
+    let (e, _owner, _vault, c) = setup_no_mock();
+    let user = Address::generate(&e);
+    // Establish risk + offer with the broad mock, then narrow to the attacker.
+    e.mock_all_auths();
+    c.set_user_risk(&user, &600, &true, &0, &(25 * USDC));
+    let now = e.ledger().timestamp();
+    c.set_loan_offer(&user, &7, &500, &(now + DAY), &(25 * USDC));
+
+    let attacker = Address::generate(&e);
+    e.mock_auths(&[MockAuth {
+        address: &attacker,
+        invoke: &MockAuthInvoke {
+            contract: &c.address,
+            fn_name: "open_loan",
+            args: (user.clone(), 10i128 * USDC, 7u32, 500u32).into_val(&e),
+            sub_invokes: &[],
+        },
+    }]);
+    // open_loan wants the registered VAULT's sig, not the attacker's -> must fail.
+    assert!(c.try_open_loan(&user, &(10 * USDC), &7, &500).is_err());
+    // And the loan was NOT opened.
+    assert!(!c.get_loan(&user).active);
+}
+
+// ── Owner rotation REVOKES the old owner ─────────────────────────────────────
+#[test]
+fn old_owner_loses_control_after_set_owner_and_new_owner_gains_it() {
+    let (e, owner, _vault, c) = setup_no_mock();
+    let new_owner = Address::generate(&e);
+    let user = Address::generate(&e);
+
+    // Old owner signs the rotation.
+    e.mock_auths(&[MockAuth {
+        address: &owner,
+        invoke: &MockAuthInvoke { contract: &c.address, fn_name: "set_owner",
+            args: (new_owner.clone(),).into_val(&e), sub_invokes: &[] },
+    }]);
+    c.set_owner(&new_owner);
+
+    // Old owner now signs an owner-gated write -> must be REJECTED (revoked).
+    e.mock_auths(&[MockAuth {
+        address: &owner,
+        invoke: &MockAuthInvoke { contract: &c.address, fn_name: "set_user_risk",
+            args: (user.clone(), 500u32, true, 0u64, 25i128 * USDC).into_val(&e), sub_invokes: &[] },
+    }]);
+    assert!(c.try_set_user_risk(&user, &500, &true, &0, &(25 * USDC)).is_err(),
+        "old owner must lose control after rotation");
+
+    // New owner signs the same write -> succeeds.
+    e.mock_auths(&[MockAuth {
+        address: &new_owner,
+        invoke: &MockAuthInvoke { contract: &c.address, fn_name: "set_user_risk",
+            args: (user.clone(), 500u32, true, 0u64, 25i128 * USDC).into_val(&e), sub_invokes: &[] },
+    }]);
+    c.set_user_risk(&user, &500, &true, &0, &(25 * USDC));
+    assert_eq!(c.get_user_risk(&user).limit, 25 * USDC);
+}
+
+// ── accrue_late is PERMISSIONLESS (intentional divergence from EVM onlyOwner) ─
+#[test]
+fn accrue_late_is_permissionless_and_succeeds_without_owner_auth() {
+    let (e, _owner, _vault, c) = setup();
+    let user = Address::generate(&e);
+    let now = e.ledger().timestamp();
+    c.set_user_risk(&user, &600, &true, &0, &(25 * USDC));
+    c.set_loan_offer(&user, &7, &500, &(now + DAY), &(25 * USDC));
+    c.set_premium_config(&user, &0, &11_574_000_000);
+    c.open_loan(&user, &(10 * USDC), &7, &500);
+    advance(&e, 8 * DAY + 10 * DAY);
+    let base = c.get_loan(&user).amount_due;
+
+    // Strip ALL mocked auth: a random unauthenticated caller must still accrue.
+    e.set_auths(&[]);
+    c.accrue_late(&user);
+    assert!(c.get_loan(&user).amount_due > base,
+        "accrue_late must be callable by anyone (locks the V3 keeper-leak fix)");
+}
+
+// ── Exact late-fee value pins the formula rate*t*amount/WAD off due+grace ─────
+#[test]
+fn late_fee_exact_value_matches_formula() {
+    let (e, _owner, _vault, c) = setup();
+    let user = Address::generate(&e);
+    let now = e.ledger().timestamp();
+    let rate: i128 = 11_574_000_000;
+    c.set_user_risk(&user, &600, &true, &0, &(25 * USDC));
+    c.set_loan_offer(&user, &7, &500, &(now + DAY), &(25 * USDC));
+    c.set_premium_config(&user, &0, &rate);
+    c.open_loan(&user, &(10 * USDC), &7, &500);
+    let amount_due = c.get_loan(&user).amount_due; // 10_500_000
+
+    // late_start = due(7d) + grace(1d) = start + 8d; accrue T seconds past it.
+    let t: u64 = 123_456;
+    advance(&e, 8 * DAY + t);
+    let wad: i128 = 1_000_000_000_000_000_000;
+    let expected_extra = rate * (t as i128) * amount_due / wad;
+    assert!(expected_extra > 0, "test must exercise a nonzero late fee");
+    assert_eq!(c.preview_owed(&user), amount_due + expected_extra,
+        "late fee must equal rate*t*amount_due/WAD measured from due+grace");
+}
+
+// ── Overflow probe: $1M loan, ~10 years late must NOT panic (overflow-checks) ─
+#[test]
+fn accrue_late_no_overflow_at_realistic_max() {
+    let (e, _owner, _vault, c) = setup();
+    let user = Address::generate(&e);
+    let now = e.ledger().timestamp();
+    let big: i128 = 1_000_000_000_000; // $1,000,000 in 6-decimals units
+    c.set_user_risk(&user, &600, &true, &0, &big);
+    c.set_loan_offer(&user, &7, &500, &(now + DAY), &big);
+    c.set_premium_config(&user, &0, &11_574_000_000);
+    c.open_loan(&user, &big, &7, &500); // LM doesn't gate on cash, so $1M opens
+    advance(&e, 8 * DAY + 3650 * DAY); // ~10 years late
+    // The intermediate rate*t*amount_due (~1.16e10 * 3.15e8 * 1.05e12 ~ 3.8e30)
+    // must stay inside i128 (~1.7e38). A panic here would be a DoS on the user.
+    let owed = c.preview_owed(&user);
+    assert!(owed > big, "late fees accrue without overflow at realistic scale");
+    c.accrue_late(&user); // materialize, also must not panic
+}

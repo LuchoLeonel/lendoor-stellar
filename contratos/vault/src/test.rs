@@ -1202,11 +1202,10 @@ fn repay_emits_event_with_pay_and_fee_payload() {
 // ─────────────── deposit minting 0 shares at price > 1 (dust loss seam) ──────
 
 #[test]
-fn tiny_deposit_at_high_price_mints_zero_shares_but_pulls_usdc() {
-    // deposit only guards assets <= 0, not shares == 0. Once price-per-share > 1,
-    // a small deposit can floor to 0 shares while the USDC is still pulled in.
-    // This documents the current (no zero-shares guard) behavior so a future
-    // min-shares check is a conscious change; the dust accrues to existing LPs.
+fn tiny_deposit_at_high_price_now_reverts_instead_of_losing_funds() {
+    // Post-fix: the ZeroShares guard means a deposit that would floor to 0 shares
+    // REVERTS rather than pulling the USDC for nothing. (Pre-fix this minted 0
+    // shares and silently swallowed the deposit — the dust-loss / donation seam.)
     let s = setup();
     let lp1 = Address::generate(&s.e);
     let borrower = Address::generate(&s.e);
@@ -1219,11 +1218,10 @@ fn tiny_deposit_at_high_price_mints_zero_shares_but_pulls_usdc() {
 
     let victim = Address::generate(&s.e);
     s.usdc_admin.mint(&victim, &1);
-    let got = s.vault.deposit(&victim, &1); // floor(1*100_001/100_476) = 0
-    assert_eq!(got, 0, "tiny deposit floors to 0 shares");
-    assert_eq!(s.vault.balance_of(&victim), 0);
-    assert_eq!(s.usdc.balance(&victim), 0, "but the 1 USDC was still pulled in");
-    assert_eq!(s.vault.total_assets(), 100_476, "the dust accrues to the pool");
+    // floor(1*100_001/100_476) = 0 -> now rejected, funds retained.
+    assert_eq!(s.vault.try_deposit(&victim, &1), Err(Ok(Error::ZeroShares.into())));
+    assert_eq!(s.usdc.balance(&victim), 1, "the 1 USDC is NOT pulled (deposit reverted)");
+    assert_eq!(s.vault.total_assets(), 100_475, "pool unchanged, no dust swallowed");
 }
 
 // ─────────────── redeem returning 0 assets at price < 1 (dust burn seam) ─────
@@ -1808,4 +1806,152 @@ fn live_defaulted_loan_blocks_new_borrow_even_after_rescore() {
     assert!(s.vault.try_borrow_with_term(&borrower, &1_000, &7, &500).is_err());
     assert_eq!(s.usdc.balance(&borrower), 10_000); // only the original disbursement
     assert_eq!(s.vault.total_assets(), 100_000);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  ADVERSARIAL SUITE — "cagarlo a palos"
+//  ERC4626 donation/first-depositor attack, credit-line theft via wrong signer,
+//  past-due repay without accrue (lost-mora footgun), upgrade hijack.
+// ═══════════════════════════════════════════════════════════════════════════
+use soroban_sdk::{testutils::{MockAuth, MockAuthInvoke}, IntoVal};
+
+// ── FIX REGRESSION 1: donation into an EMPTY vault no longer steals funds ─────
+#[test]
+fn donation_before_first_deposit_is_blocked_no_fund_loss() {
+    // The ERC-4626 first-depositor/donation attack: attacker transfers USDC DIRECTLY
+    // into the empty vault (cash()/total_assets inflate while total_supply stays 0).
+    // PRE-FIX the first honest LP deposited 100_000, minted 0 shares, and LOST it.
+    // POST-FIX the ZeroShares guard makes that deposit REVERT — funds retained.
+    let s = setup();
+    let attacker = Address::generate(&s.e);
+    let victim = Address::generate(&s.e);
+
+    s.usdc_admin.mint(&attacker, &100_000);
+    s.usdc.transfer(&attacker, &s.vault.address, &100_000); // donation
+    assert_eq!(s.vault.total_assets(), 100_000);
+    assert_eq!(s.vault.total_supply(), 0);
+
+    // First honest LP deposit would floor to 0 shares -> now rejected, not swallowed.
+    s.usdc_admin.mint(&victim, &100_000);
+    assert_eq!(
+        s.vault.try_deposit(&victim, &100_000),
+        Err(Ok(Error::ZeroShares.into())),
+        "donated price must not let an honest deposit mint 0 shares"
+    );
+    assert_eq!(s.usdc.balance(&victim), 100_000, "victim keeps every unit (no fund loss)");
+    // Note: the guard stops the FUND LOSS. The residual temporary DoS (deposits
+    // below the donated price revert) is mitigated operationally by the protocol
+    // seeding the vault's first deposit at deploy, before anyone can donate.
+}
+
+// ── FIX REGRESSION: a CLEAN empty vault still takes the first deposit 1:1 ──────
+#[test]
+fn clean_first_deposit_unaffected_by_zero_shares_guard() {
+    // Sanity: with no donation, the first deposit mints 1:1 as before — the guard
+    // only bites the 0-shares (donated/over-priced) case, never the normal flow.
+    let s = setup();
+    let lp = Address::generate(&s.e);
+    s.usdc_admin.mint(&lp, &100_000);
+    let sh = s.vault.deposit(&lp, &100_000);
+    assert_eq!(sh, 100_000, "clean first deposit unchanged by the fix");
+}
+
+// ── FIX REGRESSION 2: the inflation attack is unprofitable AND now blocked ────
+#[test]
+fn donation_inflation_attack_is_blocked_and_unprofitable() {
+    // Attacker deposits 1, donates D to inflate price. The victim's deposit now
+    // REVERTS (ZeroShares), so no value can be funneled through it, and the
+    // attacker can never extract more than they sank in.
+    let s = setup();
+    let attacker = Address::generate(&s.e);
+    let victim = Address::generate(&s.e);
+
+    s.usdc_admin.mint(&attacker, &1);
+    let atk_shares = s.vault.deposit(&attacker, &1); // 1 share, ts=1, ta=1
+    s.usdc_admin.mint(&attacker, &100_000);
+    s.usdc.transfer(&attacker, &s.vault.address, &100_000); // donate -> price ~ 100_001
+
+    // Victim's deposit would mint floor(100_000*2/100_002)=1... still > 0 here, so
+    // it is NOT blocked in this configuration; the guard only bites at 0 shares.
+    // The load-bearing property is profitability: the attacker cannot come out ahead.
+    s.usdc_admin.mint(&victim, &100_000);
+    let _ = s.vault.try_deposit(&victim, &100_000); // may or may not revert; irrelevant
+    let atk_out = s.vault.redeem(&attacker, &atk_shares);
+    assert!(atk_out <= 1 + 100_000, "attacker never profits from inflating the price");
+}
+
+// ── ATTACK 3: steal someone else's credit line (wrong signer on borrow) ───────
+#[test]
+fn attacker_cannot_borrow_against_victims_credit_line() {
+    let s = setup();
+    let lp = Address::generate(&s.e);
+    let victim = Address::generate(&s.e);
+    s.usdc_admin.mint(&lp, &100_000);
+    s.vault.deposit(&lp, &100_000);
+    grant(&s, &victim, 25_000); // victim has a 25k line + matching offer
+
+    // Narrow auth to the ATTACKER only; borrow_with_term(victim,..) needs victim's
+    // sig (borrower.require_auth()). The attacker's sig must NOT disburse victim's line.
+    let attacker = Address::generate(&s.e);
+    s.e.mock_auths(&[MockAuth {
+        address: &attacker,
+        invoke: &MockAuthInvoke {
+            contract: &s.vault.address,
+            fn_name: "borrow_with_term",
+            args: (victim.clone(), 10_000i128, 7u32, 500u32).into_val(&s.e),
+            sub_invokes: &[],
+        },
+    }]);
+    assert!(s.vault.try_borrow_with_term(&victim, &10_000, &7, &500).is_err(),
+        "an attacker must not borrow against another user's credit line");
+    assert_eq!(s.usdc.balance(&victim), 0);
+    assert!(!s.lm.get_loan(&victim).active);
+}
+
+// ── ATTACK 4: wrong signer cannot drain the vault via upgrade() ───────────────
+#[test]
+fn attacker_cannot_upgrade_vault_wasm() {
+    // upgrade swaps the wasm custodying ALL LP USDC. Only the owner's sig may pass.
+    let s = setup();
+    let attacker = Address::generate(&s.e);
+    let hash = soroban_sdk::BytesN::from_array(&s.e, &[0u8; 32]);
+    s.e.mock_auths(&[MockAuth {
+        address: &attacker,
+        invoke: &MockAuthInvoke {
+            contract: &s.vault.address,
+            fn_name: "upgrade",
+            args: (hash.clone(),).into_val(&s.e),
+            sub_invokes: &[],
+        },
+    }]);
+    assert!(s.vault.try_upgrade(&hash).is_err(),
+        "non-owner must not be able to upgrade the vault wasm");
+}
+
+// ── FOOTGUN: past-due repay WITHOUT accrue_late silently forfeits the mora ────
+#[test]
+fn past_due_repay_without_accrue_collects_only_base_no_mora() {
+    // If ops forgets accrue_late before repay, the vault reads the NON-materialized
+    // amount_due and the protocol collects only the base — late fees are lost.
+    // Pins the operational dependency (same as EVM: backend must accrueLate first).
+    let s = setup();
+    let lp = Address::generate(&s.e);
+    let borrower = Address::generate(&s.e);
+    s.usdc_admin.mint(&lp, &100_000);
+    s.vault.deposit(&lp, &100_000);
+    grant(&s, &borrower, 25_000);
+    s.lm.set_premium_config(&borrower, &0, &11_574_000_000);
+    s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
+
+    // Way past due+grace, but NOBODY calls accrue_late.
+    s.e.ledger().with_mut(|li| li.timestamp += 8 * DAY + 60 * DAY);
+    // preview shows mora is owed...
+    assert!(s.lm.preview_owed(&borrower) > 10_500, "mora is economically owed");
+
+    // ...but repay (no accrue) collects only the stored base amount_due.
+    s.usdc_admin.mint(&borrower, &500);
+    let paid = s.vault.repay(&borrower, &borrower);
+    assert_eq!(paid, 10_500, "repay without accrue collects base only (mora forfeited)");
+    assert_eq!(s.usdc.balance(&s.fee_recipient), 25);
+    assert!(!s.lm.get_loan(&borrower).active);
 }

@@ -73,6 +73,7 @@ pub enum Error {
     OverCreditLimit = 6,
     NoActiveLoan = 7,
     NotDefaulted = 8,
+    ZeroShares = 9,
 }
 
 #[contracttype]
@@ -195,6 +196,16 @@ impl Vault {
         }
         let c = cfg(&e);
         let shares = Self::to_shares(&e, &c, assets);
+        // Inflation / first-depositor guard: never pull funds in exchange for 0
+        // shares. Blocks the ERC-4626 donation attack — a direct USDC transfer into
+        // a low-/zero-supply vault inflates total_assets (cash() reads the live
+        // balance), so an honest deposit would floor to 0 shares and lose its funds.
+        // With this guard the attack degrades to a revert (no fund loss); the
+        // protocol should still make the first ("seed") deposit right after deploy
+        // so honest LPs are never forced above a donated price to mint a share.
+        if shares <= 0 {
+            panic_with_error!(&e, Error::ZeroShares);
+        }
         // Pull USDC into the vault, THEN mint shares (balance now reflects deposit;
         // to_shares was computed pre-transfer, which is the ERC-4626 convention).
         usdc_client(&e, &c).transfer(&from, &e.current_contract_address(), &assets);
