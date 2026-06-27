@@ -9,11 +9,7 @@ import {
   Index,
 } from 'typeorm';
 import { User } from './user.entity';
-
-const lowercase = {
-  to: (v?: string | null) => (v == null ? null : v.toLowerCase()),
-  from: (v?: string | null) => (v == null ? null : v.toLowerCase()),
-};
+import { walletAddressTransformer } from 'src/common/normalize-wallet';
 
 @Entity('self_verifications')
 export class SelfVerification {
@@ -32,7 +28,7 @@ export class SelfVerification {
 
   // La seguimos guardando por conveniencia, pero ya no es la primary key lógica
   @Index('idx_self_verification_wallet', { unique: true })
-  @Column({ length: 42, transformer: lowercase })
+  @Column({ type: 'text', transformer: walletAddressTransformer })
   walletAddress!: string;
 
   @Column({ default: false })

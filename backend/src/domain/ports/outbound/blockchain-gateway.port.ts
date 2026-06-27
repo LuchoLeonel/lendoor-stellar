@@ -23,7 +23,7 @@ export interface BlockchainGatewayPort {
    * Reads the current on-chain credit limit for a borrower.
    * Returns 0n if no credit line exists or if it has expired.
    *
-   * @param borrower - lowercase hex wallet address
+   * @param borrower - normalized wallet address
    */
   readCreditLimitOnChain(borrower: string): Promise<bigint>;
 
@@ -31,7 +31,7 @@ export interface BlockchainGatewayPort {
    * Sets (or refreshes) the on-chain credit score and credit limit for a borrower.
    * Also sets validUntil to 30 days from now unless overridden.
    *
-   * @param borrower    - lowercase hex wallet address
+   * @param borrower    - normalized wallet address
    * @param score       - credit score in [1, 1000]
    * @param limit       - credit limit in USDC base units (6 decimals)
    * @param kycOk       - whether KYC is approved (default true)
@@ -52,7 +52,7 @@ export interface BlockchainGatewayPort {
    * Returns offer metadata including feeBps and mined block number.
    *
    * @param amountHuman  - human-readable USDC amount (e.g. "50" = 50 USDC)
-   * @param borrower     - lowercase hex wallet address
+   * @param borrower     - normalized wallet address
    * @param tenorDays    - loan duration in days (must be 7, 14, or 21)
    * @param feeBps       - fee in basis points
    */
@@ -74,7 +74,7 @@ export interface BlockchainGatewayPort {
    * Activates late fees for a borrower by calling setPremiumConfig.
    * Typically called after a loan offer is created.
    *
-   * @param borrower           - lowercase hex wallet address
+   * @param borrower           - normalized wallet address
    * @param lateRatePerSecWad  - late fee rate in WAD per second
    */
   setPremiumConfig(
@@ -87,7 +87,7 @@ export interface BlockchainGatewayPort {
    * Reads the current outstanding debt for a borrower including accrued late fees.
    * Returns the amount in USDC base units (6 decimals), or null if the RPC call fails.
    *
-   * @param borrower - lowercase hex wallet address
+   * @param borrower - normalized wallet address
    */
   previewLoanWithLate(borrower: string): Promise<bigint | null>;
 

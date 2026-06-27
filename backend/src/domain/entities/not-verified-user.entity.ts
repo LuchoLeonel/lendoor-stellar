@@ -7,6 +7,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { walletAddressTransformer } from 'src/common/normalize-wallet';
 
 const lowercase = {
   to: (v?: string | null) => (v == null ? null : v.toLowerCase()),
@@ -19,7 +20,7 @@ export class NotVerifiedUser {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column({ type: 'text', transformer: lowercase })
+  @Column({ type: 'text', transformer: walletAddressTransformer })
   walletAddress!: string;
 
   /** Plataforma de origen: 'lemon' | 'farcaster' | 'webapp'. */

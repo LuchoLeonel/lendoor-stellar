@@ -46,6 +46,40 @@ class VerifySiweDto {
   nonce!: string;
 }
 
+class VerifyStellarDto {
+  @ApiProperty({
+    description: 'Stellar account public key',
+    example: 'GABC...',
+  })
+  @IsString()
+  @IsNotEmpty()
+  wallet!: string;
+
+  @ApiProperty({
+    description: 'Base64 signature returned by Freighter signMessage',
+    example: 'base64-signature',
+  })
+  @IsString()
+  @IsNotEmpty()
+  signature!: string;
+
+  @ApiProperty({
+    description: 'Base64-encoded message that was signed',
+    example: 'bGVuZG9vci54eXogbm9uY2U6IGExYjJjM2Q0',
+  })
+  @IsString()
+  @IsNotEmpty()
+  message!: string;
+
+  @ApiProperty({
+    description: 'One-time nonce from POST /auth/nonce',
+    example: 'a1b2c3d4',
+  })
+  @IsString()
+  @IsNotEmpty()
+  nonce!: string;
+}
+
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
@@ -82,6 +116,31 @@ export class AuthController {
   async verify(@Body() dto: VerifySiweDto) {
     const { wallet, accessToken } =
       await this.auth.verifySiweAndIssueToken(dto);
+
+    return {
+      verified: true,
+      wallet,
+      accessToken,
+    };
+  }
+
+  @Post('stellar/verify')
+  @HttpCode(200)
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
+  @ApiOperation({
+    summary: 'Verify a Stellar signed message and issue an access token',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Signature verified, access token issued',
+    schema: {
+      example: { verified: true, wallet: 'GABC...', accessToken: 'eyJ...' },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Invalid signature or nonce' })
+  async verifyStellar(@Body() dto: VerifyStellarDto) {
+    const { wallet, accessToken } =
+      await this.auth.verifyStellarAndIssueToken(dto);
 
     return {
       verified: true,

@@ -39,20 +39,27 @@ export class UserOnboardingService {
     userId: number,
     walletAddress: string,
   ): Promise<void> {
-    const wallet = walletAddress.toLowerCase();
+    const wallet = normalizeWallet(walletAddress);
+    const walletLower = wallet.toLowerCase();
 
     const sessionUpdate = await this.dataSource
       .createQueryBuilder()
       .update('device_sessions')
       .set({ userId })
-      .where('"userId" IS NULL AND LOWER("walletAddress") = :wallet', { wallet })
+      .where(
+        '"userId" IS NULL AND ("walletAddress" = :wallet OR LOWER("walletAddress") = :walletLower)',
+        { wallet, walletLower },
+      )
       .execute();
 
     const attemptUpdate = await this.dataSource
       .createQueryBuilder()
       .update('borrow_attempts')
       .set({ userId })
-      .where('"userId" IS NULL AND LOWER("walletAddress") = :wallet', { wallet })
+      .where(
+        '"userId" IS NULL AND ("walletAddress" = :wallet OR LOWER("walletAddress") = :walletLower)',
+        { wallet, walletLower },
+      )
       .execute();
 
     const sessionRows = sessionUpdate.affected ?? 0;
