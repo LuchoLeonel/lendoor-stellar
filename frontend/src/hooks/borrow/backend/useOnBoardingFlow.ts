@@ -10,6 +10,7 @@ import { normalizeErrorMessage } from "@/lib/utils";
 import { useTranslation } from "@/i18n/useTranslation";
 import { useApi } from "@/hooks/useApi";
 import { ApiError, AuthError } from "@/lib/api";
+import { normalizeWalletAddress } from "@/lib/wallet-address";
 import type { UserJourneyResponse, VerifyUserResponse } from "@shared/types/api";
 import type { WorkType } from "@shared/types/work-type";
 import type { Platform } from "@shared/types/platform";
@@ -76,14 +77,12 @@ export function useOnBoardingFlow() {
 
   // ================== wallet ==================
   const wallet = useMemo(() => {
-    const fromPrimary = primaryWallet?.address
-      ? primaryWallet.address.toLowerCase()
-      : null;
+    const fromPrimary = normalizeWalletAddress(primaryWallet?.address, mode);
 
     // ✅ En farcaster: NO uses connectedAddress como fallback (flappea)
     if (mode === "farcaster") return fromPrimary;
 
-    const fromConnected = connectedAddress ? connectedAddress.toLowerCase() : null;
+    const fromConnected = normalizeWalletAddress(connectedAddress, mode);
     return fromPrimary ?? fromConnected ?? null;
   }, [mode, primaryWallet, connectedAddress]);
 
@@ -189,7 +188,9 @@ export function useOnBoardingFlow() {
   /** Light re-fetch of the journey from backend — useful when callers
    *  suspect the cached journey is stale (e.g. isEarlyUser flipped). */
   const refreshJourney = useCallback(async () => {
-    const wallet = connectedAddress ?? primaryWallet;
+    const wallet =
+      normalizeWalletAddress(connectedAddress, mode) ??
+      normalizeWalletAddress(primaryWallet?.address, mode);
     if (!wallet) return;
     try {
       const data = await api.getUser(wallet, platform);
@@ -197,7 +198,7 @@ export function useOnBoardingFlow() {
     } catch {
       // swallow — this is a best-effort refresh
     }
-  }, [connectedAddress, primaryWallet, api, platform, updateJourneyFromResponse]);
+  }, [connectedAddress, primaryWallet, mode, api, platform, updateJourneyFromResponse]);
 
   const isSelfRequiredProblem = useCallback((status: number, bodyText: string) => {
     const problem = parseBackendProblem(bodyText);

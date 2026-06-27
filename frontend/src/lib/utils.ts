@@ -269,6 +269,26 @@ export const evmNetworks = [
   },
 ];
 
+export function stellarTxExplorerUrl(
+  txHash: string,
+  network: 'testnet' | 'public' = 'testnet',
+): string {
+  return `https://stellar.expert/explorer/${network}/tx/${txHash}`;
+}
+
+export function transactionExplorerUrl(
+  txHash?: string | null,
+  mode?: 'stellar' | string | null,
+): string | null {
+  if (!txHash) return null;
+  if (mode === 'stellar' || /^[0-9a-fA-F]{64}$/.test(txHash)) {
+    return stellarTxExplorerUrl(txHash);
+  }
+
+  const base = evmNetworks[0]?.blockExplorerUrls[0] ?? 'https://celoscan.io';
+  return `${base}/tx/${txHash}`;
+}
+
 
 
 export const tokensToCheckTeleporter = [

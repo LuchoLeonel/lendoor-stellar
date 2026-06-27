@@ -12,13 +12,11 @@
 
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
-import { Logger } from '@nestjs/common';
-
+import { Inject, Logger } from '@nestjs/common';
 import {
-  giveCreditScoreAndLimit,
-  createLoanOfferBackend,
-  setPremiumConfig,
-} from 'src/config/contractConfig';
+  BLOCKCHAIN_GATEWAY,
+  BlockchainGatewayPort,
+} from 'src/domain/ports/outbound/blockchain-gateway.port';
 
 // ─── Job name constants (shared with BlockchainQueueService) ─────────────────
 
@@ -89,6 +87,13 @@ export type BlockchainJobResult =
 export class BlockchainProcessor extends WorkerHost {
   private readonly logger = new Logger(BlockchainProcessor.name);
 
+  constructor(
+    @Inject(BLOCKCHAIN_GATEWAY)
+    private readonly blockchain: BlockchainGatewayPort,
+  ) {
+    super();
+  }
+
   async process(
     job: Job<BlockchainJobData, BlockchainJobResult, BlockchainJobName>,
   ): Promise<BlockchainJobResult> {
@@ -97,7 +102,7 @@ export class BlockchainProcessor extends WorkerHost {
     switch (job.name) {
       case BLOCKCHAIN_JOB.SET_USER_RISK: {
         const data = job.data as SetUserRiskPayload;
-        await giveCreditScoreAndLimit(
+        await this.blockchain.giveCreditScoreAndLimit(
           data.borrower,
           data.score,
           BigInt(data.limitUnitsStr),
@@ -112,7 +117,7 @@ export class BlockchainProcessor extends WorkerHost {
 
       case BLOCKCHAIN_JOB.SET_LOAN_OFFER: {
         const data = job.data as SetLoanOfferPayload;
-        const result = await createLoanOfferBackend(
+        const result = await this.blockchain.createLoanOfferBackend(
           data.amountHuman,
           data.borrower,
           data.tenorDays,
@@ -132,7 +137,7 @@ export class BlockchainProcessor extends WorkerHost {
 
       case BLOCKCHAIN_JOB.SET_PREMIUM_CONFIG: {
         const data = job.data as SetPremiumConfigPayload;
-        await setPremiumConfig(
+        await this.blockchain.setPremiumConfig(
           data.borrower,
           BigInt(data.lateRatePerSecWadStr),
         );

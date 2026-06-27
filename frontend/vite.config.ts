@@ -50,6 +50,19 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@shared': path.resolve(__dirname, './shared'),
+      '@stellar/stellar-sdk/contract': path.resolve(
+        __dirname,
+        './node_modules/@stellar/stellar-sdk/lib/esm/contract/index.js',
+      ),
+      '@stellar/stellar-sdk/rpc': path.resolve(
+        __dirname,
+        './node_modules/@stellar/stellar-sdk/lib/esm/rpc/index.js',
+      ),
+      '@stellar/stellar-sdk': path.resolve(
+        __dirname,
+        './node_modules/@stellar/stellar-sdk/lib/esm/index.js',
+      ),
+      buffer: path.resolve(__dirname, './node_modules/buffer/index.js'),
     },
   },
   server: {

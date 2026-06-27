@@ -18,6 +18,25 @@ export const BLOCKCHAIN_GATEWAY = Symbol('BLOCKCHAIN_GATEWAY');
  */
 export type TxPriority = 'high' | 'low';
 
+export type ChainLoanOpenedEvent = {
+  borrower: string;
+  principal: bigint;
+  amountDue: bigint;
+  due: number;
+  feeBps: number;
+  ledger: number;
+  txHash: string;
+  timestamp: number;
+};
+
+export type ChainLoanClosedEvent = {
+  borrower: string;
+  amountPaid: bigint;
+  txHash: string;
+  ledger: number;
+  timestamp: number;
+};
+
 export interface BlockchainGatewayPort {
   /**
    * Reads the current on-chain credit limit for a borrower.
@@ -140,6 +159,44 @@ export interface BlockchainGatewayPort {
    * timing per spec 023 §6 risk #4).
    */
   getChainBlockTimestamp(): Promise<number | null>;
+
+  /**
+   * Latest finalized chain height. For EVM this is a block number; for
+   * Stellar/Soroban this is a ledger sequence.
+   */
+  getLatestLedger(): Promise<number>;
+
+  /**
+   * Reads user risk/offer state needed by chain-sync renewal/recalc tasks.
+   */
+  readUserRisk(borrower: string): Promise<{
+    score: number;
+    validUntil: number;
+    limit: bigint;
+  } | null>;
+
+  /**
+   * Fetches loan-open events in an inclusive chain-height range.
+   */
+  getLoanOpenedEvents(
+    fromLedger: number,
+    toLedger: number,
+  ): Promise<ChainLoanOpenedEvent[]>;
+
+  /**
+   * Finds the newest matching loan-close event for a borrower at or after
+   * a DB loan's start time.
+   */
+  findLoanClosedEvent(
+    borrower: string,
+    loanStartAt: Date,
+    currentLedger: number,
+  ): Promise<ChainLoanClosedEvent | null>;
+
+  /**
+   * Verifies that a tx hash opened a loan for the given borrower.
+   */
+  verifyLoanOpenedByTxHash(txHash: string, borrower: string): Promise<boolean>;
 
   /**
    * Spec 024 A.3 — call accrueLate(borrower) on LoanManagerV3.

@@ -5,7 +5,9 @@ import { useAccount } from 'wagmi'
 import { useTranslation } from '@/i18n/useTranslation'
 import { useApi } from '@/hooks/useApi'
 import { useBorrower } from '@/providers/BorrowerProvider'
+import { useWallet } from '@/providers/WalletProvider'
 import { ApiError } from '@/lib/api'
+import { normalizeWalletAddress } from '@/lib/wallet-address'
 import { retryWithBackoff } from '@/lib/retryWithBackoff'
 import {
   clearStale,
@@ -29,7 +31,11 @@ function isNonRetryableStatus(err: unknown): boolean {
 
 export function useRepaymentRecovery(): void {
   const { address } = useAccount()
-  const walletAddress = address?.toLowerCase() ?? null
+  const { mode, primaryWallet } = useWallet()
+  const walletAddress = normalizeWalletAddress(
+    mode === 'stellar' ? primaryWallet?.address : address,
+    mode,
+  )
 
   const { t } = useTranslation()
   const api = useApi()

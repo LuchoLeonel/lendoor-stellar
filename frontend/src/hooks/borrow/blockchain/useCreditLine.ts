@@ -12,6 +12,8 @@ import { withThousands, formatUSDCAmount2dp, formatUSDCAmount2dpTruncated } from
 import { useBorrower } from '@/providers/BorrowerProvider'
 import { useWallet } from '@/providers/WalletProvider'
 import { useCreditStore } from '@/stores/creditStore'
+import { stellarReadCreditLine } from '@/lib/stellar-contracts'
+import { normalizeWalletAddress } from '@/lib/wallet-address'
 
 const CLM_ABI = [
   'function creditLimit(address) view returns (uint256)',
@@ -35,11 +37,13 @@ export function useCreditLine({ pollMs = 15_000 }: Options = {}) {
   const { t } = useTranslation()
 
   const { evault, evaultJunior, connectedAddress } = useContracts()
-  const { primaryWallet } = useWallet()
+  const { mode, primaryWallet } = useWallet()
 
   // address efectiva on-chain
-  const userAddress: string | null =
-    connectedAddress ?? primaryWallet?.address ?? null
+  const userAddress = normalizeWalletAddress(
+    connectedAddress ?? primaryWallet?.address,
+    mode,
+  )
 
   // 👇 ahora también traemos el setter del RAW.
   // Spec 028: setCreditScoreRawHwm respeta el optimistic floor — el poll
@@ -157,7 +161,7 @@ export function useCreditLine({ pollMs = 15_000 }: Options = {}) {
       return
     }
 
-    if (!clm) {
+    if (mode !== 'stellar' && !clm) {
       setError(t('hooks.useCreditLine.errors.clmUnavailable'))
       resetState()
       return
@@ -167,50 +171,80 @@ export function useCreditLine({ pollMs = 15_000 }: Options = {}) {
     setError(null)
 
     try {
-      const [limitFn, limitSt] = tracked<bigint>(() => clm.creditLimit(userAddress))
-      const [loanFn, loanSt] = tracked<any>(() => (clm as any).loans(userAddress))
+      let limit: bigint = 0n
+      let loan: any = null
+      let userRisk: any = null
+      let nextBorrow: bigint = 0n
+      let latePreview: any = null
+      let premium: any = null
+      let limitOk = true
+      let loanOk = true
+      let lateOk = true
 
-      const [riskFn, _riskSt] = tracked<any>(() => (clm as any).users(userAddress))
+      if (mode === 'stellar') {
+        const stellar = await stellarReadCreditLine(userAddress)
+        limit = stellar.limit
+        loan = stellar.loan
+        userRisk = stellar.userRisk
+        nextBorrow = stellar.nextBorrow
+        latePreview = stellar.latePreview
+        premium = stellar.premium
+      } else {
+        const [limitFn, limitSt] = tracked<bigint>(() => clm!.creditLimit(userAddress))
+        const [loanFn, loanSt] = tracked<any>(() => (clm as any).loans(userAddress))
 
-      const [nbtFn, _nbtSt] = tracked<bigint>(() => (clm as any).nextBorrowTime(userAddress))
-      const [lateFn, lateSt] = tracked<any>(() => (clm as any).previewLoanWithLate(userAddress))
-      const [premFn, _premSt] = tracked<any>(() => (clm as any).premiums(userAddress))
+        const [riskFn, _riskSt] = tracked<any>(() => (clm as any).users(userAddress))
 
-      // 🚨 Spec 077 — RPC read timeouts bumped from 3s → 10s.
-      // The 3s budget was tight for ~95th-percentile mobile 3G/4G latency
-      // to Celo Forno. When the connection is slow, all 6 reads time out,
-      // every value falls back to its default (0n / null), and the UI ends
-      // up trying to format/derive state from those nulls — produces the
-      // "blank screen + bottom nav still visible" symptom Fabián captured
-      // on Matías Cardone's screenshot (3G indicator visible). 10s covers
-      // observed worst case without compromising the "loading" feel on
-      // wifi/4G+.
-      const [limit, loan, userRisk, nextBorrow, latePreview, premium] = await Promise.all([
-        safeRead<bigint>(limitFn, 0n, 'clm:creditLimit', {
-          toastOnError: false, timeoutMs: 10000,
-        }),
-        safeRead<any>(loanFn, null as any, 'clm:loans', {
-          toastOnError: false, timeoutMs: 10000,
-        }),
-        safeRead<any>(riskFn, null as any, 'clm:users', {
-          toastOnError: false, timeoutMs: 10000,
-        }),
-        safeRead<bigint>(nbtFn, 0n, 'clm:nextBorrowTime', {
-          toastOnError: false, timeoutMs: 10000,
-        }),
-        safeRead<any>(lateFn, null as any, 'clm:previewLoanWithLate', {
-          toastOnError: false, timeoutMs: 10000,
-        }),
-        safeRead<any>(premFn, null as any, 'clm:premiums', {
-          toastOnError: false, timeoutMs: 10000,
-        }),
-      ])
+        const [nbtFn, _nbtSt] = tracked<bigint>(() => (clm as any).nextBorrowTime(userAddress))
+        const [lateFn, lateSt] = tracked<any>(() => (clm as any).previewLoanWithLate(userAddress))
+        const [premFn, _premSt] = tracked<any>(() => (clm as any).premiums(userAddress))
+
+        // 🚨 Spec 077 — RPC read timeouts bumped from 3s → 10s.
+        // The 3s budget was tight for ~95th-percentile mobile 3G/4G latency
+        // to Celo Forno. When the connection is slow, all 6 reads time out,
+        // every value falls back to its default (0n / null), and the UI ends
+        // up trying to format/derive state from those nulls — produces the
+        // "blank screen + bottom nav still visible" symptom Fabián captured
+        // on Matías Cardone's screenshot (3G indicator visible). 10s covers
+        // observed worst case without compromising the "loading" feel on
+        // wifi/4G+.
+        const [evmLimit, evmLoan, evmUserRisk, evmNextBorrow, evmLatePreview, evmPremium] = await Promise.all([
+          safeRead<bigint>(limitFn, 0n, 'clm:creditLimit', {
+            toastOnError: false, timeoutMs: 10000,
+          }),
+          safeRead<any>(loanFn, null as any, 'clm:loans', {
+            toastOnError: false, timeoutMs: 10000,
+          }),
+          safeRead<any>(riskFn, null as any, 'clm:users', {
+            toastOnError: false, timeoutMs: 10000,
+          }),
+          safeRead<bigint>(nbtFn, 0n, 'clm:nextBorrowTime', {
+            toastOnError: false, timeoutMs: 10000,
+          }),
+          safeRead<any>(lateFn, null as any, 'clm:previewLoanWithLate', {
+            toastOnError: false, timeoutMs: 10000,
+          }),
+          safeRead<any>(premFn, null as any, 'clm:premiums', {
+            toastOnError: false, timeoutMs: 10000,
+          }),
+        ])
+
+        limit = evmLimit
+        loan = evmLoan
+        userRisk = evmUserRisk
+        nextBorrow = evmNextBorrow
+        latePreview = evmLatePreview
+        premium = evmPremium
+        limitOk = limitSt.ok
+        loanOk = loanSt.ok
+        lateOk = lateSt.ok
+      }
 
       // If critical reads (limit or loan) failed/timed out, preserve previous
       // state to prevent flashing "Sin límite" when user has an active loan
-      if (!limitSt.ok || !loanSt.ok) {
+      if (!limitOk || !loanOk) {
         console.warn('[CLM] Critical RPC read failed, preserving previous state', {
-          limitOk: limitSt.ok, loanOk: loanSt.ok,
+          limitOk, loanOk,
         })
         return
       }
@@ -236,11 +270,16 @@ export function useCreditLine({ pollMs = 15_000 }: Options = {}) {
 
       let graceSec = 0
       if (loan) {
-        const rawAmount = (loan as any).amountDue ?? (loan as any)[1]
+        const rawAmount =
+          (loan as any).amount_due ?? (loan as any).amountDue ?? (loan as any)[1]
         const rawStart = (loan as any).start ?? (loan as any)[2]
         const rawDue = (loan as any).due ?? (loan as any)[3]
-        const rawFeeBps = (loan as any).feeBps ?? (loan as any)[4]
-        const rawGrace = (loan as any).gracePeriod ?? (loan as any)[5]
+        const rawFeeBps =
+          (loan as any).fee_bps ?? (loan as any).feeBps ?? (loan as any)[4]
+        const rawGrace =
+          (loan as any).grace_period ??
+          (loan as any).gracePeriod ??
+          (loan as any)[5]
         const rawActive = (loan as any).active ?? (loan as any)[6]
 
         const amountBig = toBig(rawAmount)
@@ -285,7 +324,7 @@ export function useCreditLine({ pollMs = 15_000 }: Options = {}) {
       // chain-truth amount (storage can lag preview between accrueLate
       // calls).
       let accruing = false
-      if (activeLoan && lateSt.ok && latePreview != null) {
+      if (activeLoan && lateOk && latePreview != null) {
         const rawLate =
           (latePreview as any).amountDueWithLate ??
           (latePreview as any)[1]
@@ -295,7 +334,10 @@ export function useCreditLine({ pollMs = 15_000 }: Options = {}) {
         }
       }
       if (activeLoan && premium != null && dueTs != null) {
-        const rawLateRate = (premium as any).lateRatePerSecWad ?? (premium as any)[1]
+        const rawLateRate =
+          (premium as any).late_rate_per_sec_wad ??
+          (premium as any).lateRatePerSecWad ??
+          (premium as any)[1]
         const lateRateBig = toBig(rawLateRate)
         const lateStart = dueTs + graceSec
         const nowSec = Math.floor(Date.now() / 1000)
@@ -432,7 +474,7 @@ export function useCreditLine({ pollMs = 15_000 }: Options = {}) {
     } finally {
       setLoading(false)
     }
-  }, [clm, userAddress, resetState, setCreditScoreDisplay, setCreditScoreRaw, setCreditScoreRawHwm, t])
+  }, [clm, mode, userAddress, resetState, setCreditScoreDisplay, setCreditScoreRaw, setCreditScoreRawHwm, t])
 
   // Single consolidated effect: read on mount/dep change + poll when visible
   React.useEffect(() => {

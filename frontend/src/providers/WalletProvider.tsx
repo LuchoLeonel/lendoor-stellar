@@ -14,6 +14,13 @@ import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { isWebView as lemonIsWebView } from '@lemoncash/mini-app-sdk'
 import { useFarcaster } from '@/providers/FarcasterProvider'
 import type { WalletMode } from '@shared/types/platform'
+import {
+  getFreighterStatus,
+  isStellarMode,
+  requestFreighterAddress,
+  type StellarWalletStatus,
+} from '@/lib/stellar-wallet'
+import { normalizeWalletAddress } from '@/lib/wallet-address'
 
 export type { WalletMode }
 
@@ -65,6 +72,7 @@ export function WalletProvider({ children }: PropsWithChildren) {
   const { connect, connectors } = useConnect()
   const { isMiniApp: isFarcasterMiniApp } = useFarcaster()
   const openConnectModal = useConnectModal()?.openConnectModal
+  const stellarMode = isStellarMode()
 
   // Primero vemos Farcaster, y solo si NO es Farcaster dejamos pasar a Lemon
   const rawLemonMiniApp = safeIsLemonMiniApp()
@@ -73,13 +81,51 @@ export function WalletProvider({ children }: PropsWithChildren) {
   const isMiniApp = isLemonMiniApp || isFarcasterMiniApp
 
   const [sdkHasLoaded, setSdkHasLoaded] = React.useState(false)
+  const [stellarStatus, setStellarStatus] =
+    React.useState<StellarWalletStatus | null>(null)
+  const [stellarLoading, setStellarLoading] = React.useState(false)
 
   React.useEffect(() => {
     setSdkHasLoaded(true)
   }, [])
 
+  const refreshFreighter = React.useCallback(async () => {
+    if (!stellarMode) return
+    setStellarLoading(true)
+    try {
+      setStellarStatus(await getFreighterStatus())
+    } catch (err) {
+      console.warn('[WalletProvider] Freighter status error', err)
+      setStellarStatus({
+        installed: false,
+        address: null,
+        network: null,
+        networkPassphrase: null,
+        sorobanRpcUrl: null,
+      })
+    } finally {
+      setStellarLoading(false)
+    }
+  }, [stellarMode])
+
+  React.useEffect(() => {
+    void refreshFreighter()
+  }, [refreshFreighter])
+
+  const connectFreighter = React.useCallback(async () => {
+    setStellarLoading(true)
+    try {
+      await requestFreighterAddress()
+      await refreshFreighter()
+    } catch (err) {
+      console.error('[WalletProvider] Freighter connect error', err)
+    } finally {
+      setStellarLoading(false)
+    }
+  }, [refreshFreighter])
+
   const loadingNetwork =
-    status === 'connecting' || status === 'reconnecting'
+    status === 'connecting' || status === 'reconnecting' || stellarLoading
 
   // Autoconnect en Farcaster mini-app para que wagmi exponga la address
   React.useEffect(() => {
@@ -104,11 +150,14 @@ export function WalletProvider({ children }: PropsWithChildren) {
 
   // - Lemon mini-app: loggedIn siempre true
   // - Web / Farcaster: loggedIn solo cuando wagmi está "connected"
-  const isLoggedIn = isLemonMiniApp || status === 'connected'
+  const stellarAddress = stellarStatus?.address ?? null
+  const isLoggedIn =
+    isLemonMiniApp || (stellarMode ? !!stellarAddress : status === 'connected')
 
   // === mode para el resto de la app ===
   let mode: WalletMode = 'none'
-  if (isLemonMiniApp) mode = 'lemon'
+  if (stellarMode) mode = 'stellar'
+  else if (isLemonMiniApp) mode = 'lemon'
   else if (isFarcasterMiniApp) mode = 'farcaster'
   else if (status === 'connected') mode = 'webapp'
 
@@ -116,10 +165,20 @@ export function WalletProvider({ children }: PropsWithChildren) {
     console.log('[WalletProvider] mode=', mode, {
       isLemonMiniApp,
       isFarcasterMiniApp,
+      stellarMode,
+      stellarAddress,
       status,
       address,
     })
-  }, [mode, isLemonMiniApp, isFarcasterMiniApp, status, address])
+  }, [
+    mode,
+    isLemonMiniApp,
+    isFarcasterMiniApp,
+    stellarMode,
+    stellarAddress,
+    status,
+    address,
+  ])
 
   const value = useMemo<WalletContextType>(
     () => ({
@@ -129,13 +188,23 @@ export function WalletProvider({ children }: PropsWithChildren) {
       isFarcasterMiniApp,
       isLoggedIn,
       sdkHasLoaded,
-      primaryWallet: address
-        ? { address: address.toLowerCase(), chainId: chainId ?? null }
-        : null,
+      primaryWallet:
+        stellarMode && stellarAddress
+          ? { address: stellarAddress, chainId: null }
+          : address
+            ? {
+                address: normalizeWalletAddress(address, mode) ?? address,
+                chainId: chainId ?? null,
+              }
+            : null,
       loadingNetwork,
-      setShowAuthFlow: openConnectModal ?? (() => {
-        console.warn('[WalletProvider] openConnectModal not available yet')
-      }),
+      setShowAuthFlow: stellarMode
+        ? () => {
+            void connectFreighter()
+          }
+        : openConnectModal ?? (() => {
+            console.warn('[WalletProvider] openConnectModal not available yet')
+          }),
     }),
     [
       mode,
@@ -144,9 +213,12 @@ export function WalletProvider({ children }: PropsWithChildren) {
       isFarcasterMiniApp,
       isLoggedIn,
       sdkHasLoaded,
+      stellarMode,
+      stellarAddress,
       address,
       chainId,
       loadingNetwork,
+      connectFreighter,
       openConnectModal,
     ],
   )

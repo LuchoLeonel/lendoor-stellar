@@ -10,6 +10,7 @@ import { useContracts } from "@/providers/ContractsProvider";
 import { useUsdcBalance } from "@/hooks/useUsdcBalance";
 import { LemonFundsDialogs } from "@/components/common/LemonFundsDialogs";
 import { TxState } from "@/components/common/TransactionProgress";
+import { normalizeWalletAddress } from "@/lib/wallet-address";
 import { useTranslation } from "@/i18n/useTranslation";
 import { ConfirmationDialog } from "@/components/common/ConfirmationDialog";
 
@@ -84,8 +85,7 @@ export function RepayPanel({
 
   // Spec 024 B.3 — wallet for preflight live ticker.
   const walletForPreflight =
-    (connectedAddress ?? primaryWallet?.address ?? null)?.toLowerCase() ??
-    null;
+    normalizeWalletAddress(connectedAddress ?? primaryWallet?.address, mode);
 
   // Spec 034 — internal txState still drives this component's local
   // UI (e.g. paymentInFlight). Mirror state changes up to the parent

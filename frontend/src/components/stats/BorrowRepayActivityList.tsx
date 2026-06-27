@@ -4,6 +4,8 @@ import * as React from "react"
 import { useLoanActivities } from "@/hooks/stats/useLoanActivities"
 import { UsdcIcon } from "@/components/icons/UsdcIcon"
 import { formatUsdcFromBigIntString } from "@/lib/format"
+import { transactionExplorerUrl } from "@/lib/utils"
+import { useWallet } from "@/providers/WalletProvider"
 
 function timeAgo(tsSec: number) {
   const now = Math.floor(Date.now() / 1000)
@@ -44,6 +46,7 @@ export function BorrowRepayActivityList({
   refreshSignal,
   maxHeight = 420,
 }: Props) {
+  const { mode } = useWallet()
   const {
     items,
     loading,
@@ -125,6 +128,7 @@ export function BorrowRepayActivityList({
 
         const interestDisplay =
           a.interest ? formatUsdcFromBigIntString(a.interest) : null
+        const explorerUrl = transactionExplorerUrl(a.txHash, mode)
 
         return (
           <div
@@ -164,10 +168,26 @@ export function BorrowRepayActivityList({
               </div>
             </div>
 
-            {isClose && interestDisplay && (
-              <div className="mt-1 text-[11px] text-gray-500">
-                Interés:{" "}
-                <span className="font-medium">${interestDisplay}</span>
+            {(isClose || explorerUrl) && (
+              <div className="mt-1 flex items-center justify-between gap-3 text-[11px] text-gray-500">
+                {isClose && interestDisplay ? (
+                  <span>
+                    Interés:{" "}
+                    <span className="font-medium">${interestDisplay}</span>
+                  </span>
+                ) : (
+                  <span />
+                )}
+                {explorerUrl && (
+                  <a
+                    href={explorerUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-orange-600 hover:text-orange-700"
+                  >
+                    Ver tx
+                  </a>
+                )}
               </div>
             )}
           </div>

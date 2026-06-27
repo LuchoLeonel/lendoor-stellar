@@ -9,12 +9,14 @@ import { useContracts } from '@/providers/ContractsProvider'
 import { useCreditLine } from '@/hooks/borrow/blockchain/useCreditLine'
 import { useBorrower } from '@/providers/BorrowerProvider'
 import { useWallet } from '@/providers/WalletProvider'
-import { DECIMALS, softWait, formatEvmError } from '@/lib/utils'
+import { DECIMALS, softWait, formatEvmError, transactionExplorerUrl } from '@/lib/utils'
 import { safeRead } from '@/lib/safeRead'
 import { useApi } from '@/hooks/useApi'
 import { ApiError } from '@/lib/api'
 import { retryWithBackoff } from '@/lib/retryWithBackoff'
 import { addPendingOpen, removePendingOpen, updatePendingOpen } from '@/lib/loanOpenQueue'
+import { stellarBorrowWithTerm } from '@/lib/stellar-contracts'
+import { normalizeWalletAddress } from '@/lib/wallet-address'
 
 import IEVault from '@/contracts/IEVault.json'
 import * as IEVC from '@/contracts/IEVC.json'
@@ -35,6 +37,17 @@ function clean(s: string) {
 
 function isNonRetryableStatus(err: unknown): boolean {
   return err instanceof ApiError && err.status >= 400 && err.status < 500
+}
+
+function toastOptions(description: string, explorerUrl: string | null) {
+  if (!explorerUrl) return { description }
+  return {
+    description,
+    action: {
+      label: 'View tx',
+      onClick: () => window.open(explorerUrl, '_blank', 'noopener,noreferrer'),
+    },
+  }
 }
 
 // =========================
@@ -124,16 +137,14 @@ export function useBorrow({ requireController = true }: Options = {}) {
     controllerAddress,
   } = useContracts()
 
-  const { primaryWallet } = useWallet()
+  const { mode, primaryWallet } = useWallet()
 
   // address efectiva on-chain (web/Farcaster = primaryWallet, Lemon = connectedAddress)
   const userAddress: string | null =
     connectedAddress ?? primaryWallet?.address ?? null
 
   // address normalizada para backend / DB
-  const walletAddress: string | null = userAddress
-    ? userAddress.toLowerCase()
-    : null
+  const walletAddress = normalizeWalletAddress(userAddress, mode)
 
   const { limitRaw, borrowedRaw } = useCreditLine({ pollMs: 15_000 })
 
@@ -212,7 +223,7 @@ export function useBorrow({ requireController = true }: Options = {}) {
       tenorDays: number,
       feeBps = 3000,
     ): Promise<boolean> => {
-      if (!evaultAddress || !userAddress) {
+      if (!userAddress || (mode !== 'stellar' && !evaultAddress)) {
         toast.error(t('hooks.useBorrow.toast.missingSetup.title'), {
           description: t('hooks.useBorrow.toast.missingSetup.desc'),
         })
@@ -317,98 +328,107 @@ export function useBorrow({ requireController = true }: Options = {}) {
           hasControllerAddress: !!controllerAddress,
         })
 
-        const borrowTx = {
-          contractAddress: evaultAddress,
-          abi: (IEVault as { abi: unknown[] }).abi ?? IEVault,
-          functionName: 'borrowWithTerm',
-          functionParams: [
-            amount.toString(),
-            userAddress,
-            tenorDays,
-            feeBps,
-          ],
-          value: '0',
-        }
-
         let txHash: string | null = null
 
-        // ================================
-        // 2) Chequeo & enableController
-        // ================================
-        if (requireController) {
-          if (controller && controllerAddress) {
-            console.info('[useBorrow] checking isControllerEnabled', {
-              controllerAddress,
-              user: userAddress,
-              evault: evaultAddress,
-            })
+        if (mode === 'stellar') {
+          txHash = await stellarBorrowWithTerm({
+            borrower: userAddress,
+            amount,
+            tenorDays,
+            feeBps,
+          })
+        } else {
+          const borrowTx = {
+            contractAddress: evaultAddress,
+            abi: (IEVault as { abi: unknown[] }).abi ?? IEVault,
+            functionName: 'borrowWithTerm',
+            functionParams: [
+              amount.toString(),
+              userAddress,
+              tenorDays,
+              feeBps,
+            ],
+            value: '0',
+          }
 
-            const alreadyEnabled = await safeRead(
-              () =>
-                (controller as unknown as { isControllerEnabled: (user: string, vault: string) => Promise<boolean> }).isControllerEnabled(
-                  userAddress,
-                  evaultAddress,
-                ),
-              false,
-              'isControllerEnabled',
-              { toastOnError: false },
-            )
+          // ================================
+          // 2) Chequeo & enableController
+          // ================================
+          if (requireController) {
+            if (controller && controllerAddress) {
+              console.info('[useBorrow] checking isControllerEnabled', {
+                controllerAddress,
+                user: userAddress,
+                evault: evaultAddress,
+              })
 
-            console.info('[useBorrow] isControllerEnabled result', {
-              alreadyEnabled,
-            })
-
-            if (!alreadyEnabled) {
-              console.info(
-                '[useBorrow] controller NOT enabled, sending batch [enableController, borrowWithTerm]',
-                {
-                  controllerAddress,
-                  user: userAddress,
-                  evault: evaultAddress,
-                },
+              const alreadyEnabled = await safeRead(
+                () =>
+                  (controller as unknown as { isControllerEnabled: (user: string, vault: string) => Promise<boolean> }).isControllerEnabled(
+                    userAddress,
+                    evaultAddress,
+                  ),
+                false,
+                'isControllerEnabled',
+                { toastOnError: false },
               )
 
-              const enableTx = {
-                contractAddress: controllerAddress,
-                abi: (IEVC as { abi: unknown[] }).abi ?? IEVC,
-                functionName: 'enableController',
-                functionParams: [userAddress, evaultAddress],
-                value: '0',
-              }
+              console.info('[useBorrow] isControllerEnabled result', {
+                alreadyEnabled,
+              })
 
-              const hashes = await sendBatchContractTx([enableTx, borrowTx])
-              txHash = hashes[hashes.length - 1] ?? null
-
-              if (!txHash) {
-                console.warn(
-                  '[useBorrow] batch enable+borrow sin txHash esperado',
-                  hashes,
+              if (!alreadyEnabled) {
+                console.info(
+                  '[useBorrow] controller NOT enabled, sending batch [enableController, borrowWithTerm]',
+                  {
+                    controllerAddress,
+                    user: userAddress,
+                    evault: evaultAddress,
+                  },
                 )
+
+                const enableTx = {
+                  contractAddress: controllerAddress,
+                  abi: (IEVC as { abi: unknown[] }).abi ?? IEVC,
+                  functionName: 'enableController',
+                  functionParams: [userAddress, evaultAddress],
+                  value: '0',
+                }
+
+                const hashes = await sendBatchContractTx([enableTx, borrowTx])
+                txHash = hashes[hashes.length - 1] ?? null
+
+                if (!txHash) {
+                  console.warn(
+                    '[useBorrow] batch enable+borrow sin txHash esperado',
+                    hashes,
+                  )
+                }
+              } else {
+                console.info(
+                  '[useBorrow] controller already enabled, sending single borrowWithTerm tx.',
+                )
+
+                txHash = await sendContractTx(borrowTx)
               }
             } else {
-              console.info(
-                '[useBorrow] controller already enabled, sending single borrowWithTerm tx.',
+              console.warn(
+                '[useBorrow] requireController=true pero falta controller o controllerAddress. Skipping controller logic.',
+                {
+                  requireController,
+                  hasController: !!controller,
+                  hasControllerAddress: !!controllerAddress,
+                },
               )
 
               txHash = await sendContractTx(borrowTx)
             }
           } else {
-            console.warn(
-              '[useBorrow] requireController=true pero falta controller o controllerAddress. Skipping controller logic.',
-              {
-                requireController,
-                hasController: !!controller,
-                hasControllerAddress: !!controllerAddress,
-              },
+            console.info(
+              '[useBorrow] requireController=false, sending single borrowWithTerm tx.',
             )
-
             txHash = await sendContractTx(borrowTx)
           }
-        } else {
-          console.info(
-            '[useBorrow] requireController=false, sending single borrowWithTerm tx.',
-          )
-          txHash = await sendContractTx(borrowTx)
         }
 
         // ================================
@@ -416,20 +436,23 @@ export function useBorrow({ requireController = true }: Options = {}) {
         // ================================
         await softWait(4_000)
         const synced = await informBackend(txHash)
+        const explorerUrl = transactionExplorerUrl(txHash, mode)
 
         if (synced) {
-          toast.success(t('hooks.useBorrow.toast.confirmed.title'), {
-            description: t('hooks.useBorrow.toast.confirmed.desc'),
-          })
+          toast.success(
+            t('hooks.useBorrow.toast.confirmed.title'),
+            toastOptions(t('hooks.useBorrow.toast.confirmed.desc'), explorerUrl),
+          )
         } else {
           // Chain tx SUCCEEDED (the user's borrow went through on-chain),
           // backend reconciliation is pending. Show success (green) — the
           // yellow `warning` variant misled users into thinking there was
           // a problem when there wasn't. The recovery hook syncs the backend
           // silently on next mount.
-          toast.success(t('hooks.useBorrow.toast.syncPending.title'), {
-            description: t('hooks.useBorrow.toast.syncPending.desc'),
-          })
+          toast.success(
+            t('hooks.useBorrow.toast.syncPending.title'),
+            toastOptions(t('hooks.useBorrow.toast.syncPending.desc'), explorerUrl),
+          )
         }
 
         await refresh?.()
@@ -459,6 +482,7 @@ export function useBorrow({ requireController = true }: Options = {}) {
       refresh,
       validateAmount,
       requireController,
+      mode,
       controller,
       controllerAddress,
       api,

@@ -43,11 +43,13 @@ import { useTranslation } from '@/i18n/useTranslation'
 import { useContracts } from '@/providers/ContractsProvider'
 import { useWallet } from '@/providers/WalletProvider'
 import { useBorrower } from '@/providers/BorrowerProvider'
-import { DECIMALS, formatAmount } from '@/lib/utils'
+import { DECIMALS, formatAmount, transactionExplorerUrl } from '@/lib/utils'
 import { useApi } from '@/hooks/useApi'
 import { ApiError } from '@/lib/api'
 import { retryWithBackoff } from '@/lib/retryWithBackoff'
 import { addPending, removePending, updatePending } from '@/lib/repaymentQueue'
+import { stellarRepay } from '@/lib/stellar-contracts'
+import { normalizeWalletAddress } from '@/lib/wallet-address'
 import { useGamificationStore } from '@/stores/gamificationStore'
 import { useLoanStatsStore } from '@/stores/loanStatsStore'
 import { useCreditStore } from '@/stores/creditStore'
@@ -67,6 +69,17 @@ function isNonRetryableStatus(err: unknown): boolean {
   return err instanceof ApiError && err.status >= 400 && err.status < 500
 }
 
+function toastOptions(description: string, explorerUrl: string | null) {
+  if (!explorerUrl) return { description }
+  return {
+    description,
+    action: {
+      label: 'View tx',
+      onClick: () => window.open(explorerUrl, '_blank', 'noopener,noreferrer'),
+    },
+  }
+}
+
 export function useRepay() {
   const { t } = useTranslation()
 
@@ -81,14 +94,12 @@ export function useRepay() {
     refresh,
   } = useContracts()
 
-  const { primaryWallet } = useWallet()
+  const { mode, primaryWallet } = useWallet()
 
   const userAddress: string | null =
     connectedAddress ?? primaryWallet?.address ?? null
 
-  const walletAddress: string | null = userAddress
-    ? userAddress.toLowerCase()
-    : null
+  const walletAddress = normalizeWalletAddress(userAddress, mode)
 
   const {
     refreshLoanStats,
@@ -195,7 +206,10 @@ export function useRepay() {
         userAddress,
       })
 
-      if (!evaultAddress || !usdc || !usdcAddress || !userAddress) {
+      if (
+        !userAddress ||
+        (mode !== 'stellar' && (!evaultAddress || !usdc || !usdcAddress))
+      ) {
         toast.error(t('hooks.useRepay.toast.missingSetup.title'), {
           description: t('hooks.useRepay.toast.missingSetup.desc'),
         })
@@ -390,6 +404,39 @@ export function useRepay() {
       }
 
       try {
+        if (mode === 'stellar') {
+          const txHash = await stellarRepay({
+            payer: userAddress,
+            borrower: userAddress,
+          })
+
+          let optimisticRepGainStellar = false
+          if (opts?.wasOnTime) {
+            applyOptimisticOnTimeUpdate()
+            optimisticRepGainStellar = true
+          } else {
+            applyOptimisticLateUpdate()
+          }
+
+          const synced = await informBackend(txHash, optimisticRepGainStellar)
+          const explorerUrl = transactionExplorerUrl(txHash, mode)
+
+          if (synced) {
+            toast.success(
+              t('hooks.useRepay.toast.confirmed.title'),
+              toastOptions(t('hooks.useRepay.toast.confirmed.desc'), explorerUrl),
+            )
+          } else {
+            toast.success(
+              t('hooks.useRepay.toast.syncPending.title'),
+              toastOptions(t('hooks.useRepay.toast.syncPending.desc'), explorerUrl),
+            )
+          }
+
+          await refresh?.()
+          return true
+        }
+
         const bal: bigint = await (usdc as unknown as { balanceOf(addr: string): Promise<bigint> }).balanceOf(userAddress)
 
         if (bal < repayAmount) {
@@ -473,19 +520,22 @@ export function useRepay() {
           // available on RPC within ~1-2s of mining; retry handles the rare
           // miss.
           const synced = await informBackend(txHash, optimisticRepGain)
+          const explorerUrl = transactionExplorerUrl(txHash, mode)
 
           if (synced) {
-            toast.success(t('hooks.useRepay.toast.confirmedBatch.title'), {
-              description: t('hooks.useRepay.toast.confirmedBatch.desc'),
-            })
+            toast.success(
+              t('hooks.useRepay.toast.confirmedBatch.title'),
+              toastOptions(t('hooks.useRepay.toast.confirmedBatch.desc'), explorerUrl),
+            )
           } else {
             // Spec: chain tx SUCCEEDED; backend reconciliation pending. From the
             // user's POV their payment was confirmed (that's what they care
             // about), so we show success (green). useRepaymentRecovery handles
             // the eventual backend sync silently.
-            toast.success(t('hooks.useRepay.toast.syncPending.title'), {
-              description: t('hooks.useRepay.toast.syncPending.desc'),
-            })
+            toast.success(
+              t('hooks.useRepay.toast.syncPending.title'),
+              toastOptions(t('hooks.useRepay.toast.syncPending.desc'), explorerUrl),
+            )
           }
 
           await refresh?.()
@@ -519,18 +569,21 @@ export function useRepay() {
 
         // Spec 026: backend verifies via receipt; no artificial wait needed.
         const synced = await informBackend(txHash, optimisticRepGainSingle)
+        const explorerUrl = transactionExplorerUrl(txHash, mode)
 
         if (synced) {
-          toast.success(t('hooks.useRepay.toast.confirmed.title'), {
-            description: t('hooks.useRepay.toast.confirmed.desc'),
-          })
+          toast.success(
+            t('hooks.useRepay.toast.confirmed.title'),
+            toastOptions(t('hooks.useRepay.toast.confirmed.desc'), explorerUrl),
+          )
         } else {
           // Same rationale as the batch path above: chain tx confirmed,
           // backend sync is eventual. Show success (green) — the user's
           // action succeeded from their POV.
-          toast.success(t('hooks.useRepay.toast.syncPending.title'), {
-            description: t('hooks.useRepay.toast.syncPending.desc'),
-          })
+          toast.success(
+            t('hooks.useRepay.toast.syncPending.title'),
+            toastOptions(t('hooks.useRepay.toast.syncPending.desc'), explorerUrl),
+          )
         }
 
         await refresh?.()
@@ -551,6 +604,7 @@ export function useRepay() {
       usdcDecimals,
       userAddress,
       walletAddress,
+      mode,
       sendContractTx,
       sendBatchContractTx,
       refresh,

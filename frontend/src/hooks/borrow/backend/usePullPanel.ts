@@ -11,6 +11,7 @@ import { useCreditLine } from "@/hooks/borrow/blockchain/useCreditLine";
 import { softWait, normalizeErrorMessage } from "@/lib/utils";
 import { useApi } from "@/hooks/useApi";
 import { ApiError, AuthError } from "@/lib/api";
+import { normalizeWalletAddress } from "@/lib/wallet-address";
 import { useTranslation } from "@/i18n/useTranslation";
 
 export type PullPanelProps = {
@@ -148,7 +149,7 @@ export function usePullPanel({
   const { isVerified, authLoading } = useBorrower();
   const api = useApi();
   const { connectedAddress } = useContracts();
-  const { isLemonMiniApp, primaryWallet } = useWallet();
+  const { isLemonMiniApp, mode, primaryWallet } = useWallet();
   const { submit, submitting } = useBorrow({ requireController: true });
   const { scoreDisplay } = useCreditLine();
 
@@ -156,7 +157,7 @@ export function usePullPanel({
 
   // -------- resolver wallet global --------
   const normalizeLower = (addr?: string | null): string | null =>
-    addr ? addr.toLowerCase() : null;
+    normalizeWalletAddress(addr, mode);
 
   // En orden:
   // 1) primaryWallet.address (wagmi → web + farcaster)

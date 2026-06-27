@@ -12,7 +12,7 @@ import Decimal from 'decimal.js';
 import { User } from 'src/domain/entities/user.entity';
 import { Loan, LoanStatus } from 'src/domain/entities/loan.entity';
 import { InformRepaymentDto } from './dto/inform-repayment.dto';
-import { toUnits } from 'src/config/contractConfig';
+import { toUnits } from 'src/common/amount-units';
 import { BlockchainGatewayPort } from 'src/domain/ports/outbound/blockchain-gateway.port';
 import { CreditPolicyService } from 'src/domain/services/credit-policy.service';
 import { normalizeWallet } from 'src/common/normalize-wallet';
@@ -97,13 +97,14 @@ export class LoanRepaymentService {
     const wallet = normalizeWallet(walletAddress);
     const force = opts.force === true;
 
-    const [loan, premium, previewLate, isDefaulted, nowChain] = await Promise.all([
-      this.blockchain.readLoanFull(wallet),
-      this.blockchain.readPremium(wallet),
-      this.blockchain.previewLoanWithLate(wallet),
-      this.blockchain.readIsDefaulted(wallet),
-      this.blockchain.getChainBlockTimestamp(),
-    ]);
+    const [loan, premium, previewLate, isDefaulted, nowChain] =
+      await Promise.all([
+        this.blockchain.readLoanFull(wallet),
+        this.blockchain.readPremium(wallet),
+        this.blockchain.previewLoanWithLate(wallet),
+        this.blockchain.readIsDefaulted(wallet),
+        this.blockchain.getChainBlockTimestamp(),
+      ]);
 
     if (!loan) {
       throw new ServiceUnavailableException(
@@ -316,7 +317,9 @@ export class LoanRepaymentService {
         const amountPaidNumFromChain =
           chainPaidUnits !== null
             ? Number(
-                new Decimal(chainPaidUnits.toString()).div(1_000_000).toFixed(6),
+                new Decimal(chainPaidUnits.toString())
+                  .div(1_000_000)
+                  .toFixed(6),
               )
             : null;
         const amountPaidDec = this.parseAmountHuman(dto.amountPaidHuman);
@@ -339,9 +342,11 @@ export class LoanRepaymentService {
           typeof onChainDueUnits === 'bigint' &&
           onChainDueUnits > 0n
             ? Number(
-                new Decimal(onChainDueUnits.toString()).div(1_000_000).toFixed(2),
+                new Decimal(onChainDueUnits.toString())
+                  .div(1_000_000)
+                  .toFixed(2),
               )
-            : loan.amountDueAtOpen ?? amountPaidNum;
+            : (loan.amountDueAtOpen ?? amountPaidNum);
 
         this.logger.log(
           `[LoanRepaymentService] informRepayment: effectiveAmountDue=${effectiveAmountDue} for wallet=${wallet} (on-chain closed, verified)`,
@@ -387,7 +392,8 @@ export class LoanRepaymentService {
     });
 
     if (repaidOnTime) {
-      const ladderStep = this.creditPolicy.getStepForOnTimeLoans(onTimeLoanCount);
+      const ladderStep =
+        this.creditPolicy.getStepForOnTimeLoans(onTimeLoanCount);
       newScore = ladderStep.score;
 
       const currentScore = this.toNum(user.score) ?? 1;
@@ -400,7 +406,8 @@ export class LoanRepaymentService {
         newScore = currentScore + 1;
       }
 
-      const ladderLimitUsdc = this.creditPolicy.getStepForScore(newScore).limitUsdc;
+      const ladderLimitUsdc =
+        this.creditPolicy.getStepForScore(newScore).limitUsdc;
       const ladderLimitUnitsNum = Number(toUnits(ladderLimitUsdc, 6));
       newLimitUnitsNum = Math.max(newLimitUnitsNum, ladderLimitUnitsNum);
 
@@ -441,7 +448,8 @@ export class LoanRepaymentService {
     } else if (isPostDefault) {
       const currentScore = this.toNum(user.score) ?? DEFAULT_SCORE;
       newScore = Math.max(1, currentScore - 2);
-      const newLadderLimitUsdc = this.creditPolicy.getStepForScore(newScore).limitUsdc;
+      const newLadderLimitUsdc =
+        this.creditPolicy.getStepForScore(newScore).limitUsdc;
       newLimitUnitsNum = Number(toUnits(newLadderLimitUsdc, 6));
 
       this.logger.log(
@@ -474,9 +482,13 @@ export class LoanRepaymentService {
         );
       }
     } else {
-      const ladderLimitUsdc = this.creditPolicy.getStepForScore(newScore).limitUsdc;
+      const ladderLimitUsdc =
+        this.creditPolicy.getStepForScore(newScore).limitUsdc;
       const ladderLimitUnitsNum = Number(toUnits(ladderLimitUsdc, 6));
-      const renewLimitUnitsNum = Math.max(newLimitUnitsNum, ladderLimitUnitsNum);
+      const renewLimitUnitsNum = Math.max(
+        newLimitUnitsNum,
+        ladderLimitUnitsNum,
+      );
 
       try {
         await this.blockchain.giveCreditScoreAndLimit(
@@ -514,7 +526,8 @@ export class LoanRepaymentService {
       const delta = Math.max(0, repAfter - repBefore);
 
       if (delta > 0) {
-        const finalScore = this.toNum(freshUser?.score) ?? initialScoreForRepGain;
+        const finalScore =
+          this.toNum(freshUser?.score) ?? initialScoreForRepGain;
         const oldGroup = getGroupLabelForScore(initialScoreForRepGain);
         const newGroup = getGroupLabelForScore(finalScore);
 

@@ -12,8 +12,30 @@ const hexAddress = z
 const hexKey = z
   .string()
   .regex(/^0x[0-9a-fA-F]{64}$/, 'Must be a valid 0x private key');
+const sorobanContractId = z
+  .string()
+  .regex(/^C[A-Z2-7]{55}$/, 'Must be a valid Soroban contract id');
+const stellarSecret = z
+  .string()
+  .regex(/^S[A-Z2-7]{55}$/, 'Must be a valid Stellar secret seed');
 
-const envSchema = z.object({
+const emptyToUndefined = (value: unknown) =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value;
+
+const requiredForGateway = (
+  ctx: z.RefinementCtx,
+  gateway: 'evm' | 'soroban',
+  field: string,
+) => {
+  ctx.addIssue({
+    code: 'custom',
+    path: [field],
+    message: `Required when BLOCKCHAIN_GATEWAY=${gateway}`,
+  });
+};
+
+const envSchema = z
+  .object({
   // ── Server ─────────────────────────────────────────────
   NODE_ENV: z
     .enum(['production', 'development', 'staging', 'test'])
@@ -27,10 +49,51 @@ const envSchema = z.object({
   POSTGRES_PASSWORD: z.string().min(1),
   POSTGRES_DB: z.string().min(1),
 
-  // ── Blockchain (required) ──────────────────────────────
-  ETH_RPC_URL: z.url(),
-  ETH_LOAN_MANAGER: hexAddress,
-  ETH_PRIVATE_KEY: hexKey,
+  // ── Blockchain ─────────────────────────────────────────
+  BLOCKCHAIN_GATEWAY: z
+    .preprocess(
+      (value) =>
+        typeof value === 'string' ? value.trim().toLowerCase() : value,
+      z.enum(['evm', 'soroban']).default('evm'),
+    ),
+
+  // EVM mode.
+  ETH_RPC_URL: z.preprocess(emptyToUndefined, z.url().optional()),
+  ETH_LOAN_MANAGER: z.preprocess(emptyToUndefined, hexAddress.optional()),
+  ETH_PRIVATE_KEY: z.preprocess(emptyToUndefined, hexKey.optional()),
+
+  // Soroban mode. Public testnet values default to the current deployment;
+  // the operator seed remains intentionally required for writes.
+  SOROBAN_RPC_URL: z.preprocess(
+    emptyToUndefined,
+    z.url().default('https://soroban-testnet.stellar.org'),
+  ),
+  NETWORK_PASSPHRASE: z.preprocess(
+    emptyToUndefined,
+    z.string().default('Test SDF Network ; September 2015'),
+  ),
+  STELLAR_OPERATOR_SECRET: z.preprocess(
+    emptyToUndefined,
+    stellarSecret.optional(),
+  ),
+  SOROBAN_LOAN_MANAGER: z.preprocess(
+    emptyToUndefined,
+    sorobanContractId.default(
+      'CDBB3B6PZAV5OH7NACXQTL3YLZLJ3NNUMHCMFV54WIR6MDCO6GKGFSCJ',
+    ),
+  ),
+  SOROBAN_VAULT: z.preprocess(
+    emptyToUndefined,
+    sorobanContractId.default(
+      'CDVWUWSBHFVQGPCZGLBRTHDDIJBKWLXTVC2QIPXG6UJWNDFGZUP7S7KO',
+    ),
+  ),
+  SOROBAN_USDC_SAC: z.preprocess(
+    emptyToUndefined,
+    sorobanContractId.default(
+      'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
+    ),
+  ),
 
   // ── SMTP / Email (optional — gracefully degrades) ──────
   SMTP_USER: z.string().optional(),
@@ -113,10 +176,31 @@ const envSchema = z.object({
   // ── Spec 065 — DB↔chain parity observability ──────────
   // URL to the lendoor-subgraph used by `computeDbChainDiff`. Falls back
   // to the public studio endpoint when unset (no auth needed for read).
-  SUBGRAPH_URL: z
-    .url()
-    .default('https://api.studio.thegraph.com/query/1718667/lendoor-sub/version/latest'),
-});
+  SUBGRAPH_URL: z.preprocess(
+    emptyToUndefined,
+    z
+      .url()
+      .default(
+        'https://api.studio.thegraph.com/query/1718667/lendoor-sub/version/latest',
+      ),
+  ),
+})
+  .superRefine((value, ctx) => {
+    if (value.BLOCKCHAIN_GATEWAY === 'soroban') {
+      if (!value.STELLAR_OPERATOR_SECRET) {
+        requiredForGateway(ctx, 'soroban', 'STELLAR_OPERATOR_SECRET');
+      }
+      return;
+    }
+
+    if (!value.ETH_RPC_URL) requiredForGateway(ctx, 'evm', 'ETH_RPC_URL');
+    if (!value.ETH_LOAN_MANAGER) {
+      requiredForGateway(ctx, 'evm', 'ETH_LOAN_MANAGER');
+    }
+    if (!value.ETH_PRIVATE_KEY) {
+      requiredForGateway(ctx, 'evm', 'ETH_PRIVATE_KEY');
+    }
+  });
 
 export type Env = z.infer<typeof envSchema>;
 

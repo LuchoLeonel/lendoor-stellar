@@ -9,8 +9,6 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull, In } from 'typeorm';
 import Decimal from 'decimal.js';
-import { Interface } from 'ethers';
-import { provider, CLM_ADDRESS } from 'src/config/contractConfig';
 
 import { User } from 'src/domain/entities/user.entity';
 import { Loan, LoanStatus } from 'src/domain/entities/loan.entity';
@@ -34,16 +32,12 @@ import { normalizeWallet } from 'src/common/normalize-wallet';
 
 import { LoanVerificationService } from './loan-verification.service';
 import { LoanRepaymentService } from './loan-repayment.service';
-import LoanManagerAbi from '../abi/LoanManagerV3.abi.json';
 
 // Config global para Decimal
 Decimal.set({
   precision: 40,
   rounding: Decimal.ROUND_HALF_UP,
 });
-
-const LOAN_MANAGER_IFACE = new Interface(LoanManagerAbi);
-const LOAN_OPENED_TOPIC = LOAN_MANAGER_IFACE.getEvent('LoanOpened')!.topicHash;
 
 type UserPlatform = 'lemon' | 'farcaster' | 'webapp';
 
@@ -236,7 +230,12 @@ export class LoanService {
       lateLoans: number;
     },
   ): number {
-    const { periodRate } = this.getRatesForTerm(days, score, pDefault, tieredParams);
+    const { periodRate } = this.getRatesForTerm(
+      days,
+      score,
+      pDefault,
+      tieredParams,
+    );
     return this.toBps(periodRate);
   }
 
@@ -266,7 +265,9 @@ export class LoanService {
       tieredCtx.lateLoans,
     );
     const isPreferentialRate = tieredResult.monthlyRate < 0.28;
-    const adjustedLimitUsdc = this.creditPolicy.getStepForScore(score ?? 1).limitUsdc;
+    const adjustedLimitUsdc = this.creditPolicy.getStepForScore(
+      score ?? 1,
+    ).limitUsdc;
 
     const terms = TERM_OPTIONS.map((days) => {
       const { monthlyRate, periodRate } = this.getRatesForTerm(
@@ -348,11 +349,14 @@ export class LoanService {
     const scoreNum = this.toNum(user.score);
     const pDefaultNum = this.toNum(user.riskPDefault);
 
-    const ladderLimitUsdc = this.creditPolicy.getStepForScore(scoreNum ?? 1).limitUsdc;
+    const ladderLimitUsdc = this.creditPolicy.getStepForScore(
+      scoreNum ?? 1,
+    ).limitUsdc;
 
     let effectiveLimitUsdc = ladderLimitUsdc;
     try {
-      const onChainLimitUnits = await this.blockchain.readCreditLimitOnChain(borrower);
+      const onChainLimitUnits =
+        await this.blockchain.readCreditLimitOnChain(borrower);
       const onChainLimitUsdc = Number(onChainLimitUnits) / 1_000_000;
       if (onChainLimitUsdc > 0 && onChainLimitUsdc < ladderLimitUsdc) {
         this.logger.warn(
@@ -376,7 +380,12 @@ export class LoanService {
     const tieredCtx = await this.getTieredPricingContext(user.id);
     tieredCtx.walletQuality = (user.walletQuality as WalletQuality) ?? 'fea';
 
-    const feeBps = this.getFeeBpsForTerm(tenor, scoreNum, pDefaultNum, tieredCtx);
+    const feeBps = this.getFeeBpsForTerm(
+      tenor,
+      scoreNum,
+      pDefaultNum,
+      tieredCtx,
+    );
 
     this.logger.log(
       `[LoanService] borrow: wallet=${borrower} amount=${amountHuman} tenorDays=${tenor} feeBps=${feeBps} score=${scoreNum ?? 'null'} tier=${this.creditPolicy.getTieredMonthlyRate(pDefaultNum, tieredCtx.onTimeLoans, tieredCtx.walletQuality, tieredCtx.totalRepaidUsd, tieredCtx.lateLoans).tier}`,
@@ -457,7 +466,12 @@ export class LoanService {
     const tieredCtx = await this.getTieredPricingContext(user.id);
     tieredCtx.walletQuality = (user.walletQuality as WalletQuality) ?? 'fea';
 
-    const feeBps = this.getFeeBpsForTerm(tenor, scoreNum, pDefaultNum, tieredCtx);
+    const feeBps = this.getFeeBpsForTerm(
+      tenor,
+      scoreNum,
+      pDefaultNum,
+      tieredCtx,
+    );
     const feeDec = principalDec.mul(feeBps).div(10000);
     const totalDec = principalDec.plus(feeDec);
     const amountDueAtOpenNum = Number(this.formatAmount(totalDec));
@@ -556,24 +570,10 @@ export class LoanService {
     txHash: string,
     wallet: string,
   ): Promise<void> {
-    const receipt = await provider.getTransactionReceipt(txHash);
-    if (!receipt) {
-      throw new BadRequestException('txHash not found on chain');
-    }
-    if (receipt.status !== 1) {
-      throw new BadRequestException('txHash transaction reverted');
-    }
-
-    const walletLower = wallet.toLowerCase();
-    const clmLower = CLM_ADDRESS.toLowerCase();
-
-    const matched = receipt.logs.some((log) => {
-      if (log.address.toLowerCase() !== clmLower) return false;
-      if (log.topics[0] !== LOAN_OPENED_TOPIC) return false;
-      const userFromTopic = '0x' + log.topics[1].slice(-40).toLowerCase();
-      return userFromTopic === walletLower;
-    });
-
+    const matched = await this.blockchain.verifyLoanOpenedByTxHash(
+      txHash,
+      wallet,
+    );
     if (!matched) {
       throw new BadRequestException(
         'txHash is not a LoanOpened event for this wallet',

@@ -13,6 +13,7 @@ import { useWallet } from "@/providers/WalletProvider";
 import { useTranslation } from "@/i18n/useTranslation";
 import { useAuthStore } from "@/stores/authStore";
 import { lendoorApi } from "@/lib/api";
+import { signFreighterMessage } from "@/lib/stellar-wallet";
 import type { GetNonceResponse, VerifySiweResponse } from "@shared/types/api";
 
 // Spec 044 — request the 6 identity claims on every Lemon SIWE so backend
@@ -110,11 +111,40 @@ Nonce: ${nonce}
 Issued At: ${issuedAt}`;
 }
 
+function buildStellarAuthMessage(address: string, nonce: string): string {
+  const domain =
+    typeof window !== "undefined" ? window.location.host : "localhost";
+  const uri =
+    typeof window !== "undefined"
+      ? window.location.origin
+      : "http://localhost:3000";
+  const issuedAt = new Date().toISOString();
+
+  return `${domain} wants you to sign in with your Stellar account:
+${address}
+
+Sign in to Lendoor
+
+URI: ${uri}
+Version: 1
+Nonce: ${nonce}
+Issued At: ${issuedAt}`;
+}
+
+function utf8ToBase64(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
+
 export function useRefreshAccessToken(): () => Promise<string | null> {
   const { address: wagmiAddress, chainId: wagmiChainId, status: wagmiStatus } =
     useAccount();
   const { signMessageAsync } = useSignMessage();
-  const { mode } = useWallet();
+  const { mode, primaryWallet } = useWallet();
   const { t } = useTranslation();
   const { setAccessToken, setAuthLoading } = useAuthStore();
 
@@ -136,7 +166,16 @@ export function useRefreshAccessToken(): () => Promise<string | null> {
           if (refreshRes.ok) {
             const data = await refreshRes.json();
             setAccessToken(data.accessToken);
-            try { localStorage.setItem("lendoor:tokenWallet", data.wallet.toLowerCase()); } catch { /* */ }
+            try {
+              localStorage.setItem(
+                "lendoor:tokenWallet",
+                mode === "stellar"
+                  ? String(data.wallet)
+                  : String(data.wallet).toLowerCase(),
+              );
+            } catch {
+              /* */
+            }
             return data.accessToken;
           }
         } catch {
@@ -223,7 +262,58 @@ export function useRefreshAccessToken(): () => Promise<string | null> {
         return data.accessToken;
       }
 
-      // 2) WEB / FARCASTER via wagmi
+      // 2) STELLAR via Freighter
+      if (mode === "stellar" && primaryWallet?.address) {
+        console.log("[RefreshAccessToken] Using Stellar Freighter auth flow");
+
+        const nonceRes = await fetch(`${BACKEND_URL}/auth/nonce`, {
+          method: "POST",
+        });
+        if (!nonceRes.ok) {
+          const txt = await nonceRes.text().catch(() => "");
+          throw new Error(
+            txt || `Error al pedir nonce (HTTP ${nonceRes.status})`,
+          );
+        }
+        const { nonce } = (await nonceRes.json()) as GetNonceResponse;
+
+        const message = buildStellarAuthMessage(primaryWallet.address, nonce);
+        const signature = await signFreighterMessage(
+          message,
+          primaryWallet.address,
+        );
+
+        const verifyRes = await fetch(`${BACKEND_URL}/auth/stellar/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            wallet: primaryWallet.address,
+            signature,
+            message: utf8ToBase64(message),
+            nonce,
+          }),
+        });
+
+        if (!verifyRes.ok) {
+          const txt = await verifyRes.text().catch(() => "");
+          throw new Error(
+            txt || `Error /auth/stellar/verify (HTTP ${verifyRes.status})`,
+          );
+        }
+
+        const data = (await verifyRes.json()) as VerifySiweResponse;
+
+        setAccessToken(data.accessToken);
+        try {
+          localStorage.setItem("lendoor:tokenWallet", primaryWallet.address);
+        } catch {
+          /* */
+        }
+        console.log("[RefreshAccessToken] Stellar auth success");
+        return data.accessToken;
+      }
+
+      // 3) WEB / FARCASTER via wagmi
       if (wagmiStatus === "connected" && wagmiAddress && wagmiChainId) {
         console.log("[RefreshAccessToken] Using wagmi SIWE flow");
 
@@ -271,7 +361,7 @@ export function useRefreshAccessToken(): () => Promise<string | null> {
         return data.accessToken;
       }
 
-      // 3) wagmi not connected — user needs to connect via RainbowKit first
+      // 4) wagmi not connected — user needs to connect via RainbowKit first
       console.log("[RefreshAccessToken] No wallet connected via wagmi", { wagmiStatus });
       return null;
     } catch (e: unknown) {
@@ -297,5 +387,14 @@ export function useRefreshAccessToken(): () => Promise<string | null> {
       setAuthLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, wagmiStatus, wagmiAddress, wagmiChainId, signMessageAsync, setAccessToken, setAuthLoading]);
+  }, [
+    mode,
+    primaryWallet,
+    wagmiStatus,
+    wagmiAddress,
+    wagmiChainId,
+    signMessageAsync,
+    setAccessToken,
+    setAuthLoading,
+  ]);
 }

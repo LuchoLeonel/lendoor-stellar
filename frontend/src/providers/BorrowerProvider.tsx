@@ -20,6 +20,8 @@ import { useLoanStatsStore } from "@/stores/loanStatsStore";
 import { setLoanStatsFromJourney } from "@/stores/actions/setLoanStatsFromJourney";
 import { useRefreshAccessToken } from "@/hooks/borrow/useRefreshAccessToken";
 import { useRefreshLoanStats } from "@/hooks/borrow/useRefreshLoanStats";
+import { useWallet } from "@/providers/WalletProvider";
+import { normalizeWalletAddress } from "@/lib/wallet-address";
 
 export type { AchievementSummary };
 
@@ -79,6 +81,7 @@ const BorrowerContext = createContext<BorrowerContextType | null>(null);
 
 export function BorrowerProvider({ children }: { children: React.ReactNode }) {
   const { address } = useAccount();
+  const { mode, primaryWallet } = useWallet();
 
   // Hooks that need React (wagmi, wallet provider)
   const refreshAccessToken = useRefreshAccessToken();
@@ -121,7 +124,10 @@ export function BorrowerProvider({ children }: { children: React.ReactNode }) {
   const prevWalletRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const current = address?.toLowerCase() || null;
+    const current = normalizeWalletAddress(
+      mode === "stellar" ? primaryWallet?.address : address,
+      mode,
+    );
 
     if (prevWalletRef.current === null) {
       prevWalletRef.current = current;
@@ -130,7 +136,10 @@ export function BorrowerProvider({ children }: { children: React.ReactNode }) {
       // This happens when the user reconnects with a different wallet after a page reload.
       if (current) {
         try {
-          const tokenWallet = localStorage.getItem("lendoor:tokenWallet")?.toLowerCase();
+          const tokenWallet = normalizeWalletAddress(
+            localStorage.getItem("lendoor:tokenWallet"),
+            mode,
+          );
           if (tokenWallet && tokenWallet !== current) {
             console.log("[Borrower] Stale token for wallet", tokenWallet, "but current is", current, "— clearing auth");
             useAuthStore.getState().clearAuth();
@@ -154,7 +163,7 @@ export function BorrowerProvider({ children }: { children: React.ReactNode }) {
     useCreditStore.getState().reset();
     useGamificationStore.getState().reset();
     useLoanStatsStore.getState().reset();
-  }, [address]);
+  }, [address, mode, primaryWallet]);
 
   const value: BorrowerContextType = useMemo(
     () => ({
