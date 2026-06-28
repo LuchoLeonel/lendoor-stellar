@@ -1,4 +1,5 @@
 const getEvents = jest.fn();
+const getTransaction = jest.fn();
 const fromScVal = jest.fn((value: unknown) => value);
 const scAddress = jest.fn((address: string) => ({
   toXDR: () => `addr:${address}`,
@@ -20,7 +21,7 @@ jest.mock('src/config/sorobanConfig', () => ({
   scU64: jest.fn(),
   sendLoanManagerCall: jest.fn(),
   simulateLoanManagerCall: jest.fn(),
-  sorobanServer: jest.fn(() => ({ getEvents })),
+  sorobanServer: jest.fn(() => ({ getEvents, getTransaction })),
   toUnits: jest.fn((value: string | number | bigint) => BigInt(value)),
 }));
 
@@ -32,6 +33,7 @@ describe('SorobanBlockchainGateway event scans', () => {
   beforeEach(() => {
     gateway = new SorobanBlockchainGateway();
     getEvents.mockReset();
+    getTransaction.mockReset();
     fromScVal.mockImplementation((value: unknown) => value);
     scAddress.mockClear();
     scSymbol.mockClear();
@@ -125,5 +127,24 @@ describe('SorobanBlockchainGateway event scans', () => {
         timestamp: 1767225600,
       },
     ]);
+  });
+
+  it('returns false when loan-open transaction events are absent', async () => {
+    getTransaction.mockResolvedValueOnce({
+      status: 'SUCCESS',
+      events: undefined,
+    });
+
+    await expect(
+      gateway.verifyLoanOpenedByTxHash('tx-open', 'GBORROWER'),
+    ).resolves.toBe(false);
+  });
+
+  it('propagates loan-open transaction polling failures', async () => {
+    getTransaction.mockRejectedValueOnce(new Error('RPC timeout'));
+
+    await expect(
+      gateway.verifyLoanOpenedByTxHash('tx-open', 'GBORROWER'),
+    ).rejects.toThrow('RPC timeout');
   });
 });

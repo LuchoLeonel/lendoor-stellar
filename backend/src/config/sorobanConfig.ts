@@ -28,10 +28,16 @@ export const NETWORK_PASSPHRASE =
   process.env.NETWORK_PASSPHRASE ?? 'Test SDF Network ; September 2015';
 
 const STELLAR_OPERATOR_SECRET = process.env.STELLAR_OPERATOR_SECRET;
-const TX_CONFIRM_TIMEOUT_MS = Number(
-  process.env.CLM_TX_CONFIRM_TIMEOUT_MS ?? 60_000,
+const TX_CONFIRM_TIMEOUT_MS = positiveIntEnv(
+  'CLM_TX_CONFIRM_TIMEOUT_MS',
+  process.env.CLM_TX_CONFIRM_TIMEOUT_MS,
+  60_000,
 );
-const MAX_SEND_ATTEMPTS = Number(process.env.CLM_SEND_MAX_ATTEMPTS ?? 3);
+const MAX_SEND_ATTEMPTS = positiveIntEnv(
+  'CLM_SEND_MAX_ATTEMPTS',
+  process.env.CLM_SEND_MAX_ATTEMPTS,
+  3,
+);
 
 type QueuedTask = () => Promise<void>;
 const highQueue: QueuedTask[] = [];
@@ -49,6 +55,18 @@ function stellar(): StellarSdk {
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function positiveIntEnv(
+  name: string,
+  raw: string | undefined,
+  fallback: number,
+) {
+  const value = raw === undefined || raw.trim() === '' ? fallback : Number(raw);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+  return value;
 }
 
 function dispatch(): void {
@@ -204,6 +222,28 @@ async function waitForTransaction(hash: string) {
   );
 }
 
+async function waitForTransactionWithRetry(hash: string, purpose: string) {
+  let lastErr: unknown = null;
+  for (let attempt = 1; attempt <= MAX_SEND_ATTEMPTS; attempt++) {
+    try {
+      return await waitForTransaction(hash);
+    } catch (e) {
+      lastErr = e;
+      if (attempt === MAX_SEND_ATTEMPTS || !isRetryableSorobanError(e)) {
+        throw e;
+      }
+      const wait = 2000 * attempt;
+      logger.warn(
+        `[${purpose}] confirm attempt ${attempt}/${MAX_SEND_ATTEMPTS} failed for ${hash}: ${String(
+          (e as { message?: string })?.message ?? e,
+        ).slice(0, 160)}. Polling again in ${wait}ms`,
+      );
+      await sleep(wait);
+    }
+  }
+  throw lastErr ?? new Error(`${purpose} confirmation failed for ${hash}`);
+}
+
 async function buildContractTransaction(
   method: string,
   args: StellarScVal[],
@@ -246,28 +286,27 @@ export async function sendLoanManagerCall(
   priority: TxPriority = 'low',
 ) {
   assertSorobanContractId(SOROBAN_LOAN_MANAGER, 'SOROBAN_LOAN_MANAGER');
-  return enqueueSoroban(
-    () =>
-      withSorobanWriteRetry(async () => {
-        const server = sorobanServer();
-        const keypair = operatorKeypair();
-        const tx = await buildContractTransaction(method, args);
-        const prepared = await server.prepareTransaction(tx);
-        prepared.sign(keypair);
+  return enqueueSoroban(async () => {
+    const sent = await withSorobanWriteRetry(async () => {
+      const server = sorobanServer();
+      const keypair = operatorKeypair();
+      const tx = await buildContractTransaction(method, args);
+      const prepared = await server.prepareTransaction(tx);
+      prepared.sign(keypair);
 
-        const sent = await server.sendTransaction(prepared);
-        if (sent.status === 'TRY_AGAIN_LATER') {
-          throw new Error(`TRY_AGAIN_LATER ${sent.hash}`);
-        }
-        if (sent.status === 'ERROR') {
-          throw new Error(`Soroban send failed for ${purpose}: ${sent.hash}`);
-        }
+      const result = await server.sendTransaction(prepared);
+      if (result.status === 'TRY_AGAIN_LATER') {
+        throw new Error(`TRY_AGAIN_LATER ${result.hash}`);
+      }
+      if (result.status === 'ERROR') {
+        throw new Error(`Soroban send failed for ${purpose}: ${result.hash}`);
+      }
+      return result;
+    }, `${purpose}:send`);
 
-        logger.log(`[${purpose}] tx hash=${sent.hash}`);
-        const confirmed = await waitForTransaction(sent.hash);
-        logger.log(`[${purpose}] confirmed ledger=${confirmed.ledger}`);
-        return confirmed;
-      }, purpose),
-    priority,
-  );
+    logger.log(`[${purpose}] tx hash=${sent.hash}`);
+    const confirmed = await waitForTransactionWithRetry(sent.hash, purpose);
+    logger.log(`[${purpose}] confirmed ledger=${confirmed.ledger}`);
+    return confirmed;
+  }, priority);
 }

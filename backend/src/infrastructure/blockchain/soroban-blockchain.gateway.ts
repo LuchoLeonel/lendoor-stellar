@@ -440,7 +440,7 @@ export class SorobanBlockchainGateway implements BlockchainGatewayPort {
     if (!tx) return false;
     if (tx.status !== 'SUCCESS') return false;
 
-    for (const group of tx.events.contractEventsXdr ?? []) {
+    for (const group of tx.events?.contractEventsXdr ?? []) {
       for (const event of group) {
         if (!isLoanManagerContractEvent(event)) continue;
         const body = event.body().v0();
@@ -494,7 +494,7 @@ export class SorobanBlockchainGateway implements BlockchainGatewayPort {
         return { verified: false, reason: 'reverted' };
       }
 
-      for (const group of tx.events.contractEventsXdr ?? []) {
+      for (const group of tx.events?.contractEventsXdr ?? []) {
         for (const event of group) {
           if (!isLoanManagerContractEvent(event)) continue;
           const body = event.body().v0();
