@@ -37,7 +37,8 @@ Required proof:
 - Backend creates a loan offer on Soroban.
 - Backend reads active loan state from Soroban.
 - Backend verifies a repay tx by Stellar tx hash.
-- Backend chain sync reads Soroban events by ledger cursor and persists loan state.
+- Backend chain sync reads Soroban events by ledger cursor idempotently and persists loan state.
+- Replayed events or duplicate tx hashes do not create duplicate loans or double-apply repayments.
 - Backend stores Stellar addresses without lowercasing or converting them.
 
 Pass condition:
@@ -100,6 +101,7 @@ Required proof:
   - explorer URL is `stellar.expert`
 - Backend accepts Stellar wallet addresses in all user/loan endpoints.
 - Backend accepts Stellar tx hashes for open/repay reporting.
+- Backend rejects non-Stellar wallet addresses and non-Stellar tx hashes at Stellar-mode endpoints.
 - Existing app responses still power:
   - onboarding state
   - credit limit
@@ -124,8 +126,8 @@ Run this exact flow on Stellar testnet:
 1. Start backend.
 2. Start frontend.
 3. Connect Freighter testnet wallet.
-4. Backend/operator gives the wallet a credit limit.
-5. Frontend shows the credit limit.
+4. Backend/operator creates the wallet credit limit and loan offer on Soroban.
+5. Frontend shows the credit limit and loan offer.
 6. User borrows from the UI.
 7. Borrow tx succeeds on Stellar testnet.
 8. Borrow tx link opens on stellar.expert.
@@ -152,6 +154,8 @@ The migration is not complete if any of these are true:
 - Stellar addresses are lowercased.
 - Borrow or repay only works through scripts, not through the app.
 - Backend DB disagrees with Soroban loan state after sync.
+- Replayed Soroban events or repeated tx-hash reports mutate loan state twice.
+- Stellar-mode endpoints accept EVM wallet addresses or `0x` transaction hashes.
 - Frontend shows a success state for a tx that is missing or failed on Stellar.
 - Explorer links do not open the correct Stellar testnet tx.
 - Tests only pass with mocked chain behavior and no real testnet smoke test was run.
@@ -165,6 +169,8 @@ Verdict: PASS or FAIL
 
 Contracts:
 - command/results
+- deployed contract addresses
+- network/testnet identifier
 - testnet tx links
 
 Backend:
