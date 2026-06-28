@@ -8,6 +8,7 @@ import {
 import {
   assertStellarAccount,
   fromScVal,
+  isLoanManagerContractEvent,
   scAddress,
   scBool,
   scI128,
@@ -33,6 +34,10 @@ type SorobanLoan = {
   gracePeriod?: bigint | number;
   active?: boolean;
 };
+
+type SorobanEventResponse = Awaited<
+  ReturnType<ReturnType<typeof sorobanServer>['getEvents']>
+>['events'][number];
 
 type SorobanPremium = {
   premium_rate_per_sec_wad?: bigint;
@@ -61,6 +66,36 @@ function eventTimestamp(ledgerClosedAt: string): number {
 
 function eventTopic(value: string): string {
   return scSymbol(value).toXDR('base64');
+}
+
+async function getContractEvents(
+  startLedger: number,
+  endLedger: number,
+  topics: string[][],
+): Promise<SorobanEventResponse[]> {
+  const filters = [
+    {
+      type: 'contract' as const,
+      contractIds: [SOROBAN_LOAN_MANAGER],
+      topics,
+    },
+  ];
+  const limit = 1000;
+  const events: SorobanEventResponse[] = [];
+  let cursor: string | null = null;
+
+  do {
+    const response = await sorobanServer().getEvents(
+      cursor
+        ? { filters, cursor, limit }
+        : { filters, startLedger, endLedger, limit },
+    );
+    events.push(...response.events);
+    if (!response.cursor || response.cursor === cursor) break;
+    cursor = response.events.length === limit ? response.cursor : null;
+  } while (cursor);
+
+  return events;
 }
 
 function normalizeLoan(loan: SorobanLoan): {
@@ -122,6 +157,9 @@ export class SorobanBlockchainGateway implements BlockchainGatewayPort {
     }
 
     const finalValidUntil = validUntil ?? nowPlus(30 * 24 * 60 * 60);
+    if (limit < 0n) {
+      throw new Error(`Invalid limit: ${limit}`);
+    }
     await sendLoanManagerCall(
       'set_user_risk',
       [
@@ -159,6 +197,9 @@ export class SorobanBlockchainGateway implements BlockchainGatewayPort {
     }
 
     const maxAmount = toUnits(amountHuman, 6);
+    if (maxAmount <= 0n) {
+      throw new Error(`Invalid amountHuman: ${amountHuman}`);
+    }
     const validUntil = nowPlus(3 * 24 * 60 * 60);
     const tx = await sendLoanManagerCall(
       'set_loan_offer',
@@ -188,6 +229,9 @@ export class SorobanBlockchainGateway implements BlockchainGatewayPort {
     priority: TxPriority = 'low',
   ): Promise<void> {
     assertStellarAccount(borrower);
+    if (lateRatePerSecWad < 0n) {
+      throw new Error(`Invalid lateRatePerSecWad: ${lateRatePerSecWad}`);
+    }
     await sendLoanManagerCall(
       'set_premium_config',
       [scAddress(borrower), scI128(0n), scI128(lateRatePerSecWad)],
@@ -313,20 +357,11 @@ export class SorobanBlockchainGateway implements BlockchainGatewayPort {
     fromLedger: number,
     toLedger: number,
   ): Promise<ChainLoanOpenedEvent[]> {
-    const response = await sorobanServer().getEvents({
-      startLedger: fromLedger,
-      endLedger: toLedger,
-      filters: [
-        {
-          type: 'contract',
-          contractIds: [SOROBAN_LOAN_MANAGER],
-          topics: [[eventTopic('loanopen')]],
-        },
-      ],
-      limit: 1000,
-    });
+    const events = await getContractEvents(fromLedger, toLedger, [
+      [eventTopic('loanopen')],
+    ]);
 
-    return response.events
+    return events
       .filter((event) => event.inSuccessfulContractCall)
       .map((event) => {
         const topics = event.topic.map((topic) => fromScVal(topic));
@@ -359,22 +394,12 @@ export class SorobanBlockchainGateway implements BlockchainGatewayPort {
     assertStellarAccount(borrower);
     const loanStartUnix = Math.floor(loanStartAt.getTime() / 1000);
     const startLedger = Math.max(0, currentLedger - 100_000);
-    const response = await sorobanServer().getEvents({
-      startLedger,
-      endLedger: currentLedger,
-      filters: [
-        {
-          type: 'contract',
-          contractIds: [SOROBAN_LOAN_MANAGER],
-          topics: [
-            [eventTopic('loanclos'), scAddress(borrower).toXDR('base64')],
-          ],
-        },
-      ],
-      limit: 1000,
-    });
+    const events = await getContractEvents(startLedger, currentLedger, [
+      [eventTopic('loanclos')],
+      [scAddress(borrower).toXDR('base64')],
+    ]);
 
-    const matches = response.events
+    const matches = events
       .filter((event) => event.inSuccessfulContractCall)
       .map((event) => ({
         event,
@@ -401,11 +426,23 @@ export class SorobanBlockchainGateway implements BlockchainGatewayPort {
     borrower: string,
   ): Promise<boolean> {
     assertStellarAccount(borrower);
-    const tx = await sorobanServer().getTransaction(txHash);
+    let tx: Awaited<
+      ReturnType<ReturnType<typeof sorobanServer>['getTransaction']>
+    > | null = null;
+    for (let attempt = 1; attempt <= 10; attempt++) {
+      tx = await sorobanServer().getTransaction(txHash);
+      if (tx.status !== 'NOT_FOUND') break;
+      if (attempt < 10) {
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    }
+
+    if (!tx) return false;
     if (tx.status !== 'SUCCESS') return false;
 
     for (const group of tx.events.contractEventsXdr ?? []) {
       for (const event of group) {
+        if (!isLoanManagerContractEvent(event)) continue;
         const body = event.body().v0();
         const topics = body.topics().map((topic) => fromScVal(topic));
         if (topics[0] === 'loanopen' && topics[1] === borrower) return true;
@@ -459,6 +496,7 @@ export class SorobanBlockchainGateway implements BlockchainGatewayPort {
 
       for (const group of tx.events.contractEventsXdr ?? []) {
         for (const event of group) {
+          if (!isLoanManagerContractEvent(event)) continue;
           const body = event.body().v0();
           const topics = body.topics().map((topic) => fromScVal(topic));
           if (topics[0] !== 'loanclos' || topics[1] !== borrower) continue;

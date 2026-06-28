@@ -8,6 +8,7 @@ dotenv.config();
 
 type StellarSdk = typeof import('@stellar/stellar-sdk');
 type StellarTransaction = import('@stellar/stellar-sdk').Transaction;
+type StellarContractEvent = import('@stellar/stellar-sdk').xdr.ContractEvent;
 type StellarScVal = import('@stellar/stellar-sdk').xdr.ScVal;
 
 const logger = new Logger('SorobanConfig');
@@ -94,6 +95,19 @@ export function assertSorobanContractId(
   if (!/^C[A-Z2-7]{55}$/.test(contractId)) {
     throw new Error(`Invalid ${label}: ${contractId}`);
   }
+}
+
+export function isLoanManagerContractEvent(
+  event: StellarContractEvent,
+): boolean {
+  const contractId = event.contractId();
+  if (!contractId) return false;
+  return (
+    Buffer.compare(
+      Buffer.from(contractId as unknown as Uint8Array),
+      stellar().StrKey.decodeContract(SOROBAN_LOAN_MANAGER),
+    ) === 0
+  );
 }
 
 function operatorSecret(): string {
