@@ -148,6 +148,7 @@
       "progressStart": "Día 1",
       "termProgressLabel": "Plazo del crédito",
       "termProgressEnd": "Vencimiento",
+      "deadlineOverdue": "Fecha límite superada",
       "depositAmountCta": "Agregar {{amount}} USDC para pagar",
       "payWithBalance": "Pagar con saldo disponible"
     }

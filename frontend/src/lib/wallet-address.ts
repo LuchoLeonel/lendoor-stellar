@@ -10,10 +10,14 @@ export function normalizeWalletAddress(
   const trimmed = address?.trim();
   if (!trimmed) return null;
 
-  if (STELLAR_ACCOUNT_ADDRESS_PATTERN.test(trimmed)) return trimmed;
-  if (EVM_WALLET_ADDRESS_PATTERN.test(trimmed)) return trimmed.toLowerCase();
+  if (mode === "stellar") {
+    return STELLAR_ACCOUNT_ADDRESS_PATTERN.test(trimmed) ? trimmed : null;
+  }
 
-  return mode === "stellar" ? trimmed : trimmed.toLowerCase();
+  if (EVM_WALLET_ADDRESS_PATTERN.test(trimmed)) return trimmed.toLowerCase();
+  if (STELLAR_ACCOUNT_ADDRESS_PATTERN.test(trimmed)) return trimmed;
+
+  return null;
 }
 
 export function walletAddressEquals(

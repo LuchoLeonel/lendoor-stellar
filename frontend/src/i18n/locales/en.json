@@ -148,6 +148,7 @@
       "progressStart": "Day 1",
       "termProgressLabel": "Credit term",
       "termProgressEnd": "Deadline",
+      "deadlineOverdue": "Deadline passed",
       "depositAmountCta": "Add {{amount}} USDC to pay",
       "payWithBalance": "Pay with available balance"
     }

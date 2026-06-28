@@ -20,7 +20,10 @@ export function suggestFixedEmail(email: string): {
   changed: boolean;
 } {
   const trimmed = email.trim();
-  const [local, domain] = trimmed.split("@");
+  const parts = trimmed.split("@");
+  if (parts.length !== 2) return { email: trimmed, changed: trimmed !== email };
+
+  const [local, domain] = parts;
   if (!local || !domain) return { email: trimmed, changed: trimmed !== email };
 
   const lowerDomain = domain.toLowerCase();
