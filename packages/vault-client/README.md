@@ -41,10 +41,10 @@ Obviously you need to adjust the above command based on the actual command you u
 Now that you have your library up-to-date and added to your project, you can import it in a file and see inline documentation for all of its exported methods:
 
 ```js
-import { Contract, networks } from "vault-client"
+import { Client, networks } from "vault-client"
 
-const contract = new Contract({
-  ...networks.futurenet, // for example; check which networks this library exports
+const contract = new Client({
+  ...networks.testnet,
   rpcUrl: '...', // use your own, or find one for testing at https://soroban.stellar.org/docs/reference/rpc#public-rpc-providers
 })
 

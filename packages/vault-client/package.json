@@ -5,6 +5,7 @@
   "exports": "./dist/index.js",
   "typings": "dist/index.d.ts",
   "scripts": {
+    "prepack": "npm run build",
     "build": "tsc"
   },
   "dependencies": {
