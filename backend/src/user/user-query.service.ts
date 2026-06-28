@@ -200,7 +200,7 @@ export class UserQueryService {
       const otpExpiresAt = pending?.otpExpiresAt ?? null;
 
       // Suppress unused variable warning
-      void early;
+      void earlyBadge;
       void hasLoanHistory;
       void requestPlatformEff;
       void shouldGoToWaitlistRequest;
@@ -238,7 +238,7 @@ export class UserQueryService {
         ),
 
         waitlistLimit,
-        isEarlyUser: earlyBadge,
+        isEarlyUser: early,
         isInWaitlist,
         waitlistPosition,
         waitlistPriority: user.waitlistPriority ?? 0,

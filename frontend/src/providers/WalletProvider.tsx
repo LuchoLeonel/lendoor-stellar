@@ -11,6 +11,7 @@ import {
 import { useAccount, useConnect } from 'wagmi'
 import { useConnectModal } from '@rainbow-me/rainbowkit'
 
+import { getNetworkDetails } from '@stellar/freighter-api'
 import { isWebView as lemonIsWebView } from '@lemoncash/mini-app-sdk'
 import { useFarcaster } from '@/providers/FarcasterProvider'
 import type { WalletMode } from '@shared/types/platform'
@@ -21,8 +22,11 @@ import {
   type StellarWalletStatus,
 } from '@/lib/stellar-wallet'
 import { normalizeWalletAddress } from '@/lib/wallet-address'
+import { dedupeToast as toast } from '@/lib/dedupeToast'
 
 export type { WalletMode }
+
+const DEBUG_WALLET = import.meta.env.VITE_DEBUG_WALLET === 'true'
 
 type PrimaryWallet = {
   address: string
@@ -42,6 +46,7 @@ type WalletContextType = {
   sdkHasLoaded: boolean
   primaryWallet: PrimaryWallet | null
   loadingNetwork: boolean
+  stellarLoading: boolean
 
   // abrir modal de conexión en web
   setShowAuthFlow: () => void
@@ -96,13 +101,13 @@ export function WalletProvider({ children }: PropsWithChildren) {
       setStellarStatus(await getFreighterStatus())
     } catch (err) {
       console.warn('[WalletProvider] Freighter status error', err)
-      setStellarStatus({
-        installed: false,
-        address: null,
-        network: null,
-        networkPassphrase: null,
-        sorobanRpcUrl: null,
-      })
+      setStellarStatus((current) => ({
+        installed: current?.installed ?? false,
+        address: current?.address ?? null,
+        network: current?.network ?? null,
+        networkPassphrase: current?.networkPassphrase ?? null,
+        sorobanRpcUrl: current?.sorobanRpcUrl ?? null,
+      }))
     } finally {
       setStellarLoading(false)
     }
@@ -113,16 +118,32 @@ export function WalletProvider({ children }: PropsWithChildren) {
   }, [refreshFreighter])
 
   const connectFreighter = React.useCallback(async () => {
+    if (stellarLoading) return
     setStellarLoading(true)
     try {
-      await requestFreighterAddress()
-      await refreshFreighter()
+      const address = await requestFreighterAddress()
+      const details = await getNetworkDetails().catch(() => ({
+        network: null,
+        networkPassphrase: null,
+        sorobanRpcUrl: null,
+      }))
+      setStellarStatus({
+        installed: true,
+        address,
+        network: details.network ?? null,
+        networkPassphrase: details.networkPassphrase ?? null,
+        sorobanRpcUrl: details.sorobanRpcUrl ?? null,
+      })
+      console.log('[WalletProvider] Freighter connected', address)
     } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to connect Freighter'
       console.error('[WalletProvider] Freighter connect error', err)
+      toast.error(message)
     } finally {
       setStellarLoading(false)
     }
-  }, [refreshFreighter])
+  }, [refreshFreighter, stellarLoading])
 
   const loadingNetwork =
     status === 'connecting' || status === 'reconnecting' || stellarLoading
@@ -162,6 +183,7 @@ export function WalletProvider({ children }: PropsWithChildren) {
   else if (status === 'connected') mode = 'webapp'
 
   React.useEffect(() => {
+    if (!DEBUG_WALLET) return
     console.log('[WalletProvider] mode=', mode, {
       isLemonMiniApp,
       isFarcasterMiniApp,
@@ -198,6 +220,7 @@ export function WalletProvider({ children }: PropsWithChildren) {
               }
             : null,
       loadingNetwork,
+      stellarLoading: stellarMode ? stellarLoading : false,
       setShowAuthFlow: stellarMode
         ? () => {
             void connectFreighter()
@@ -220,6 +243,7 @@ export function WalletProvider({ children }: PropsWithChildren) {
       loadingNetwork,
       connectFreighter,
       openConnectModal,
+      stellarLoading,
     ],
   )
 

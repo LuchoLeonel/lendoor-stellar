@@ -72,10 +72,10 @@ export default defineConfig({
     // Spec 082 (dev only): proxy del backend bajo el MISMO origen que el
     // frontend, así un único tunnel/dominio fijo expone ambos. El frontend
     // usa VITE_PUBLIC_BACKEND_URL=/__api (ver .env.local) → vite reescribe
-    // /__api/user/... → http://localhost:5001/user/...
+    // /__api/user/... → http://localhost:5000/user/...
     proxy: {
       '/__api': {
-        target: 'http://localhost:5001',
+        target: 'http://localhost:5000',
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/__api/, ''),
       },

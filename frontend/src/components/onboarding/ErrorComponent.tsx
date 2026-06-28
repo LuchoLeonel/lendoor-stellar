@@ -1,7 +1,7 @@
 // src/components/onboarding/ErrorComponent.tsx
 import { useTranslation } from "@/i18n/useTranslation";
 
-const ErrorComponent = (_props: { error: string | null }) => {
+const ErrorComponent = ({ error }: { error: string | null }) => {
   const { t } = useTranslation();
 
   const handleRetry = () => {
@@ -39,6 +39,12 @@ const ErrorComponent = (_props: { error: string | null }) => {
         <p className="text-[15px] leading-relaxed text-muted-foreground mb-8">
           {t("onboarding.error.body")}
         </p>
+
+        {import.meta.env.DEV && error ? (
+          <p className="mb-8 w-full rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-left text-xs text-red-700">
+            {error}
+          </p>
+        ) : null}
 
         <button
           onClick={handleRetry}

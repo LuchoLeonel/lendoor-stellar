@@ -34,6 +34,7 @@ import { useTranslation } from "@/i18n/useTranslation";
 import { logLemonOutcome } from "@/lib/lemonErrorLog";
 import { lendoorApi } from "@/lib/api";
 import { normalizeWalletAddress } from "@/lib/wallet-address";
+import { isStellarMode } from "@/lib/stellar-wallet";
 
 // Spec 044 — full set of identity claims requested from Lemon at every
 // authenticate(). The user grants them once and Lemon caches consent;
@@ -328,6 +329,27 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
     const stillAlive = () => aliveRef.current;
 
     try {
+      // Stellar/Freighter reads go through Soroban clients — skip EVM RPC bootstrap.
+      if (mode === "stellar" || isStellarMode()) {
+        const addr = primaryWallet?.address
+          ? normalizeWalletAddress(primaryWallet.address, mode)
+          : null;
+
+        if (stillAlive()) {
+          setEVault(null);
+          setEVaultJunior(null);
+          setController(null);
+          setUSDC(null);
+          setUsdcDecimals(6);
+          setSigner(null);
+          setConnectedAddress(addr);
+          setChainId(null);
+          initializedRef.current = true;
+          setReady(true);
+        }
+        return;
+      }
+
       // 0) Read provider RESILIENTE
       let readProvider: JsonRpcProvider | null = null;
       let readUrl = "";
@@ -545,7 +567,7 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
       setReady(true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, walletClient, disconnect]);
+  }, [mode, walletClient, disconnect, primaryWallet]);
 
   useEffect(() => {
     void build();

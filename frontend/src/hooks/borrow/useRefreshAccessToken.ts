@@ -141,7 +141,7 @@ export function useRefreshAccessToken(): () => Promise<string | null> {
     status: wagmiStatus,
   } = useAccount();
   const { signMessageAsync } = useSignMessage();
-  const { mode, primaryWallet } = useWallet();
+  const { mode, primaryWallet, stellarLoading } = useWallet();
   const { t } = useTranslation();
   const { setAccessToken, setAuthLoading } = useAuthStore();
 
@@ -168,6 +168,19 @@ export function useRefreshAccessToken(): () => Promise<string | null> {
                 : mode === "lemon"
                   ? null
                   : wagmiAddress;
+
+            if (
+              mode !== "lemon" &&
+              !connectedWallet &&
+              !(mode === "stellar" && stellarLoading)
+            ) {
+              setAccessToken(null);
+              localStorage.removeItem("lendoor:accessToken");
+              localStorage.removeItem("lendoor:tokenWallet");
+              throw new Error(
+                "Stored session cannot be bound to a connected wallet",
+              );
+            }
 
             if (connectedWallet) {
               const refreshedWallet = normalizeWalletAddress(data.wallet, mode);
@@ -292,6 +305,9 @@ export function useRefreshAccessToken(): () => Promise<string | null> {
 
       // 2) STELLAR via Freighter
       if (mode === "stellar") {
+        if (stellarLoading) {
+          return null;
+        }
         if (!primaryWallet?.address) {
           console.log(
             "[RefreshAccessToken] No Stellar wallet connected via Freighter",
@@ -439,6 +455,7 @@ export function useRefreshAccessToken(): () => Promise<string | null> {
   }, [
     mode,
     primaryWallet,
+    stellarLoading,
     wagmiStatus,
     wagmiAddress,
     wagmiChainId,

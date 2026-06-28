@@ -1,9 +1,13 @@
-# 005 — Stellar migration success criteria
+# 005 — Stellar mode success criteria
 
-Use this as the final go/no-go checklist after migrating the app from EVM to
-Stellar/Soroban.
+Use this as the final go/no-go checklist for **Stellar-mode flows** after
+wiring Soroban support alongside the existing EVM paths.
 
-The migration is successful only if every required item below passes.
+This spec does **not** require removing EVM support. It verifies that a user
+running the app in Stellar mode can complete the borrow/repay lifecycle on
+Stellar testnet with backend and frontend state in agreement.
+
+Stellar mode is successful only if every required item below passes.
 
 ## 1. Blockchain contracts
 
@@ -66,7 +70,7 @@ Required proof:
 - Frontend reads credit limit from Soroban.
 - Frontend builds and submits borrow tx through the Stellar wallet.
 - Frontend builds and submits repay tx through the Stellar wallet.
-- Frontend does not use EVM-only flows:
+- In Stellar mode, frontend does not use EVM-only flows:
   - no `approve`
   - no `allowance`
   - no EVC/controller enable step
@@ -146,11 +150,12 @@ One fresh test wallet completes borrow -> repay through the app, and chain,
 backend DB, and frontend UI all agree.
 ```
 
-## 6. Hard fail conditions
+## 6. Hard fail conditions (Stellar mode)
 
-The migration is not complete if any of these are true:
+Stellar mode is not ready if any of these are true:
 
-- Any required flow still depends on an EVM wallet, EVM address, or EVM tx format.
+- Any **Stellar-mode** borrow/repay/onboarding flow still depends on an EVM
+  wallet, EVM address format, or EVM tx hash format.
 - Stellar addresses are lowercased.
 - Borrow or repay only works through scripts, not through the app.
 - Backend DB disagrees with Soroban loan state after sync.

@@ -8,7 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan, LessThan } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { createPublicClient, http, recoverMessageAddress } from 'viem';
 import { parseSiweMessage } from 'viem/siwe';
 import { CACHE_MANAGER, Cache } from '@nestjs/cache-manager';
@@ -450,16 +450,16 @@ export class AuthService {
 
     let isValid = false;
     try {
-      const { verify: verifyEd25519 } = require('@noble/ed25519') as {
-        verify: (
-          signature: Uint8Array,
-          message: Uint8Array,
-          publicKey: Uint8Array,
-        ) => boolean;
-      };
-      isValid = verifyEd25519(
+      const { verifyAsync: verifyEd25519 } = (await import(
+        '@noble/ed25519'
+      )) as typeof import('@noble/ed25519');
+      const sep53MessageHash = createHash('sha256')
+        .update('Stellar Signed Message:\n', 'utf8')
+        .update(messageBytes)
+        .digest();
+      isValid = await verifyEd25519(
         signatureBytes,
-        messageBytes,
+        sep53MessageHash,
         decodeStellarPublicKey(wallet),
       );
     } catch (err: unknown) {

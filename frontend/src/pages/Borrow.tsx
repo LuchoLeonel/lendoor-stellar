@@ -23,6 +23,10 @@ import { useLoanStatsStore } from "@/stores/loanStatsStore";
 function BorrowPageInner() {
   const { mode } = useWallet();
   const { t } = useTranslation();
+  const needsPhoneAndSurvey =
+    mode === "lemon" || mode === "webapp" || mode === "stellar";
+  const needsWalletConnect =
+    mode === "farcaster" || mode === "webapp" || mode === "stellar";
 
   const {
     ready,
@@ -109,8 +113,8 @@ function BorrowPageInner() {
     const otpCompleted = hasEmail && !needsOtp;
     if (!otpCompleted) return;
 
-    const phoneOk = (mode !== "lemon" && mode !== "webapp") || phoneVerified;
-    const surveyOk = (mode !== "lemon" && mode !== "webapp") || surveySubmitted;
+    const phoneOk = !needsPhoneAndSurvey || phoneVerified;
+    const surveyOk = !needsPhoneAndSurvey || surveySubmitted;
     if (!phoneOk || !surveyOk) return;
 
     journeyRefreshAttemptedRef.current = true;
@@ -130,16 +134,28 @@ function BorrowPageInner() {
     if (!otpCompleted) return false;
     if (loanVerifyDoneRef.current) return false;
     if (verifying) return false;
+    if (verifyError) return false;
+    if (isVerified || unlockedBorrow) return false;
 
-    // Lemon/webapp: also need phone verification + survey submitted before initializing
-    if ((mode === "lemon" || mode === "webapp") && !phoneVerified) return false;
-    if ((mode === "lemon" || mode === "webapp") && !surveySubmitted) return false;
+    // Lemon/web + Stellar/Freighter: phone + survey before initializing
+    if (needsPhoneAndSurvey && !phoneVerified) return false;
+    if (needsPhoneAndSurvey && !surveySubmitted) return false;
 
     // For Farcaster, also need self verification
     if (mode === "farcaster" && !selfVerifiedInSession) return false;
 
     return true;
-  }, [journey, mode, verifying, phoneVerified, surveySubmitted, selfVerifiedInSession]);
+  }, [
+    journey,
+    mode,
+    verifying,
+    verifyError,
+    isVerified,
+    unlockedBorrow,
+    phoneVerified,
+    surveySubmitted,
+    selfVerifiedInSession,
+  ]);
 
   // Auto-initialize account when all conditions are met (email + phone verified)
   React.useEffect(() => {
@@ -174,12 +190,16 @@ function BorrowPageInner() {
 
     if (!ready) return "loading";
 
-    if (!isLoggedIn && (mode === "farcaster" || mode === "webapp")) return "not-logged-in";
+    if (!isLoggedIn && needsWalletConnect) return "not-logged-in";
     if (error) return "error";
     if (!accessReady) return "loading";
     if (!journey) return "loading";
 
-    if (!termsAccepted && (mode === "lemon" || mode === "webapp" || mode === "farcaster")) return "terms";
+    if (
+      !termsAccepted &&
+      (needsPhoneAndSurvey || mode === "farcaster")
+    )
+      return "terms";
 
     // Stay on the loading splash while loan/verify is in progress.
     // This prevents the skeleton flash: loading → borrow skeleton → loading.
@@ -204,10 +224,11 @@ function BorrowPageInner() {
         if (verifyingFromOtp) return "early-init";
 
         // After email OTP, verify phone before initializing account (wizard)
-        if (otpCompleted && !phoneVerified && (mode === "lemon" || mode === "webapp")) return "early-phone";
+        if (otpCompleted && !phoneVerified && needsPhoneAndSurvey) return "early-phone";
 
         // After phone, survey before initializing account
-        if (otpCompleted && phoneVerified && !surveySubmitted && (mode === "lemon" || mode === "webapp")) return "early-survey";
+        if (otpCompleted && phoneVerified && !surveySubmitted && needsPhoneAndSurvey)
+          return "early-survey";
 
         // Phone just verified — show initializing splash briefly
         if (phoneJustVerified) return "loading";
@@ -215,9 +236,14 @@ function BorrowPageInner() {
         // Fully done (email + phone + verified) → borrow
         if ((isVerified || unlockedBorrow) && phoneVerified) return "borrow";
 
-        // Phone verified + survey done → initialize account
+        // Phone verified + survey done → initialize account.
+        // Only show the splash when initialization can actually run or is
+        // running; otherwise keep a visible retry step instead of trapping the
+        // user on an indefinite loader.
         if (otpCompleted && mode !== "farcaster") {
-          if (verifyError) return "early-init";
+          if (verifyError) return needsPhoneAndSurvey ? "early-survey" : "early-init";
+          if (canInitEarlyNow || initInFlightRef.current) return "loading";
+          if (needsPhoneAndSurvey) return "early-survey";
           return "loading";
         }
 
@@ -246,7 +272,13 @@ function BorrowPageInner() {
     const userHasLoans = typeof loansCount === "number" && loansCount > 0;
 
     // Phone verification gate for existing users (standalone)
-    if ((isVerified || unlockedBorrow || userHasLoans) && !phoneVerified && !hasOpenLoan && (mode === "lemon" || mode === "webapp")) return "phone-verify";
+    if (
+      (isVerified || unlockedBorrow || userHasLoans) &&
+      !phoneVerified &&
+      !hasOpenLoan &&
+      needsPhoneAndSurvey
+    )
+      return "phone-verify";
 
     if (isVerified || unlockedBorrow || userHasLoans) return "borrow";
 
@@ -255,6 +287,8 @@ function BorrowPageInner() {
     ready,
     isLoggedIn,
     mode,
+    needsPhoneAndSurvey,
+    needsWalletConnect,
     error,
     accessReady,
     journey,
@@ -271,6 +305,7 @@ function BorrowPageInner() {
     loansCount,
     phoneJustVerified,
     surveySubmitted,
+    canInitEarlyNow,
   ]);
 
   // Derive the loading label based on current state — all rendered by a single
@@ -415,7 +450,12 @@ function BorrowPageInner() {
           setWorkType={setWorkType}
           verifying={verifying}
           verifyError={verifyError}
-          handleEarlyAccessStart={() => setSurveyConfirmed(true)}
+          handleEarlyAccessStart={() => {
+            setSurveyConfirmed(true);
+            if (surveyConfirmed) {
+              void handleEarlyAccessStart();
+            }
+          }}
         />
       );
       break;

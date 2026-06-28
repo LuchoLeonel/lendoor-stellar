@@ -4,6 +4,10 @@
 // crashes immediately with a clear message instead of failing at
 // random times when a service first reads a missing var.
 
+import dotenv from 'dotenv';
+
+dotenv.config();
+
 import { z } from 'zod/v4';
 
 const hexAddress = z

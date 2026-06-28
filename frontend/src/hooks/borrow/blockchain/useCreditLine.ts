@@ -56,6 +56,8 @@ export function useCreditLine({ pollMs = 15_000 }: Options = {}) {
       ? primaryWallet?.address
       : (connectedAddress ?? primaryWallet?.address);
   const userAddress = normalizeWalletAddress(rawUserAddress, mode);
+  const creditLineIdentity = userAddress ? `${mode}:${userAddress}` : null;
+  const activeIdentityRef = React.useRef<string | null>(null);
 
   // 👇 ahora también traemos el setter del RAW.
   // Spec 028: setCreditScoreRawHwm respeta el optimistic floor — el poll
@@ -167,8 +169,14 @@ export function useCreditLine({ pollMs = 15_000 }: Options = {}) {
     setLoanFeeBps(null);
   }, [setCreditScoreDisplay, setCreditScoreRaw]);
 
+  React.useEffect(() => {
+    activeIdentityRef.current = creditLineIdentity;
+    resetState();
+  }, [creditLineIdentity, resetState]);
+
   const read = React.useCallback(async () => {
-    if (!userAddress) {
+    const requestIdentity = creditLineIdentity;
+    if (!userAddress || !requestIdentity) {
       resetState();
       return;
     }
@@ -192,6 +200,7 @@ export function useCreditLine({ pollMs = 15_000 }: Options = {}) {
       let limitOk = true;
       let loanOk = true;
       let lateOk = true;
+      let premiumOk = true;
 
       if (mode === "stellar") {
         const stellar = await stellarReadCreditLine(userAddress);
@@ -219,7 +228,7 @@ export function useCreditLine({ pollMs = 15_000 }: Options = {}) {
         const [lateFn, lateSt] = tracked<any>(() =>
           (clm as any).previewLoanWithLate(userAddress),
         );
-        const [premFn, _premSt] = tracked<any>(() =>
+        const [premFn, premSt] = tracked<any>(() =>
           (clm as any).premiums(userAddress),
         );
 
@@ -275,7 +284,10 @@ export function useCreditLine({ pollMs = 15_000 }: Options = {}) {
         limitOk = limitSt.ok;
         loanOk = loanSt.ok;
         lateOk = lateSt.ok;
+        premiumOk = premSt.ok;
       }
+
+      if (activeIdentityRef.current !== requestIdentity) return;
 
       // If critical reads (limit or loan) failed/timed out, preserve previous
       // state to prevent flashing "Sin límite" when user has an active loan
@@ -375,7 +387,9 @@ export function useCreditLine({ pollMs = 15_000 }: Options = {}) {
           debt = lateBig;
         }
       }
-      if (activeLoan && premium != null && dueTs != null) {
+      if (activeLoan && !premiumOk) {
+        // Preserve previous late-fee badge state on transient read failure.
+      } else if (activeLoan && premium != null && dueTs != null) {
         const rawLateRate =
           (premium as any).late_rate_per_sec_wad ??
           (premium as any).lateRatePerSecWad ??
@@ -386,8 +400,10 @@ export function useCreditLine({ pollMs = 15_000 }: Options = {}) {
         if (lateRateBig != null && lateRateBig > 0n && nowSec > lateStart) {
           accruing = true;
         }
+        setIsAccruingLateFees(accruing);
+      } else {
+        setIsAccruingLateFees(false);
       }
-      setIsAccruingLateFees(accruing);
 
       setBorrowedRaw(debt);
 
@@ -510,15 +526,19 @@ export function useCreditLine({ pollMs = 15_000 }: Options = {}) {
         setCooldownUntil(null);
       }
     } catch (e: unknown) {
+      if (activeIdentityRef.current !== requestIdentity) return;
       console.warn("[CLM] read error:", e);
       setError(
         (e as any)?.message ?? t("hooks.useCreditLine.errors.readFailed"),
       );
       // Don't resetState() — preserve previous values to avoid flashing wrong UI
     } finally {
-      setLoading(false);
+      if (activeIdentityRef.current === requestIdentity) {
+        setLoading(false);
+      }
     }
   }, [
+    creditLineIdentity,
     clm,
     mode,
     userAddress,

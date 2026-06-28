@@ -82,6 +82,11 @@ export class LoanVerificationService {
     const effectivePlatform =
       this.normalizePlatform(user.platform) ?? platformNorm ?? 'lemon';
 
+    if (user.platform !== effectivePlatform) {
+      user.platform = effectivePlatform;
+      await this.userRepo.update({ id: user.id }, { platform: effectivePlatform });
+    }
+
     if (!user.termsAcceptedAt && effectivePlatform !== 'farcaster') {
       throw new ForbiddenException(
         'Tenés que aceptar los Términos y Condiciones antes de habilitar tu crédito.',
@@ -180,11 +185,20 @@ export class LoanVerificationService {
     }
 
     // First-time credit setup
-    const result = await this.blockchain.giveCreditScoreAndLimit(
-      wallet,
-      DEFAULT_SCORE,
-      DEFAULT_CREDIT_LIMIT_USDC,
-    );
+    let result: number;
+    try {
+      result = await this.blockchain.giveCreditScoreAndLimit(
+        wallet,
+        DEFAULT_SCORE,
+        DEFAULT_CREDIT_LIMIT_USDC,
+      );
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      this.logger.error(
+        `[LoanVerificationService] Failed to set on-chain credit for ${wallet}: ${errMsg}`,
+      );
+      throw new BadRequestException('Failed to set on-chain credit line');
+    }
 
     if (result !== 200) {
       this.logger.error(

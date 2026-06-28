@@ -48,12 +48,16 @@ function isNonRetryableStatus(err: unknown): boolean {
   return err instanceof ApiError && err.status >= 400 && err.status < 500;
 }
 
-function toastOptions(description: string, explorerUrl: string | null) {
+function toastOptions(
+  description: string,
+  explorerUrl: string | null,
+  viewTxLabel: string,
+) {
   if (!explorerUrl) return { description };
   return {
     description,
     action: {
-      label: "View tx",
+      label: viewTxLabel,
       onClick: () => window.open(explorerUrl, "_blank", "noopener,noreferrer"),
     },
   };
@@ -119,9 +123,16 @@ function decodeCustomError(e: unknown): DecodedCustomError {
 
 export function useBorrow({ requireController = true }: Options = {}) {
   const { t } = useTranslation();
+  const { mode, primaryWallet, isLemonMiniApp } = useWallet();
 
   const formatBorrowError = React.useCallback(
     (e: unknown): string => {
+      if (mode === "stellar") {
+        return e instanceof Error && e.message
+          ? e.message
+          : t("hooks.useBorrow.errors.stellarFailed");
+      }
+
       const decoded = decodeCustomError(e);
       if (decoded?.kind === "mapped") return t(decoded.key);
       if (decoded?.kind === "unknown") {
@@ -131,7 +142,7 @@ export function useBorrow({ requireController = true }: Options = {}) {
       }
       return formatEvmError(e);
     },
-    [t],
+    [mode, t],
   );
 
   const {
@@ -145,8 +156,6 @@ export function useBorrow({ requireController = true }: Options = {}) {
     controller,
     controllerAddress,
   } = useContracts();
-
-  const { mode, primaryWallet, isLemonMiniApp } = useWallet();
 
   // address efectiva on-chain (web/Farcaster = primaryWallet, Lemon = connectedAddress)
   const userAddress: string | null =
@@ -462,6 +471,7 @@ export function useBorrow({ requireController = true }: Options = {}) {
             toastOptions(
               t("hooks.useBorrow.toast.confirmed.desc"),
               explorerUrl,
+              t("hooks.useBorrow.toast.viewTx"),
             ),
           );
         } else {
@@ -475,6 +485,7 @@ export function useBorrow({ requireController = true }: Options = {}) {
             toastOptions(
               t("hooks.useBorrow.toast.syncPending.desc"),
               explorerUrl,
+              t("hooks.useBorrow.toast.viewTx"),
             ),
           );
         }

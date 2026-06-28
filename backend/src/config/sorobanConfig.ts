@@ -176,34 +176,47 @@ function isSimulationError(sim: unknown): sim is { error: string } {
   return typeof (sim as { error?: unknown })?.error === 'string';
 }
 
-function isRetryableSorobanError(err: unknown): boolean {
+function isRetryableSendError(err: unknown): boolean {
   const msg = String((err as { message?: string })?.message ?? err);
-  return msg.includes('TRY_AGAIN_LATER') || msg.includes('timeout');
+  return msg.includes('TRY_AGAIN_LATER');
 }
 
-async function withSorobanWriteRetry<T>(
-  fn: () => Promise<T>,
+function isRetryableConfirmError(err: unknown): boolean {
+  const msg = String((err as { message?: string })?.message ?? err);
+  return /TX_CONFIRM_TIMEOUT/i.test(msg);
+}
+
+async function sendPreparedTransaction(
+  prepared: StellarTransaction,
   purpose: string,
-): Promise<T> {
+): Promise<{ hash: string; status: string }> {
+  const server = sorobanServer();
   let lastErr: unknown = null;
   for (let attempt = 1; attempt <= MAX_SEND_ATTEMPTS; attempt++) {
     try {
-      return await fn();
+      const result = await server.sendTransaction(prepared);
+      if (result.status === 'TRY_AGAIN_LATER') {
+        throw new Error(`TRY_AGAIN_LATER ${result.hash}`);
+      }
+      if (result.status === 'ERROR') {
+        throw new Error(`Soroban send failed for ${purpose}: ${result.hash}`);
+      }
+      return result;
     } catch (e) {
       lastErr = e;
-      if (attempt === MAX_SEND_ATTEMPTS || !isRetryableSorobanError(e)) {
+      if (attempt === MAX_SEND_ATTEMPTS || !isRetryableSendError(e)) {
         throw e;
       }
       const wait = 2000 * attempt;
       logger.warn(
-        `[${purpose}] attempt ${attempt}/${MAX_SEND_ATTEMPTS} failed: ${String(
+        `[${purpose}] send attempt ${attempt}/${MAX_SEND_ATTEMPTS} failed: ${String(
           (e as { message?: string })?.message ?? e,
-        ).slice(0, 160)}. Retrying in ${wait}ms`,
+        ).slice(0, 160)}. Retrying same signed tx in ${wait}ms`,
       );
       await sleep(wait);
     }
   }
-  throw lastErr ?? new Error(`${purpose} failed`);
+  throw lastErr ?? new Error(`${purpose} send failed`);
 }
 
 async function waitForTransaction(hash: string) {
@@ -229,7 +242,7 @@ async function waitForTransactionWithRetry(hash: string, purpose: string) {
       return await waitForTransaction(hash);
     } catch (e) {
       lastErr = e;
-      if (attempt === MAX_SEND_ATTEMPTS || !isRetryableSorobanError(e)) {
+      if (attempt === MAX_SEND_ATTEMPTS || !isRetryableConfirmError(e)) {
         throw e;
       }
       const wait = 2000 * attempt;
@@ -287,22 +300,13 @@ export async function sendLoanManagerCall(
 ) {
   assertSorobanContractId(SOROBAN_LOAN_MANAGER, 'SOROBAN_LOAN_MANAGER');
   return enqueueSoroban(async () => {
-    const sent = await withSorobanWriteRetry(async () => {
-      const server = sorobanServer();
-      const keypair = operatorKeypair();
-      const tx = await buildContractTransaction(method, args);
-      const prepared = await server.prepareTransaction(tx);
-      prepared.sign(keypair);
+    const server = sorobanServer();
+    const keypair = operatorKeypair();
+    const tx = await buildContractTransaction(method, args);
+    const prepared = await server.prepareTransaction(tx);
+    prepared.sign(keypair);
 
-      const result = await server.sendTransaction(prepared);
-      if (result.status === 'TRY_AGAIN_LATER') {
-        throw new Error(`TRY_AGAIN_LATER ${result.hash}`);
-      }
-      if (result.status === 'ERROR') {
-        throw new Error(`Soroban send failed for ${purpose}: ${result.hash}`);
-      }
-      return result;
-    }, `${purpose}:send`);
+    const sent = await sendPreparedTransaction(prepared, `${purpose}:send`);
 
     logger.log(`[${purpose}] tx hash=${sent.hash}`);
     const confirmed = await waitForTransactionWithRetry(sent.hash, purpose);

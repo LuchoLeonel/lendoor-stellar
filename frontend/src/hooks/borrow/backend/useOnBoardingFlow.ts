@@ -133,10 +133,13 @@ export function useOnBoardingFlow() {
 
   const setVerifyAndToast = useCallback(
     (raw: unknown, title?: string) => {
-      const pretty = normalizeErrorMessage(raw) ?? "";
-      setVerifyError(pretty);
-
       const fallback = t("hooks.useOnBoardingFlow.toast.genericError");
+      const pretty = normalizeErrorMessage(raw);
+      const message = pretty && pretty.trim().length > 0
+        ? pretty
+        : title || fallback;
+
+      setVerifyError(message);
       toast.error(title || fallback);
     },
     [t],
@@ -322,8 +325,16 @@ export function useOnBoardingFlow() {
   ]);
 
   // ================== accessReady gate ==================
-  const shouldWaitContracts = !(mode === "farcaster" || isMiniApp);
-  const shouldGateWaitlistChecking = !(mode === "farcaster" || isMiniApp);
+  const shouldWaitContracts = !(
+    mode === "farcaster" ||
+    mode === "stellar" ||
+    isMiniApp
+  );
+  const shouldGateWaitlistChecking = !(
+    mode === "farcaster" ||
+    mode === "stellar" ||
+    isMiniApp
+  );
 
   useEffect(() => {
     if (accessReady) return;
@@ -612,10 +623,13 @@ export function useOnBoardingFlow() {
       // 1.5) Persist workType if set (may have been selected after OTP was already verified)
       if (workType) {
         try {
-          await api.rawAuthedPost("/user/update-work-type", {
-            walletAddress: addr,
-            workType,
-          });
+          await withTimeout(
+            api.rawAuthedPost("/user/update-work-type", {
+              walletAddress: addr,
+              workType,
+            }),
+            5000,
+          );
         } catch {
           // Non-blocking — workType is nice-to-have, don't fail the flow
         }
@@ -625,10 +639,13 @@ export function useOnBoardingFlow() {
       const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
       for (let attempt = 1; attempt <= 3; attempt++) {
-        const { res, authFailed } = await api.rawAuthedPost("/loan/verify", {
-          walletAddress: addr,
-          platform,
-        });
+        const { res, authFailed } = await withTimeout(
+          api.rawAuthedPost("/loan/verify", {
+            walletAddress: addr,
+            platform,
+          }),
+          45_000,
+        );
 
         if (authFailed) {
           setVerifyAndToast(SESSION_ERROR_MSG);
@@ -656,7 +673,10 @@ export function useOnBoardingFlow() {
             return;
           }
 
-          setVerifyAndToast(null, t("hooks.useOnBoardingFlow.toast.verifyAccessFailedTitle"));
+          setVerifyAndToast(
+            text && text.trim().length > 0 ? text.trim() : `HTTP ${res.status}`,
+            t("hooks.useOnBoardingFlow.toast.verifyAccessFailedTitle"),
+          );
           return;
         }
 
@@ -913,10 +933,13 @@ export function useOnBoardingFlow() {
       setVerifying(true);
       setVerifyError(null);
 
-      const { res, authFailed } = await api.rawAuthedPost("/loan/verify", {
-        walletAddress: capturedWallet,
-        platform,
-      });
+      const { res, authFailed } = await withTimeout(
+        api.rawAuthedPost("/loan/verify", {
+          walletAddress: capturedWallet,
+          platform,
+        }),
+        45_000,
+      );
 
       if (authFailed) {
         setVerifyAndToast(SESSION_ERROR_MSG);
@@ -979,11 +1002,15 @@ export function useOnBoardingFlow() {
 
   useEffect(() => {
     if (!journey) return;
+    if (mode === "stellar") return;
     if (!journey.isEarlyUser) return;
     if (!journey.email) return;
     if (journey.requiresWaitlistOtp) return;
     if (isVerified || unlockedBorrow) return;
     if (verifying) return;
+    if (verifyError) return;
+    if ((platform === "lemon" || platform === "webapp") && !phoneVerified) return;
+    if ((platform === "lemon" || platform === "webapp") && !workType) return;
 
     if (autoStartedRef.current) return;
     autoStartedRef.current = true;
@@ -992,7 +1019,18 @@ export function useOnBoardingFlow() {
 
     // Wallet change cleanup: reset ref so the effect can re-run for the new wallet
     // (the wallet reset effect at line 215 already resets autoStartedRef)
-  }, [journey, isVerified, unlockedBorrow, verifying, handleEarlyAccessFromWaitlist]);
+  }, [
+    journey,
+    mode,
+    isVerified,
+    unlockedBorrow,
+    verifying,
+    verifyError,
+    platform,
+    phoneVerified,
+    workType,
+    handleEarlyAccessFromWaitlist,
+  ]);
 
   const loadingLabel = useMemo(() => {
     if (!isLoggedIn) return t("hooks.useOnBoardingFlow.loading.app");

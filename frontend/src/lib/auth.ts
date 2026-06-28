@@ -15,6 +15,11 @@ export type AuthFetchResult = {
 // Deduplicates concurrent refreshAccessToken calls so only one refresh
 // runs at a time. Subsequent callers reuse the in-flight promise.
 let inflightRefresh: Promise<string | null> | null = null;
+const DEBUG_AUTH = import.meta.env.VITE_DEBUG_AUTH === "true";
+
+function debugAuth(...args: unknown[]) {
+  if (DEBUG_AUTH) console.log(...args);
+}
 
 function deduplicatedRefresh(
   refreshFn: () => Promise<string | null>,
@@ -55,7 +60,7 @@ export async function fetchWithAuthRetry(
   const { refreshAccessToken, headers, ...rest } = options;
 
   const urlStr = typeof input === "string" ? input : (input as URL).toString();
-  console.log("[fetchWithAuthRetry] start", urlStr);
+  debugAuth("[fetchWithAuthRetry] start", urlStr);
 
   const baseHeaders: Record<string, string> = {};
 
@@ -92,12 +97,12 @@ export async function fetchWithAuthRetry(
 
   // 1) Si no hay token, intentamos refresh ANTES de pegarle al back
   if (!token) {
-    console.log("[fetchWithAuthRetry] no token in storage, refreshing...");
+    debugAuth("[fetchWithAuthRetry] no token in storage, refreshing...");
     token = await deduplicatedRefresh(refreshAccessToken);
     didInitialRefresh = true;
 
     if (!token) {
-      console.warn(
+      debugAuth(
         "[fetchWithAuthRetry] refreshAccessToken returned null → doing unauthenticated request",
       );
       // Intento sin Authorization; el caller verá el 401/403 como error de negocio
@@ -105,7 +110,7 @@ export async function fetchWithAuthRetry(
       return { res, authFailed: false };
     }
   } else {
-    console.log("[fetchWithAuthRetry] using token from storage");
+    debugAuth("[fetchWithAuthRetry] using token from storage");
   }
 
   // 2) Primer intento
@@ -116,7 +121,7 @@ export async function fetchWithAuthRetry(
     return { res: null, authFailed: false };
   }
 
-  console.log(
+  debugAuth(
     "[fetchWithAuthRetry] first response",
     res.status,
     res.statusText,
@@ -137,11 +142,11 @@ export async function fetchWithAuthRetry(
     return { res, authFailed: true };
   }
 
-  console.log("[fetchWithAuthRetry] 401, trying refreshAccessToken...");
+  debugAuth("[fetchWithAuthRetry] 401, trying refreshAccessToken...");
   const fresh = await deduplicatedRefresh(refreshAccessToken);
 
   if (!fresh) {
-    console.warn(
+    debugAuth(
       "[fetchWithAuthRetry] refreshAccessToken returned null after 401 → caller sees business error",
     );
     // Dejamos que el caller trate el 401 como error de negocio, no como authFailed duro.
@@ -158,7 +163,7 @@ export async function fetchWithAuthRetry(
     return { res: null, authFailed: false };
   }
 
-  console.log(
+  debugAuth(
     "[fetchWithAuthRetry] second response",
     res2.status,
     res2.statusText,

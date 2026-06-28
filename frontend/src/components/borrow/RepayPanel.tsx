@@ -87,7 +87,9 @@ export function RepayPanel({
   const walletForPreflight = normalizeWalletAddress(
     mode === "stellar"
       ? primaryWallet?.address
-      : (connectedAddress ?? primaryWallet?.address),
+      : mode === "lemon"
+        ? (connectedAddress ?? primaryWallet?.address)
+        : (primaryWallet?.address ?? connectedAddress),
     mode,
   );
 
