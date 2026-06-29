@@ -26,6 +26,7 @@ describe('AuthController', () => {
   let authService: {
     createNonce: jest.Mock;
     verifySiweAndIssueToken: jest.Mock;
+    verifyStellarAndIssueToken: jest.Mock;
     refreshToken: jest.Mock;
   };
 
@@ -35,6 +36,10 @@ describe('AuthController', () => {
     authService = {
       createNonce: jest.fn().mockResolvedValue(VALID_NONCE),
       verifySiweAndIssueToken: jest.fn().mockResolvedValue({
+        wallet: VALID_WALLET,
+        accessToken: VALID_ACCESS_TOKEN,
+      }),
+      verifyStellarAndIssueToken: jest.fn().mockResolvedValue({
         wallet: VALID_WALLET,
         accessToken: VALID_ACCESS_TOKEN,
       }),
@@ -83,6 +88,22 @@ describe('AuthController', () => {
         wallet: VALID_WALLET,
         accessToken: VALID_ACCESS_TOKEN,
       });
+    });
+  });
+
+  describe('verifyStellar', () => {
+    it('calls authService.verifyStellarAndIssueToken() with the full DTO', async () => {
+      const dto = {
+        wallet: 'GABC',
+        signature: 'base64-signature',
+        message: 'base64-message',
+        nonce: VALID_NONCE,
+      };
+
+      await controller.verifyStellar(dto);
+
+      expect(authService.verifyStellarAndIssueToken).toHaveBeenCalledTimes(1);
+      expect(authService.verifyStellarAndIssueToken).toHaveBeenCalledWith(dto);
     });
   });
 

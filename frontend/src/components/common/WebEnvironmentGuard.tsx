@@ -5,20 +5,25 @@ import * as React from "react";
 import QRCode from "react-qr-code";
 import { useWallet } from "@/providers/WalletProvider";
 import { LEMON_MINI_APP_ID } from "@/lib/constants";
+import { isStellarMode } from "@/lib/stellar-wallet";
 import { useTranslation } from "@/i18n/useTranslation";
 import BlurText from "@/components/reactbits/BlurText";
+
+function isLocalhost(hostname: string): boolean {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "127.0.1.1" ||
+    hostname === "::1" ||
+    hostname.endsWith(".localhost")
+  );
+}
 
 function isAllowedHost(hostname: string | null): boolean {
   if (!hostname) return false;
 
-  // localhost variants — disabled to test the blocked screen
-  // if (
-  //   hostname === "localhost" ||
-  //   hostname === "127.0.0.1" ||
-  //   hostname === "127.0.1.1" ||
-  //   hostname.endsWith(".localhost")
-  // )
-  //   return true;
+  // Stellar/Freighter local dev — keep Lemon-only gate for EVM web builds.
+  if (isStellarMode() && isLocalhost(hostname)) return true;
 
   // Dev tunnels (VS Code, etc.)
   if (hostname.endsWith(".devtunnels.ms")) return true;

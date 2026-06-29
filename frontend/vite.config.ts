@@ -50,6 +50,19 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@shared': path.resolve(__dirname, './shared'),
+      '@stellar/stellar-sdk/contract': path.resolve(
+        __dirname,
+        './node_modules/@stellar/stellar-sdk/lib/esm/contract/index.js',
+      ),
+      '@stellar/stellar-sdk/rpc': path.resolve(
+        __dirname,
+        './node_modules/@stellar/stellar-sdk/lib/esm/rpc/index.js',
+      ),
+      '@stellar/stellar-sdk': path.resolve(
+        __dirname,
+        './node_modules/@stellar/stellar-sdk/lib/esm/index.js',
+      ),
+      buffer: path.resolve(__dirname, './node_modules/buffer/index.js'),
     },
   },
   server: {
@@ -59,10 +72,10 @@ export default defineConfig({
     // Spec 082 (dev only): proxy del backend bajo el MISMO origen que el
     // frontend, así un único tunnel/dominio fijo expone ambos. El frontend
     // usa VITE_PUBLIC_BACKEND_URL=/__api (ver .env.local) → vite reescribe
-    // /__api/user/... → http://localhost:5001/user/...
+    // /__api/user/... → http://localhost:5000/user/...
     proxy: {
       '/__api': {
-        target: 'http://localhost:5001',
+        target: 'http://localhost:5000',
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/__api/, ''),
       },

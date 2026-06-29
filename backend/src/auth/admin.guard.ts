@@ -15,6 +15,15 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request } from 'express';
+import { normalizeWallet } from 'src/common/normalize-wallet';
+
+function normalizeAdminWallet(wallet: string): string {
+  try {
+    return normalizeWallet(wallet);
+  } catch {
+    return wallet.trim().toLowerCase();
+  }
+}
 
 @Injectable()
 export class AdminGuard implements CanActivate {
@@ -25,7 +34,9 @@ export class AdminGuard implements CanActivate {
       Request & { user?: { walletAddress?: string } }
     >();
 
-    const wallet = req.user?.walletAddress?.toLowerCase();
+    const wallet = req.user?.walletAddress
+      ? normalizeAdminWallet(req.user.walletAddress)
+      : undefined;
     if (!wallet) {
       // AccessTokenGuard should have populated req.user; defense in depth.
       this.logger.warn('AdminGuard: req.user missing — did AccessTokenGuard run?');
@@ -43,7 +54,7 @@ export class AdminGuard implements CanActivate {
 }
 
 /**
- * Parse ADMIN_WALLETS env var into a lowercase array of addresses.
+ * Parse ADMIN_WALLETS env var into normalized addresses.
  * Tolerates trailing/leading whitespace, quotes, and empty slots.
  * Exported for unit testing.
  */
@@ -52,6 +63,7 @@ export function parseAdminWallets(raw: string | undefined | null): string[] {
   return raw
     .replace(/^["']|["']$/g, '') // strip wrapping quotes if present in .env
     .split(',')
-    .map((s) => s.trim().toLowerCase())
-    .filter((s) => s.length > 0);
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .map((s) => normalizeAdminWallet(s));
 }

@@ -13,6 +13,8 @@ import { useWallet } from "@/providers/WalletProvider";
 import { useTranslation } from "@/i18n/useTranslation";
 import { useAuthStore } from "@/stores/authStore";
 import { lendoorApi } from "@/lib/api";
+import { signFreighterMessage } from "@/lib/stellar-wallet";
+import { normalizeWalletAddress } from "@/lib/wallet-address";
 import type { GetNonceResponse, VerifySiweResponse } from "@shared/types/api";
 
 // Spec 044 — request the 6 identity claims on every Lemon SIWE so backend
@@ -78,7 +80,9 @@ function parseLemonClaims(
 }
 
 function parseLemonChainId(): number {
-  const raw = (import.meta.env.VITE_LEMON_CHAIN_ID as string | undefined)?.trim();
+  const raw = (
+    import.meta.env.VITE_LEMON_CHAIN_ID as string | undefined
+  )?.trim();
   if (!raw) return LemonChainId.CELO;
   const n = Number(raw);
   return Number.isFinite(n) ? n : LemonChainId.CELO;
@@ -110,11 +114,34 @@ Nonce: ${nonce}
 Issued At: ${issuedAt}`;
 }
 
+function buildStellarAuthMessage(address: string, nonce: string): string {
+  const domain =
+    typeof window !== "undefined" ? window.location.host : "localhost";
+  const uri =
+    typeof window !== "undefined"
+      ? window.location.origin
+      : "http://localhost:3000";
+  const issuedAt = new Date().toISOString();
+
+  return `${domain} wants you to sign in with your Stellar account:
+${address}
+
+Sign in to Lendoor
+
+URI: ${uri}
+Version: 1
+Nonce: ${nonce}
+Issued At: ${issuedAt}`;
+}
+
 export function useRefreshAccessToken(): () => Promise<string | null> {
-  const { address: wagmiAddress, chainId: wagmiChainId, status: wagmiStatus } =
-    useAccount();
+  const {
+    address: wagmiAddress,
+    chainId: wagmiChainId,
+    status: wagmiStatus,
+  } = useAccount();
   const { signMessageAsync } = useSignMessage();
-  const { mode } = useWallet();
+  const { mode, primaryWallet, stellarLoading } = useWallet();
   const { t } = useTranslation();
   const { setAccessToken, setAuthLoading } = useAuthStore();
 
@@ -135,8 +162,52 @@ export function useRefreshAccessToken(): () => Promise<string | null> {
           });
           if (refreshRes.ok) {
             const data = await refreshRes.json();
+            const connectedWallet =
+              mode === "stellar"
+                ? primaryWallet?.address
+                : mode === "lemon"
+                  ? null
+                  : wagmiAddress;
+
+            if (
+              mode !== "lemon" &&
+              !connectedWallet &&
+              !(mode === "stellar" && stellarLoading)
+            ) {
+              setAccessToken(null);
+              localStorage.removeItem("lendoor:accessToken");
+              localStorage.removeItem("lendoor:tokenWallet");
+              throw new Error(
+                "Stored session cannot be bound to a connected wallet",
+              );
+            }
+
+            if (connectedWallet) {
+              const refreshedWallet = normalizeWalletAddress(data.wallet, mode);
+              const currentWallet = normalizeWalletAddress(
+                connectedWallet,
+                mode,
+              );
+
+              if (!refreshedWallet || refreshedWallet !== currentWallet) {
+                setAccessToken(null);
+                localStorage.removeItem("lendoor:accessToken");
+                localStorage.removeItem("lendoor:tokenWallet");
+                throw new Error("Stored session wallet does not match");
+              }
+            }
+
             setAccessToken(data.accessToken);
-            try { localStorage.setItem("lendoor:tokenWallet", data.wallet.toLowerCase()); } catch { /* */ }
+            try {
+              localStorage.setItem(
+                "lendoor:tokenWallet",
+                mode === "stellar"
+                  ? String(data.wallet)
+                  : String(data.wallet).toLowerCase(),
+              );
+            } catch {
+              /* */
+            }
             return data.accessToken;
           }
         } catch {
@@ -178,7 +249,9 @@ export function useRefreshAccessToken(): () => Promise<string | null> {
           throw new Error("Lemon SIWE falló o fue cancelado");
         }
 
-        const { wallet, signature, message, grantedClaims } = (res as unknown as Record<string, unknown>).data as {
+        const { wallet, signature, message, grantedClaims } = (
+          res as unknown as Record<string, unknown>
+        ).data as {
           wallet: string;
           signature: `0x${string}`;
           message: string;
@@ -201,7 +274,11 @@ export function useRefreshAccessToken(): () => Promise<string | null> {
         const data = (await verifyRes.json()) as VerifySiweResponse;
 
         setAccessToken(data.accessToken);
-        try { localStorage.setItem("lendoor:tokenWallet", wallet.toLowerCase()); } catch { /* */ }
+        try {
+          localStorage.setItem("lendoor:tokenWallet", wallet.toLowerCase());
+        } catch {
+          /* */
+        }
         console.log("[RefreshAccessToken] Lemon SIWE success");
 
         // Spec 044 — fire-and-forget persist of identity claims. Now that
@@ -216,15 +293,84 @@ export function useRefreshAccessToken(): () => Promise<string | null> {
               ...parsed,
             })
             .catch((e) => {
-              console.warn("[RefreshAccessToken] lemon-profile persist failed:", e);
+              console.warn(
+                "[RefreshAccessToken] lemon-profile persist failed:",
+                e,
+              );
             });
         }
 
         return data.accessToken;
       }
 
-      // 2) WEB / FARCASTER via wagmi
-      if (wagmiStatus === "connected" && wagmiAddress && wagmiChainId) {
+      // 2) STELLAR via Freighter
+      if (mode === "stellar") {
+        if (stellarLoading) {
+          return null;
+        }
+        if (!primaryWallet?.address) {
+          console.log(
+            "[RefreshAccessToken] No Stellar wallet connected via Freighter",
+          );
+          return null;
+        }
+
+        console.log("[RefreshAccessToken] Using Stellar Freighter auth flow");
+
+        const nonceRes = await fetch(`${BACKEND_URL}/auth/nonce`, {
+          method: "POST",
+        });
+        if (!nonceRes.ok) {
+          const txt = await nonceRes.text().catch(() => "");
+          throw new Error(
+            txt || `Error al pedir nonce (HTTP ${nonceRes.status})`,
+          );
+        }
+        const { nonce } = (await nonceRes.json()) as GetNonceResponse;
+
+        const message = buildStellarAuthMessage(primaryWallet.address, nonce);
+        const signature = await signFreighterMessage(
+          message,
+          primaryWallet.address,
+        );
+
+        const verifyRes = await fetch(`${BACKEND_URL}/auth/stellar/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            wallet: primaryWallet.address,
+            signature,
+            message,
+            nonce,
+          }),
+        });
+
+        if (!verifyRes.ok) {
+          const txt = await verifyRes.text().catch(() => "");
+          throw new Error(
+            txt || `Error /auth/stellar/verify (HTTP ${verifyRes.status})`,
+          );
+        }
+
+        const data = (await verifyRes.json()) as VerifySiweResponse;
+
+        setAccessToken(data.accessToken);
+        try {
+          localStorage.setItem("lendoor:tokenWallet", primaryWallet.address);
+        } catch {
+          /* */
+        }
+        console.log("[RefreshAccessToken] Stellar auth success");
+        return data.accessToken;
+      }
+
+      // 3) WEB / FARCASTER via wagmi
+      if (
+        mode !== "stellar" &&
+        wagmiStatus === "connected" &&
+        wagmiAddress &&
+        wagmiChainId
+      ) {
         console.log("[RefreshAccessToken] Using wagmi SIWE flow");
 
         const nonceRes = await fetch(`${BACKEND_URL}/auth/nonce`, {
@@ -266,13 +412,22 @@ export function useRefreshAccessToken(): () => Promise<string | null> {
         const data = (await verifyRes.json()) as VerifySiweResponse;
 
         setAccessToken(data.accessToken);
-        try { localStorage.setItem("lendoor:tokenWallet", wagmiAddress.toLowerCase()); } catch { /* */ }
+        try {
+          localStorage.setItem(
+            "lendoor:tokenWallet",
+            wagmiAddress.toLowerCase(),
+          );
+        } catch {
+          /* */
+        }
         console.log("[RefreshAccessToken] wagmi SIWE success");
         return data.accessToken;
       }
 
-      // 3) wagmi not connected — user needs to connect via RainbowKit first
-      console.log("[RefreshAccessToken] No wallet connected via wagmi", { wagmiStatus });
+      // 4) wagmi not connected — user needs to connect via RainbowKit first
+      console.log("[RefreshAccessToken] No wallet connected via wagmi", {
+        wagmiStatus,
+      });
       return null;
     } catch (e: unknown) {
       console.error("[RefreshAccessToken] failed", e);
@@ -296,6 +451,17 @@ export function useRefreshAccessToken(): () => Promise<string | null> {
     } finally {
       setAuthLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, wagmiStatus, wagmiAddress, wagmiChainId, signMessageAsync, setAccessToken, setAuthLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    mode,
+    primaryWallet,
+    stellarLoading,
+    wagmiStatus,
+    wagmiAddress,
+    wagmiChainId,
+    signMessageAsync,
+    setAccessToken,
+    setAuthLoading,
+    t,
+  ]);
 }

@@ -148,6 +148,7 @@
       "progressStart": "Día 1",
       "termProgressLabel": "Plazo del crédito",
       "termProgressEnd": "Vencimiento",
+      "deadlineOverdue": "Fecha límite superada",
       "depositAmountCta": "Agregar {{amount}} USDC para pagar",
       "payWithBalance": "Pagar con saldo disponible"
     }
@@ -787,11 +788,13 @@
         "syncRecovered": {
           "title": "Crédito sincronizado",
           "desc": "Tu crédito fue registrado exitosamente."
-        }
+        },
+        "viewTx": "Ver tx"
       },
       "errors": {
         "insufficientCash": "No hay fondos disponibles en este momento. Intentá más tarde.",
-        "unknownCustom": "Algo salió mal al procesar tu crédito. Intentá de nuevo."
+        "unknownCustom": "Algo salió mal al procesar tu crédito. Intentá de nuevo.",
+        "stellarFailed": "Algo salió mal al procesar tu crédito en Stellar. Intentá de nuevo."
       }
     },
     "useCreditLine": {

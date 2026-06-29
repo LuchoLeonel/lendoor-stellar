@@ -23,6 +23,12 @@ import { AuthModule } from 'src/auth/auth.module';
 import { SelfModule } from 'src/self/self.module';
 import { BLOCKCHAIN_GATEWAY } from 'src/domain/ports/outbound/blockchain-gateway.port';
 import { EthersBlockchainGateway } from 'src/infrastructure/blockchain/ethers-blockchain.gateway';
+import { SorobanBlockchainGateway } from 'src/infrastructure/blockchain/soroban-blockchain.gateway';
+
+const blockchainGatewayProvider =
+  (process.env.BLOCKCHAIN_GATEWAY ?? '').toLowerCase() === 'soroban'
+    ? SorobanBlockchainGateway
+    : EthersBlockchainGateway;
 
 @Module({
   imports: [
@@ -41,7 +47,7 @@ import { EthersBlockchainGateway } from 'src/infrastructure/blockchain/ethers-bl
     BlockchainProcessor,
     BlockchainQueueService,
     LoanCalculationsService,
-    { provide: BLOCKCHAIN_GATEWAY, useClass: EthersBlockchainGateway },
+    { provide: BLOCKCHAIN_GATEWAY, useClass: blockchainGatewayProvider },
   ],
   controllers: [LoanController, PublicStatsController],
   exports: [

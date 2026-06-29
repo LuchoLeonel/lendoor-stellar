@@ -6,15 +6,16 @@ import {
   Matches,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { WALLET_ADDRESS_PATTERN } from 'src/common/normalize-wallet';
 
 export class VerifyPhoneDto {
   @ApiProperty({
-    description: 'EVM wallet address of the user',
-    example: '0xabc123...',
+    description: 'Wallet address of the user',
+    example: 'GABC...',
   })
   @IsString()
   @IsNotEmpty()
-  @Matches(/^0x[0-9a-fA-F]{40}$/, { message: 'Invalid wallet address format' })
+  @Matches(WALLET_ADDRESS_PATTERN, { message: 'Invalid wallet address format' })
   walletAddress!: string;
 
   /** E.164 format: +5491112345678 */

@@ -1,5 +1,20 @@
 // ======= ENV / CONSTS =======
-export const BACKEND_URL = import.meta.env.VITE_PUBLIC_BACKEND_URL ?? "https://8lh8dmll-5000.brs.devtunnels.ms";
+const configuredBackendUrl =
+  import.meta.env.VITE_PUBLIC_BACKEND_URL?.trim() || undefined;
+
+if (!configuredBackendUrl && !import.meta.env.DEV) {
+  throw new Error("VITE_PUBLIC_BACKEND_URL must be set outside local development");
+}
+
+if (configuredBackendUrl) {
+  try {
+    new URL(configuredBackendUrl);
+  } catch {
+    throw new Error("VITE_PUBLIC_BACKEND_URL must be a valid absolute URL");
+  }
+}
+
+export const BACKEND_URL = configuredBackendUrl ?? "http://localhost:5000";
 
 export const FRONTEND_URL = import.meta.env.VITE_APP_BASE_URL ?? "http://localhost:3000";
 

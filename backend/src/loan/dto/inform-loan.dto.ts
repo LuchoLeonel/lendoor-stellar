@@ -6,16 +6,20 @@ import {
   Matches,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import {
+  CHAIN_TX_HASH_PATTERN,
+  WALLET_ADDRESS_PATTERN,
+} from 'src/common/normalize-wallet';
 
 export class InformLoanDto {
-  /** Wallet EVM del usuario (0x...) */
+  /** Wallet del usuario */
   @ApiProperty({
-    description: 'EVM wallet address of the user',
-    example: '0xabc123...',
+    description: 'Wallet address of the user',
+    example: 'GABC...',
   })
   @IsString()
   @IsNotEmpty()
-  @Matches(/^0x[0-9a-fA-F]{40}$/, { message: 'Invalid wallet address format' })
+  @Matches(WALLET_ADDRESS_PATTERN, { message: 'Invalid wallet address format' })
   walletAddress!: string;
 
   /** Monto prestado, human-readable, ej: "50" para 50 USDC */
@@ -44,11 +48,11 @@ export class InformLoanDto {
   /** tx hash de la tx de borrow — required para idempotencia */
   @ApiProperty({
     description: 'On-chain transaction hash of the borrow tx',
-    example: '0xtxhash...',
+    example: '0123456789abcdef...',
   })
   @IsString()
   @IsNotEmpty({ message: 'txHash is required for idempotent loan creation' })
-  @Matches(/^0x[0-9a-fA-F]{64}$/, {
+  @Matches(CHAIN_TX_HASH_PATTERN, {
     message: 'Invalid transaction hash format',
   })
   txHash!: string;

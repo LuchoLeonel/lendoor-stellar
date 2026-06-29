@@ -1,15 +1,19 @@
 import { IsString, IsNotEmpty, IsOptional, Matches } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  CHAIN_TX_HASH_PATTERN,
+  WALLET_ADDRESS_PATTERN,
+} from 'src/common/normalize-wallet';
 
 export class InformRepaymentDto {
-  /** Wallet EVM del usuario (0x...) */
+  /** Wallet del usuario */
   @ApiProperty({
-    description: 'EVM wallet address of the user',
-    example: '0xabc123...',
+    description: 'Wallet address of the user',
+    example: 'GABC...',
   })
   @IsString()
   @IsNotEmpty()
-  @Matches(/^0x[0-9a-fA-F]{40}$/, { message: 'Invalid wallet address format' })
+  @Matches(WALLET_ADDRESS_PATTERN, { message: 'Invalid wallet address format' })
   walletAddress!: string;
 
   /** Monto efectivamente pagado (total), human-readable, ej: "52.35" */
@@ -28,11 +32,11 @@ export class InformRepaymentDto {
   /** Opcional: tx hash de la tx de repay */
   @ApiPropertyOptional({
     description: 'On-chain transaction hash of the repayment tx',
-    example: '0xtxhash...',
+    example: '0123456789abcdef...',
   })
   @IsOptional()
   @IsString()
-  @Matches(/^0x[0-9a-fA-F]{64}$/, {
+  @Matches(CHAIN_TX_HASH_PATTERN, {
     message: 'Invalid transaction hash format',
   })
   txHash?: string;

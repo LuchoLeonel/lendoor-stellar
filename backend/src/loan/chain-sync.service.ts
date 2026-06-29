@@ -1,35 +1,23 @@
 // src/loan/chain-sync.service.ts
-import { Injectable, Logger, Inject, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, IsNull, Not, Between } from 'typeorm';
-import { Contract, EventLog, Interface } from 'ethers';
 
 import { Loan, LoanStatus } from 'src/domain/entities/loan.entity';
 import { User } from 'src/domain/entities/user.entity';
 import { ChainScanCursor } from 'src/domain/entities/chain-scan-cursor.entity';
 import { Metric } from 'src/domain/entities/metric.entity';
-import { provider, CLM_ADDRESS, toUnits } from 'src/config/contractConfig';
+import { toUnits } from 'src/common/amount-units';
 import { env } from 'src/config/env';
 import {
   BLOCKCHAIN_GATEWAY,
   BlockchainGatewayPort,
+  ChainLoanClosedEvent,
+  ChainLoanOpenedEvent,
 } from 'src/domain/ports/outbound/blockchain-gateway.port';
 import { CreditPolicyService } from 'src/domain/services/credit-policy.service';
 import { LoanCalculationsService } from './loan-calculations.service';
 import { KNOWN_TESTING_LOANS_COUNT } from './known-testing-loans';
-// Spec 070 — ABI imported from the compiled contract artifact (see
-// src/abi/README.md). Eliminates the entire class of "hand-written event
-// signature drifts from bytecode" bugs (incident 2026-05-20).
-import LoanManagerAbi from '../abi/LoanManagerV3.abi.json';
-
-const SYNC_ABI = LoanManagerAbi;
-
-// Spec 070 — known-good topic-0 of `LoanOpened`, computed once from the
-// 2026-05-20 audited artifact. The bootstrap assertion below refuses to
-// start the service if the locally-imported ABI hashes to a different
-// topic, so we catch drift before any RPC call returns silently-empty.
-const EXPECTED_LOAN_OPENED_TOPIC =
-  '0x3f2f4670ea97f3de37dec9dad38327fae4c9bd7b03be9237b8d8c3783cc3009c';
 
 // Spec 065 Layer 2 — cursor key shared across runs.
 const LOAN_OPENED_CURSOR_ID = 'loan_opened';
@@ -38,9 +26,6 @@ const USDC_DECIMALS = 6;
 const BATCH_SIZE = 5;
 const BATCH_DELAY_MS = 200;
 const MAX_BLOCK_RANGE = 10_000;
-// Celo L2 runs at ~1 s/block since the 2025 migration. Empirically verified
-// 1.000 s/block across 12.6M blocks (audit 2026-04-18, spec 009 §9.1).
-const CELO_BLOCK_TIME_SEC = 1;
 // Tolerance (seconds) when matching a DB loan's startAt to the on-chain
 // loans(addr).start timestamp. The backend writes startAt = Date.now() in
 // inform-open, which is typically within a few seconds of the chain block ts.
@@ -53,42 +38,8 @@ const DEFAULT_CREDIT_LIMIT_USDC = toUnits(1, 6);
 const REPAID_ON_TIME_GRACE_MS = 24 * 60 * 60 * 1000;
 
 @Injectable()
-export class ChainSyncService implements OnModuleInit {
+export class ChainSyncService {
   private readonly logger = new Logger(ChainSyncService.name);
-  private readonly contract: Contract;
-
-  /**
-   * Spec 070 — fail-fast ABI drift assertion.
-   *
-   * Computes topic-0 of `LoanOpened` from the locally-imported ABI and
-   * compares against the known-good constant. If the artifact ever
-   * regenerates with a different signature (contract change without
-   * coordinated deploy), this throws and Nest refuses to bootstrap —
-   * which is much better than the 19h silent data-loss the previous
-   * bug caused.
-   *
-   * Recovery: if the contract genuinely changed, regenerate the
-   * artifact (`yarn sync-abi`), update EXPECTED_LOAN_OPENED_TOPIC at
-   * the top of this file with the new topic-0 (visible in the error
-   * message), and ship the bump together with the contract migration.
-   */
-  onModuleInit(): void {
-    const iface = new Interface(SYNC_ABI);
-    const actualTopic = iface.getEvent('LoanOpened')?.topicHash;
-    if (actualTopic !== EXPECTED_LOAN_OPENED_TOPIC) {
-      throw new Error(
-        `[ABI DRIFT] LoanOpened topic-0 mismatch.\n` +
-          `  expected: ${EXPECTED_LOAN_OPENED_TOPIC}\n` +
-          `  actual:   ${actualTopic}\n` +
-          `Refusing to start. If the contract genuinely changed, run ` +
-          `\`yarn sync-abi\` and update EXPECTED_LOAN_OPENED_TOPIC in ` +
-          `chain-sync.service.ts.`,
-      );
-    }
-    this.logger.log(
-      `[ABI guard] LoanOpened topic-0 verified: ${EXPECTED_LOAN_OPENED_TOPIC}`,
-    );
-  }
 
   constructor(
     @InjectRepository(Loan)
@@ -103,9 +54,7 @@ export class ChainSyncService implements OnModuleInit {
     @Inject(BLOCKCHAIN_GATEWAY)
     private readonly blockchain: BlockchainGatewayPort,
     private readonly loanCalc: LoanCalculationsService,
-  ) {
-    this.contract = new Contract(CLM_ADDRESS, SYNC_ABI, provider);
-  }
+  ) {}
 
   async syncLoansWithChain(): Promise<void> {
     const startTime = Date.now();
@@ -158,7 +107,7 @@ export class ChainSyncService implements OnModuleInit {
       //    for that address are reconciled when the on-chain slot is inactive.
       const loansByAddress = new Map<string, Loan[]>();
       for (const loan of unsettledLoans) {
-        const addr = loan.borrowerAddress.toLowerCase();
+        const addr = loan.borrowerAddress;
         const bucket = loansByAddress.get(addr);
         if (bucket) {
           bucket.push(loan);
@@ -176,7 +125,7 @@ export class ChainSyncService implements OnModuleInit {
       );
 
       // 3. Cache current block
-      const currentBlock = await provider.getBlockNumber();
+      const currentBlock = await this.blockchain.getLatestLedger();
 
       let checked = 0;
       let reconciled = 0;
@@ -340,7 +289,7 @@ export class ChainSyncService implements OnModuleInit {
         where: { id: LOAN_OPENED_CURSOR_ID },
       });
       let fromBlock = cursor ? Number(cursor.block) : 0;
-      const currentBlock = await provider.getBlockNumber();
+      const currentBlock = await this.blockchain.getLatestLedger();
 
       // Spec 065 §2.2.2 (the "Better" path that wasn't done in the original
       // migration): if cursor is at genesis, jump forward to ~current. The
@@ -371,9 +320,7 @@ export class ChainSyncService implements OnModuleInit {
       }
 
       const toBlock = Math.min(fromBlock + MAX_BLOCK_RANGE, currentBlock);
-      const filter = this.contract.filters.LoanOpened();
-      const events = await this.contract.queryFilter(
-        filter,
+      const events = await this.blockchain.getLoanOpenedEvents(
         fromBlock + 1,
         toBlock,
       );
@@ -383,16 +330,15 @@ export class ChainSyncService implements OnModuleInit {
       let errors = 0;
 
       for (const event of events) {
-        const e = event as EventLog;
-        const wallet = (e.args[0] as string).toLowerCase();
+        const wallet = event.borrower;
         try {
-          const result = await this.insertMissingLoan(e, wallet);
+          const result = await this.insertMissingLoan(event, wallet);
           if (result === 'inserted') inserted++;
           else skipped++;
         } catch (err) {
           errors++;
           this.logger.error(
-            `[LoanOpenedScan] insert failed tx=${e.transactionHash}: ${err}`,
+            `[LoanOpenedScan] insert failed tx=${event.txHash}: ${err}`,
           );
         }
       }
@@ -430,11 +376,11 @@ export class ChainSyncService implements OnModuleInit {
    * this row if it has already been closed on chain.
    */
   private async insertMissingLoan(
-    event: EventLog,
+    event: ChainLoanOpenedEvent,
     wallet: string,
   ): Promise<'inserted' | 'skipped'> {
     const existing = await this.loanRepo.findOne({
-      where: { openTxHash: event.transactionHash },
+      where: { openTxHash: event.txHash },
     });
     if (existing) return 'skipped';
 
@@ -444,7 +390,7 @@ export class ChainSyncService implements OnModuleInit {
     if (!user) {
       // No DB user — surface for triage but don't error the whole scan.
       this.logger.warn(
-        `[LoanOpenedScan] No DB user for wallet=${wallet} tx=${event.transactionHash}. Skipping.`,
+        `[LoanOpenedScan] No DB user for wallet=${wallet} tx=${event.txHash}. Skipping.`,
       );
       return 'skipped';
     }
@@ -455,18 +401,11 @@ export class ChainSyncService implements OnModuleInit {
     // Contract sets `L.start = block.timestamp` internally but does not
     // emit it. We recover startUnix from the block timestamp of the event
     // (same value the contract used).
-    const principal = Number(event.args[1]) / 10 ** USDC_DECIMALS;
-    const amountDue = Number(event.args[2]) / 10 ** USDC_DECIMALS;
-    const dueUnix = Number(event.args[3]);
-    const feeBps = Number(event.args[4]);
-    const block = await provider.getBlock(event.blockNumber);
-    if (!block) {
-      this.logger.warn(
-        `[LoanOpenedScan] Could not fetch block ${event.blockNumber} for tx=${event.transactionHash}. Skipping.`,
-      );
-      return 'skipped';
-    }
-    const startUnix = block.timestamp;
+    const principal = Number(event.principal) / 10 ** USDC_DECIMALS;
+    const amountDue = Number(event.amountDue) / 10 ** USDC_DECIMALS;
+    const dueUnix = event.due;
+    const feeBps = event.feeBps;
+    const startUnix = event.timestamp;
     const tenorDays = Math.round((dueUnix - startUnix) / 86400);
 
     // Mirror the exact shape used by `LoanService.informLoanOpened` so the
@@ -484,7 +423,7 @@ export class ChainSyncService implements OnModuleInit {
       dueAt: new Date(dueUnix * 1000),
       status: LoanStatus.OPEN,
       repaidOnTime: false,
-      openTxHash: event.transactionHash,
+      openTxHash: event.txHash,
       syncedByChain: true,
     });
 
@@ -495,7 +434,7 @@ export class ChainSyncService implements OnModuleInit {
     // at scale (steady-state should be ~0 inserts per run).
     this.logger.warn(
       `[LoanOpenedScan] INSERTED missing loan wallet=${wallet} loanId=${loan.id} ` +
-        `principal=${principal} tx=${event.transactionHash} — inform-open never fired`,
+        `principal=${principal} tx=${event.txHash} — inform-open never fired`,
     );
 
     return 'inserted';
@@ -510,6 +449,13 @@ export class ChainSyncService implements OnModuleInit {
   // poll; not a true regression).
 
   async computeDbChainDiff(): Promise<number | null> {
+    if ((process.env.BLOCKCHAIN_GATEWAY ?? '').toLowerCase() === 'soroban') {
+      this.logger.log(
+        '[ParityMetric] Skipping EVM subgraph parity metric in Soroban mode.',
+      );
+      return null;
+    }
+
     try {
       const res = await fetch(env().SUBGRAPH_URL, {
         method: 'POST',
@@ -584,11 +530,14 @@ export class ChainSyncService implements OnModuleInit {
   private async getOnChainLoan(
     borrowerAddress: string,
   ): Promise<{ active: boolean; start: number }> {
-    const result = (await this.contract.loans(borrowerAddress)) as unknown[];
+    const result = await this.blockchain.readLoanFull(borrowerAddress);
+    if (!result) {
+      throw new Error(`Could not read on-chain loan for ${borrowerAddress}`);
+    }
     return {
-      active: result[6] as boolean,
+      active: result.active,
       // loans(addr).start — block.timestamp at openLoan. 0 when slot is inactive.
-      start: Number(result[2]),
+      start: Number(result.start),
     };
   }
 
@@ -600,70 +549,12 @@ export class ChainSyncService implements OnModuleInit {
     borrowerAddress: string,
     loanStartAt: Date,
     currentBlock: number,
-  ): Promise<{
-    amountPaid: bigint;
-    txHash: string;
-    blockNumber: number;
-    timestamp: number;
-  } | null> {
-    // Calculate search window from loan start (all stored as UTC timestamptz)
-    const loanStartUnix = Math.floor(loanStartAt.getTime() / 1000);
-    const nowUnix = Math.floor(Date.now() / 1000);
-    const blocksSinceStart = Math.ceil(
-      (nowUnix - loanStartUnix) / CELO_BLOCK_TIME_SEC,
+  ): Promise<ChainLoanClosedEvent | null> {
+    return this.blockchain.findLoanClosedEvent(
+      borrowerAddress,
+      loanStartAt,
+      currentBlock,
     );
-    const fromBlock = Math.max(0, currentBlock - blocksSinceStart - 2000);
-
-    const filter = this.contract.filters.LoanClosed(borrowerAddress);
-
-    // Search newest-first in chunks (most recent chunk first)
-    for (let to = currentBlock; to >= fromBlock; to -= MAX_BLOCK_RANGE) {
-      const from = Math.max(to - MAX_BLOCK_RANGE + 1, fromBlock);
-      const events = await this.contract.queryFilter(filter, from, to);
-
-      // Spec 043 — Layer 1: walk events newest-first within the chunk and
-      // return the FIRST one whose timestamp is >= loanStartUnix. Older
-      // events belong to previous loans of the same wallet (a wallet can
-      // borrow → close → re-borrow many times) and must NOT be assigned
-      // to this loan. Without this filter, chain-sync was assigning the
-      // most-recent LoanClosed of a wallet to ALL unsynced rows of that
-      // wallet, generating duplicate closeTxHash entries (audit
-      // 2026-05-05 found 15 hashes in 16 phantom rows, $205 inflated
-      // Repaid USD in admin trends).
-      if (events.length > 0) {
-        for (let i = events.length - 1; i >= 0; i--) {
-          const event = events[i] as EventLog;
-          const block = await provider.getBlock(event.blockNumber);
-          const eventTimestamp = block?.timestamp ?? nowUnix;
-
-          if (eventTimestamp < loanStartUnix) {
-            // This event happened BEFORE this loan was opened — it
-            // belongs to a previous loan of the same wallet. Continue
-            // walking backwards (older events are even further from
-            // matching this loan, so we can stop early).
-            this.logger.debug(
-              `[ChainSync] Skipping LoanClosed at ${eventTimestamp} (< loanStartUnix=${loanStartUnix}) for ${borrowerAddress}`,
-            );
-            return null;
-          }
-
-          return {
-            amountPaid: event.args[1] as bigint,
-            txHash: event.transactionHash,
-            blockNumber: event.blockNumber,
-            timestamp: eventTimestamp,
-          };
-        }
-      }
-
-      // Small delay between chunk queries to avoid RPC throttling
-      if (to - MAX_BLOCK_RANGE >= fromBlock) {
-        await this.sleep(200);
-      }
-    }
-
-    // Exhausted the search range — event genuinely not found
-    return null;
   }
 
   // ── Reconciliation ─────────────────────────────────────────────
@@ -739,7 +630,7 @@ export class ChainSyncService implements OnModuleInit {
       // the event. Skip rather than create a phantom assignment.
       const closerLoan = await manager.findOne(Loan, {
         where: {
-          borrowerAddress: freshLoan.borrowerAddress.toLowerCase(),
+          borrowerAddress: freshLoan.borrowerAddress,
           startAt: Between(
             new Date(freshLoan.startAt.getTime() + 1),
             new Date(eventData.timestamp * 1000),
@@ -771,8 +662,7 @@ export class ChainSyncService implements OnModuleInit {
         return null;
       }
 
-      freshLoan.amountPaid =
-        Number(eventData.amountPaid) / 10 ** USDC_DECIMALS;
+      freshLoan.amountPaid = Number(eventData.amountPaid) / 10 ** USDC_DECIMALS;
       freshLoan.closeTxHash = eventData.txHash;
       freshLoan.closedAt = new Date(eventData.timestamp * 1000);
 
@@ -871,8 +761,7 @@ export class ChainSyncService implements OnModuleInit {
       // Older background reconciliations stay 'low'.
       const closedAtMs = closedAt?.getTime() ?? Date.now();
       const minutesSinceClose = (Date.now() - closedAtMs) / 60000;
-      const priority: 'high' | 'low' =
-        minutesSinceClose < 2 ? 'high' : 'low';
+      const priority: 'high' | 'low' = minutesSinceClose < 2 ? 'high' : 'low';
 
       this.logger.log(
         `[ChainSync] Credit ${kind}: wallet=${borrowerAddress} score=${newScore} limit=${newLimitUnitsNum} priority=${priority} (closed ${minutesSinceClose.toFixed(1)}min ago)`,
@@ -938,10 +827,10 @@ export class ChainSyncService implements OnModuleInit {
 
             checked++;
             try {
-              const onChain = (await this.contract.users(
+              const onChain = await this.blockchain.readUserRisk(
                 user.walletAddress,
-              )) as unknown[];
-              const validUntil = Number(onChain[2]);
+              );
+              const validUntil = onChain?.validUntil ?? 0;
 
               // Skip if no validUntil set (0 means no expiry) or still fresh
               if (validUntil === 0 || validUntil > renewThreshold) return;
@@ -1161,15 +1050,13 @@ export class ChainSyncService implements OnModuleInit {
             });
             const canaryStep =
               this.creditPolicy.getStepForOnTimeLoans(canaryOnTime);
-            const canaryLimitUnits = Number(
-              toUnits(canaryStep.limitUsdc, 6),
-            );
+            const canaryLimitUnits = Number(toUnits(canaryStep.limitUsdc, 6));
 
-            const onChain = (await this.contract.users(
+            const onChain = await this.blockchain.readUserRisk(
               canary.walletAddress,
-            )) as unknown[];
-            const onChainScore = Number(onChain[0]);
-            const onChainLimit = Number(onChain[4]);
+            );
+            const onChainScore = onChain?.score ?? 0;
+            const onChainLimit = Number(onChain?.limit ?? 0n);
 
             levelNeedsChainUpdate =
               onChainScore !== canaryStep.score ||
@@ -1247,9 +1134,7 @@ export class ChainSyncService implements OnModuleInit {
         where: { userId: user.id, repaidOnTime: true },
       });
       const step = this.creditPolicy.getStepForOnTimeLoans(onTimeLoans);
-      const correctLimitUnits = Number(
-        toUnits(step.limitUsdc, 6),
-      );
+      const correctLimitUnits = Number(toUnits(step.limitUsdc, 6));
 
       const dbScore = user.score ?? 1;
       const dbLimit = user.creditLimit ? Number(user.creditLimit) : 0;
@@ -1257,19 +1142,18 @@ export class ChainSyncService implements OnModuleInit {
 
       if (checkChain) {
         // Level canary was wrong → full on-chain verification
-        const onChain = (await this.contract.users(
-          user.walletAddress,
-        )) as unknown[];
+        const onChain = await this.blockchain.readUserRisk(user.walletAddress);
+        const onChainScore = onChain?.score ?? 0;
+        const onChainLimit = Number(onChain?.limit ?? 0n);
         const chainInSync =
-          Number(onChain[0]) === step.score &&
-          Number(onChain[4]) === correctLimitUnits;
+          onChainScore === step.score && onChainLimit === correctLimitUnits;
 
         if (chainInSync && dbInSync) return 'skip';
 
         if (!chainInSync) {
           this.logger.log(
             `[LadderRecalc] wallet=${user.walletAddress} onTimeLoans=${onTimeLoans} ` +
-              `onChain: score=${Number(onChain[0])} limit=${Number(onChain[4])} -> ` +
+              `onChain: score=${onChainScore} limit=${onChainLimit} -> ` +
               `score=${step.score} limit=${correctLimitUnits}`,
           );
 

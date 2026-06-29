@@ -10,6 +10,7 @@ import { useContracts } from "@/providers/ContractsProvider";
 import { useUsdcBalance } from "@/hooks/useUsdcBalance";
 import { LemonFundsDialogs } from "@/components/common/LemonFundsDialogs";
 import { TxState } from "@/components/common/TransactionProgress";
+import { normalizeWalletAddress } from "@/lib/wallet-address";
 import { useTranslation } from "@/i18n/useTranslation";
 import { ConfirmationDialog } from "@/components/common/ConfirmationDialog";
 
@@ -83,16 +84,23 @@ export function RepayPanel({
   const { t } = useTranslation();
 
   // Spec 024 B.3 — wallet for preflight live ticker.
-  const walletForPreflight =
-    (connectedAddress ?? primaryWallet?.address ?? null)?.toLowerCase() ??
-    null;
+  const walletForPreflight = normalizeWalletAddress(
+    mode === "stellar"
+      ? primaryWallet?.address
+      : mode === "lemon"
+        ? (connectedAddress ?? primaryWallet?.address)
+        : (primaryWallet?.address ?? connectedAddress),
+    mode,
+  );
 
   // Spec 034 — internal txState still drives this component's local
   // UI (e.g. paymentInFlight). Mirror state changes up to the parent
   // via `onTxStateChange` so the celebration overlay survives this
   // component's unmount post-repay.
-  const [txState, setTxStateInternal] = React.useState<TxState>('idle');
-  const [txError, setTxErrorInternal] = React.useState<string | undefined>(undefined);
+  const [txState, setTxStateInternal] = React.useState<TxState>("idle");
+  const [txError, setTxErrorInternal] = React.useState<string | undefined>(
+    undefined,
+  );
   const setTxState = React.useCallback(
     (s: TxState) => {
       setTxStateInternal(s);
@@ -104,7 +112,7 @@ export function RepayPanel({
     (e?: string) => {
       setTxErrorInternal(e);
       // Forward the error alongside the most-recent state.
-      onTxStateChange?.('failed', e);
+      onTxStateChange?.("failed", e);
     },
     [onTxStateChange],
   );
@@ -114,9 +122,12 @@ export function RepayPanel({
 
   const isLemonMode = mode === "lemon";
 
-  const { raw: usdcRaw, decimals: usdcDecimals, display: usdcDisplay, loading: usdcLoading } = useUsdcBalance(
-    isLemonMode ? 10_000 : 0,
-  );
+  const {
+    raw: usdcRaw,
+    decimals: usdcDecimals,
+    display: usdcDisplay,
+    loading: usdcLoading,
+  } = useUsdcBalance(isLemonMode ? 10_000 : 0);
 
   const [openDeposit, setOpenDeposit] = React.useState(false);
   // confirmOpen state removed — Lemon SDK handles its own confirmation
@@ -224,7 +235,9 @@ export function RepayPanel({
   // a transient RPC error (raw becomes null briefly), the previous confirmed
   // value is kept and the CTA does not flicker to a different state.
   const [stableInsufficient, setStableInsufficient] = React.useState(false);
-  const [stableMissingAmount, setStableMissingAmount] = React.useState<string | null>(null);
+  const [stableMissingAmount, setStableMissingAmount] = React.useState<
+    string | null
+  >(null);
 
   React.useEffect(() => {
     // Only update stable state when the balance is definitively loaded (not in
@@ -253,7 +266,9 @@ export function RepayPanel({
     setStableInsufficient(insufficient);
     if (insufficient) {
       const diff = outstandingRaw - usdcRaw;
-      setStableMissingAmount(diff > 0n ? ceilToTwoDecimals(diff, usdcDecimals) : null);
+      setStableMissingAmount(
+        diff > 0n ? ceilToTwoDecimals(diff, usdcDecimals) : null,
+      );
     } else {
       setStableMissingAmount(null);
     }
@@ -277,8 +292,8 @@ export function RepayPanel({
   const repayCta = wantsConnectCta
     ? t("borrow.repay.ctaConnect")
     : paymentInFlight
-    ? t("borrow.repay.ctaPaying")
-    : t("borrow.repay.ctaPay");
+      ? t("borrow.repay.ctaPaying")
+      : t("borrow.repay.ctaPay");
 
   const repayDisabled = paymentInFlight || (!hasDebt && !wantsConnectCta);
 
@@ -295,7 +310,7 @@ export function RepayPanel({
       // ✅ abrimos ventana anti-flicker apenas disparamos el repay
       startInFlightWindow();
 
-      setTxState('pending');
+      setTxState("pending");
       setTxError(undefined);
 
       // Spec 028: tell useRepay whether this is an on-time repay so it can
@@ -305,15 +320,15 @@ export function RepayPanel({
         wasOnTime,
       });
       if (!ok) {
-        setTxState('failed');
+        setTxState("failed");
         setRepayInFlight(false);
         return;
       }
 
-      setTxState('confirmed');
+      setTxState("confirmed");
       onRepay?.(outstandingAmount);
     } catch (err) {
-      setTxState('failed');
+      setTxState("failed");
       setTxError(err instanceof Error ? err.message : String(err));
       setRepayInFlight(false);
       console.error(err);
@@ -363,16 +378,20 @@ export function RepayPanel({
   const daysLabel = hasTiming
     ? (() => {
         const d = daysRemaining as number;
-        if (d > 1) return t('borrow.market.dueInDays', { days: Math.ceil(d) });
-        if (d > 0) return t('borrow.market.dueInLessDay');
-        if (d > -1) return t('borrow.market.dueToday');
-        return t('borrow.market.overdueDays', { days: Math.abs(Math.floor(d)) });
+        if (d > 1) return t("borrow.market.dueInDays", { days: Math.ceil(d) });
+        if (d > 0) return t("borrow.market.dueInLessDay");
+        if (d > -1) return t("borrow.market.dueToday");
+        return t("borrow.market.overdueDays", {
+          days: Math.abs(Math.floor(d)),
+        });
       })()
     : null;
 
   const interestLabel =
     typeof loanFeeBps === "number" && loanFeeBps > 0
-      ? t('borrow.market.interestLabel', { rate: (loanFeeBps / 100).toFixed(2) })
+      ? t("borrow.market.interestLabel", {
+          rate: (loanFeeBps / 100).toFixed(2),
+        })
       : null;
 
   const isOverdue = hasTiming && (daysRemaining as number) < 0;
@@ -387,44 +406,49 @@ export function RepayPanel({
 
   return (
     <div className="relative w-full">
-
       {/* 1. CRÉDITO ACTIVO — status + amount (como producción) */}
       <div className="flex items-center justify-center gap-2 mb-2">
         {!isOverdue && <div className="h-2 w-2 rounded-full bg-amber-500" />}
-        <span className={`text-[11px] font-semibold uppercase tracking-wider ${isOverdue ? 'text-red-600' : 'text-muted-foreground'}`}>
-          {isAccruingLateFees ? t('borrow.market.creditOverdue') : t('borrow.market.creditActive')}
+        <span
+          className={`text-[11px] font-semibold uppercase tracking-wider ${isOverdue ? "text-red-600" : "text-muted-foreground"}`}
+        >
+          {isAccruingLateFees
+            ? t("borrow.market.creditOverdue")
+            : t("borrow.market.creditActive")}
         </span>
       </div>
       <div className="text-center mb-3">
         <p className="text-[11px] uppercase tracking-widest font-medium text-muted-foreground/70 mb-1">
-          {t('borrow.repay.totalLabel')}
+          {t("borrow.repay.totalLabel")}
         </p>
         <div className="flex items-baseline justify-center gap-2">
           <span
             className={`font-bold leading-tight tabular-nums ${
-              isOverdue ? 'text-red-600' : 'text-foreground'
-            } ${
-              showLiveTicker ? 'text-[1.6rem]' : 'text-[2.5rem]'
-            }`}
+              isOverdue ? "text-red-600" : "text-foreground"
+            } ${showLiveTicker ? "text-[1.6rem]" : "text-[2.5rem]"}`}
           >
             {hasDebt
               ? showLiveTicker
                 ? preflight.displayHuman
                 : outstandingAmount
-              : '0.00'}
+              : "0.00"}
           </span>
-          <span className="text-lg font-semibold text-muted-foreground">USDC</span>
+          <span className="text-lg font-semibold text-muted-foreground">
+            USDC
+          </span>
         </div>
       </div>
 
       {/* Deadline pill below amount */}
       {daysLabel && (
         <div className="flex justify-center mb-5">
-          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold ${
-            isOverdue
-              ? 'bg-red-100 text-red-700 border border-red-200'
-              : 'bg-amber-50 text-amber-700 border border-amber-200'
-          }`}>
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold ${
+              isOverdue
+                ? "bg-red-100 text-red-700 border border-red-200"
+                : "bg-amber-50 text-amber-700 border border-amber-200"
+            }`}
+          >
             <Calendar className="h-3.5 w-3.5 shrink-0" />
             {daysLabel}
           </span>
@@ -433,11 +457,17 @@ export function RepayPanel({
 
       {/* 2. ESTADO ACTUAL — card con barra de progreso */}
       {hasTiming && (
-        <div className="mb-4 rounded-2xl bg-white px-4 py-4" style={{ border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+        <div
+          className="mb-4 rounded-2xl bg-white px-4 py-4"
+          style={{
+            border: "1px solid rgba(0,0,0,0.06)",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+          }}
+        >
           <div className="flex items-center justify-between mb-1.5">
             <span className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
               <Clock className="h-3 w-3 shrink-0" />
-              {t('borrow.repay.termProgressLabel')}
+              {t("borrow.repay.termProgressLabel")}
             </span>
             <span className="text-[11px] font-semibold text-muted-foreground">
               {Math.round(safeProgressPct)}% transcurrido
@@ -450,9 +480,15 @@ export function RepayPanel({
             />
           </div>
           <div className="mt-1.5 flex items-center justify-between text-[10px] font-medium">
-            <span className="text-muted-foreground">{t('borrow.repay.progressStart')}</span>
-            <span className={`uppercase font-bold ${isOverdue ? 'text-red-600' : 'text-muted-foreground'}`}>
-              {isOverdue ? 'Fecha límite superada' : 'Vencimiento'}
+            <span className="text-muted-foreground">
+              {t("borrow.repay.progressStart")}
+            </span>
+            <span
+              className={`uppercase font-bold ${isOverdue ? "text-red-600" : "text-muted-foreground"}`}
+            >
+              {isOverdue
+                ? t("borrow.repay.deadlineOverdue")
+                : t("borrow.repay.termProgressEnd")}
             </span>
           </div>
         </div>
@@ -469,28 +505,46 @@ export function RepayPanel({
       )}
 
       {/* 3. DETALLE — como producción */}
-      <div className="rounded-xl bg-slate-50/80 px-4 py-3 mb-4" style={{ border: '1px solid rgba(0,0,0,0.05)' }}>
+      <div
+        className="rounded-xl bg-slate-50/80 px-4 py-3 mb-4"
+        style={{ border: "1px solid rgba(0,0,0,0.05)" }}
+      >
         <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-          {t('borrow.repay.detailHeader')}
+          {t("borrow.repay.detailHeader")}
         </p>
         {interestLabel && (
           <div className="flex items-center justify-between py-1.5 text-[13px] border-b border-slate-100">
-            <span className="text-muted-foreground">{t('borrow.repay.interestRow')}</span>
+            <span className="text-muted-foreground">
+              {t("borrow.repay.interestRow")}
+            </span>
             <span className="font-medium text-foreground">{interestLabel}</span>
           </div>
         )}
         {isLemonMode && usdcDisplay != null && (
           <div className="flex items-center justify-between py-1.5 text-[13px]">
-            <span className="text-muted-foreground">{t('borrow.repay.balanceRow')}</span>
-            <span className="font-medium text-foreground">{usdcDisplay} USDC</span>
+            <span className="text-muted-foreground">
+              {t("borrow.repay.balanceRow")}
+            </span>
+            <span className="font-medium text-foreground">
+              {usdcDisplay} USDC
+            </span>
           </div>
         )}
       </div>
 
       {/* 4. AVISO — triángulo naranja (nuevo) */}
       {insufficientText && (
-        <div className="mb-4 flex items-center gap-3 rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(249,116,21,0.06)', border: '1px solid rgba(249,116,21,0.15)' }}>
-          <div className="shrink-0 flex items-center justify-center" style={{ width: 28, height: 28 }}>
+        <div
+          className="mb-4 flex items-center gap-3 rounded-2xl px-4 py-3"
+          style={{
+            backgroundColor: "rgba(249,116,21,0.06)",
+            border: "1px solid rgba(249,116,21,0.15)",
+          }}
+        >
+          <div
+            className="shrink-0 flex items-center justify-center"
+            style={{ width: 28, height: 28 }}
+          >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
               <path d="M12 2L1 21h22L12 2z" fill="#E97316" />
               <path d="M11 10h2v5h-2z" fill="white" />
@@ -511,20 +565,42 @@ export function RepayPanel({
           <button
             type="button"
             className="w-full h-[52px] rounded-2xl text-[15px] font-semibold text-white flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition-all"
-            style={{ backgroundColor: '#F97415', boxShadow: '0 4px 16px rgba(249,116,21,0.25)' }}
+            style={{
+              backgroundColor: "#F97415",
+              boxShadow: "0 4px 16px rgba(249,116,21,0.25)",
+            }}
             onClick={() => setOpenDeposit(true)}
           >
-            Depositar USDC
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m7 17 9.2-9.2M17 17V7H7"/></svg>
+            {t("borrow.repay.depositButton")}
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m7 17 9.2-9.2M17 17V7H7" />
+            </svg>
           </button>
         ) : (
           <button
             type="submit"
             disabled={repayDisabled}
             className="w-full h-[52px] rounded-2xl text-[15px] font-semibold text-white flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.98] transition-all"
-            style={isOverdue
-              ? { backgroundColor: '#ef4444', boxShadow: '0 4px 16px rgba(239,68,68,0.25)' }
-              : { backgroundColor: '#F97415', boxShadow: '0 4px 16px rgba(249,116,21,0.25)' }}
+            style={
+              isOverdue
+                ? {
+                    backgroundColor: "#ef4444",
+                    boxShadow: "0 4px 16px rgba(239,68,68,0.25)",
+                  }
+                : {
+                    backgroundColor: "#F97415",
+                    boxShadow: "0 4px 16px rgba(249,116,21,0.25)",
+                  }
+            }
           >
             {paymentInFlight && (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />

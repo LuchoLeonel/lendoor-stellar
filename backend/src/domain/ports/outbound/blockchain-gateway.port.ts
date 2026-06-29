@@ -18,12 +18,31 @@ export const BLOCKCHAIN_GATEWAY = Symbol('BLOCKCHAIN_GATEWAY');
  */
 export type TxPriority = 'high' | 'low';
 
+export type ChainLoanOpenedEvent = {
+  borrower: string;
+  principal: bigint;
+  amountDue: bigint;
+  due: number;
+  feeBps: number;
+  ledger: number;
+  txHash: string;
+  timestamp: number;
+};
+
+export type ChainLoanClosedEvent = {
+  borrower: string;
+  amountPaid: bigint;
+  txHash: string;
+  ledger: number;
+  timestamp: number;
+};
+
 export interface BlockchainGatewayPort {
   /**
    * Reads the current on-chain credit limit for a borrower.
    * Returns 0n if no credit line exists or if it has expired.
    *
-   * @param borrower - lowercase hex wallet address
+   * @param borrower - normalized wallet address
    */
   readCreditLimitOnChain(borrower: string): Promise<bigint>;
 
@@ -31,7 +50,7 @@ export interface BlockchainGatewayPort {
    * Sets (or refreshes) the on-chain credit score and credit limit for a borrower.
    * Also sets validUntil to 30 days from now unless overridden.
    *
-   * @param borrower    - lowercase hex wallet address
+   * @param borrower    - normalized wallet address
    * @param score       - credit score in [1, 1000]
    * @param limit       - credit limit in USDC base units (6 decimals)
    * @param kycOk       - whether KYC is approved (default true)
@@ -52,7 +71,7 @@ export interface BlockchainGatewayPort {
    * Returns offer metadata including feeBps and mined block number.
    *
    * @param amountHuman  - human-readable USDC amount (e.g. "50" = 50 USDC)
-   * @param borrower     - lowercase hex wallet address
+   * @param borrower     - normalized wallet address
    * @param tenorDays    - loan duration in days (must be 7, 14, or 21)
    * @param feeBps       - fee in basis points
    */
@@ -74,7 +93,7 @@ export interface BlockchainGatewayPort {
    * Activates late fees for a borrower by calling setPremiumConfig.
    * Typically called after a loan offer is created.
    *
-   * @param borrower           - lowercase hex wallet address
+   * @param borrower           - normalized wallet address
    * @param lateRatePerSecWad  - late fee rate in WAD per second
    */
   setPremiumConfig(
@@ -87,7 +106,7 @@ export interface BlockchainGatewayPort {
    * Reads the current outstanding debt for a borrower including accrued late fees.
    * Returns the amount in USDC base units (6 decimals), or null if the RPC call fails.
    *
-   * @param borrower - lowercase hex wallet address
+   * @param borrower - normalized wallet address
    */
   previewLoanWithLate(borrower: string): Promise<bigint | null>;
 
@@ -140,6 +159,44 @@ export interface BlockchainGatewayPort {
    * timing per spec 023 §6 risk #4).
    */
   getChainBlockTimestamp(): Promise<number | null>;
+
+  /**
+   * Latest finalized chain height. For EVM this is a block number; for
+   * Stellar/Soroban this is a ledger sequence.
+   */
+  getLatestLedger(): Promise<number>;
+
+  /**
+   * Reads user risk/offer state needed by chain-sync renewal/recalc tasks.
+   */
+  readUserRisk(borrower: string): Promise<{
+    score: number;
+    validUntil: number;
+    limit: bigint;
+  } | null>;
+
+  /**
+   * Fetches loan-open events in an inclusive chain-height range.
+   */
+  getLoanOpenedEvents(
+    fromLedger: number,
+    toLedger: number,
+  ): Promise<ChainLoanOpenedEvent[]>;
+
+  /**
+   * Finds the newest matching loan-close event for a borrower at or after
+   * a DB loan's start time.
+   */
+  findLoanClosedEvent(
+    borrower: string,
+    loanStartAt: Date,
+    currentLedger: number,
+  ): Promise<ChainLoanClosedEvent | null>;
+
+  /**
+   * Verifies that a tx hash opened a loan for the given borrower.
+   */
+  verifyLoanOpenedByTxHash(txHash: string, borrower: string): Promise<boolean>;
 
   /**
    * Spec 024 A.3 — call accrueLate(borrower) on LoanManagerV3.

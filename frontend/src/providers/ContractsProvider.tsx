@@ -33,6 +33,8 @@ import { useWallet, type WalletMode } from "@/providers/WalletProvider";
 import { useTranslation } from "@/i18n/useTranslation";
 import { logLemonOutcome } from "@/lib/lemonErrorLog";
 import { lendoorApi } from "@/lib/api";
+import { normalizeWalletAddress } from "@/lib/wallet-address";
+import { isStellarMode } from "@/lib/stellar-wallet";
 
 // Spec 044 — full set of identity claims requested from Lemon at every
 // authenticate(). The user grants them once and Lemon caches consent;
@@ -327,6 +329,27 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
     const stillAlive = () => aliveRef.current;
 
     try {
+      // Stellar/Freighter reads go through Soroban clients — skip EVM RPC bootstrap.
+      if (mode === "stellar" || isStellarMode()) {
+        const addr = primaryWallet?.address
+          ? normalizeWalletAddress(primaryWallet.address, mode)
+          : null;
+
+        if (stillAlive()) {
+          setEVault(null);
+          setEVaultJunior(null);
+          setController(null);
+          setUSDC(null);
+          setUsdcDecimals(6);
+          setSigner(null);
+          setConnectedAddress(addr);
+          setChainId(null);
+          initializedRef.current = true;
+          setReady(true);
+        }
+        return;
+      }
+
       // 0) Read provider RESILIENTE
       let readProvider: JsonRpcProvider | null = null;
       let readUrl = "";
@@ -372,7 +395,7 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
             null;
 
           if (sdkChainId) selectedChainId = sdkChainId;
-          walletLower = wallet ? String(wallet).toLowerCase() : null;
+          walletLower = normalizeWalletAddress(String(wallet ?? ""), mode);
 
           // Spec 044 — persist granted claims to backend (fire-and-forget;
           // never block auth flow on this).
@@ -499,7 +522,7 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
 
       if (walletClient && walletClient.account) {
         // 1) Caso ideal: usar walletClient (RainbowKit / Farcaster)
-        addr = walletClient.account.address.toLowerCase();
+        addr = normalizeWalletAddress(walletClient.account.address, mode);
         chainIdLocal =
           typeof walletClient.chain?.id === "number"
             ? walletClient.chain.id
@@ -512,7 +535,7 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
         });
       } else if (primaryWallet?.address) {
         // 2) Fallback: usar lo que expone WalletProvider (useAccount de wagmi)
-        addr = primaryWallet.address.toLowerCase();
+        addr = normalizeWalletAddress(primaryWallet.address, mode);
         chainIdLocal = primaryWallet.chainId ?? null;
 
         console.info("[Lendoor] using primaryWallet from WalletProvider", {
@@ -544,7 +567,7 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
       setReady(true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, walletClient, disconnect]);
+  }, [mode, walletClient, disconnect, primaryWallet]);
 
   useEffect(() => {
     void build();
@@ -644,6 +667,12 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
           (res as any)?.error ||
           "Transaction failed";
         throw new Error(errMsg);
+      }
+
+      if (mode === "stellar") {
+        throw new Error(
+          "Stellar transaction signing is not wired for this EVM contract call yet.",
+        );
       }
 
       // --- modo web / farcaster → usamos wagmi walletClient + viem ---
@@ -838,6 +867,12 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
         throw new Error(errMsg);
       }
 
+      if (mode === "stellar") {
+        throw new Error(
+          "Stellar batch transaction signing is not wired for these EVM contract calls yet.",
+        );
+      }
+
       // ---- Web / Farcaster: correrlas una por una ----
       const hashes: string[] = [];
       for (const t of txs) {
@@ -908,13 +943,15 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
             .data as any;
           // Persist claims fire-and-forget; SIWE flow continues regardless.
           if (wallet && grantedClaims?.length) {
-            const walletLower = String(wallet).toLowerCase();
+            const walletLower = normalizeWalletAddress(String(wallet), mode);
             const parsed = parseLemonClaims(grantedClaims);
-            void lendoorApi
-              .lemonProfile({ walletAddress: walletLower, ...parsed })
-              .catch(() => {
-                /* swallow — risk persist is best-effort */
-              });
+            if (walletLower) {
+              void lendoorApi
+                .lemonProfile({ walletAddress: walletLower, ...parsed })
+                .catch(() => {
+                  /* swallow — risk persist is best-effort */
+                });
+            }
           }
           return { wallet, signature, message };
         }

@@ -9,7 +9,7 @@ import {
 import { Repository } from 'typeorm';
 import { User } from 'src/domain/entities/user.entity';
 import { VerifyUserDto } from './dto/verify-user.dto';
-import { toUnits } from 'src/config/contractConfig';
+import { toUnits } from 'src/common/amount-units';
 import { BlockchainGatewayPort } from 'src/domain/ports/outbound/blockchain-gateway.port';
 import { CreditPolicyService } from 'src/domain/services/credit-policy.service';
 import { UserService } from 'src/user/user.service';
@@ -79,7 +79,13 @@ export class LoanVerificationService {
       await this.userRepo.update({ id: user.id }, { platform: platformNorm });
     }
 
-    const effectivePlatform = user.platform ?? platformNorm;
+    const effectivePlatform =
+      this.normalizePlatform(user.platform) ?? platformNorm ?? 'lemon';
+
+    if (user.platform !== effectivePlatform) {
+      user.platform = effectivePlatform;
+      await this.userRepo.update({ id: user.id }, { platform: effectivePlatform });
+    }
 
     if (!user.termsAcceptedAt && effectivePlatform !== 'farcaster') {
       throw new ForbiddenException(
@@ -95,9 +101,16 @@ export class LoanVerificationService {
       await this.userRepo.update({ id: user.id }, { platform: platformNorm });
     }
 
-    // Check early access quota
-    const isEarly = await this.userService.isEarlyUser(user);
-    if (!isEarly) {
+    // Check early access quota only when a waitlist limit is configured.
+    // Stellar base has no waitlist, so journey and verify must both allow access.
+    const waitlistLimit =
+      await this.userService.getUserUntilWaitlist(effectivePlatform);
+    const canAccessCredit =
+      !waitlistLimit ||
+      waitlistLimit <= 0 ||
+      (await this.userService.isEarlyUser(user, effectivePlatform));
+
+    if (!canAccessCredit) {
       this.logger.warn(
         `[LoanVerificationService] Wallet ${wallet} (id=${user.id}) fuera del cupo early, no se asigna crédito.`,
       );
@@ -139,7 +152,9 @@ export class LoanVerificationService {
         `[LoanVerificationService] Wallet ${wallet} on-chain creditLimit=0 (expired), refreshing with risk-adjusted values score=${scoreNum} limit=${creditNum}`,
       );
 
-      const ladderLimitUsdc = this.creditPolicy.getStepForScore(scoreNum ?? 1).limitUsdc;
+      const ladderLimitUsdc = this.creditPolicy.getStepForScore(
+        scoreNum ?? 1,
+      ).limitUsdc;
       const adjustedLimitUnits = toUnits(ladderLimitUsdc, 6);
 
       try {
@@ -170,11 +185,20 @@ export class LoanVerificationService {
     }
 
     // First-time credit setup
-    const result = await this.blockchain.giveCreditScoreAndLimit(
-      wallet,
-      DEFAULT_SCORE,
-      DEFAULT_CREDIT_LIMIT_USDC,
-    );
+    let result: number;
+    try {
+      result = await this.blockchain.giveCreditScoreAndLimit(
+        wallet,
+        DEFAULT_SCORE,
+        DEFAULT_CREDIT_LIMIT_USDC,
+      );
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      this.logger.error(
+        `[LoanVerificationService] Failed to set on-chain credit for ${wallet}: ${errMsg}`,
+      );
+      throw new BadRequestException('Failed to set on-chain credit line');
+    }
 
     if (result !== 200) {
       this.logger.error(

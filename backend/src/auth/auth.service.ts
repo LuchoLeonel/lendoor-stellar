@@ -8,13 +8,15 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan, LessThan } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { createPublicClient, http, recoverMessageAddress } from 'viem';
 import { parseSiweMessage } from 'viem/siwe';
 import { CACHE_MANAGER, Cache } from '@nestjs/cache-manager';
 
 import { SiweNonce } from 'src/domain/entities/siwe-nonce.entity';
 import { AccessToken } from 'src/domain/entities/access-token.entity';
+import { normalizeWallet } from 'src/common/normalize-wallet';
+import { decodeStellarPublicKey } from 'src/common/stellar-strkey';
 
 interface TokenCacheEntry {
   walletAddress: string;
@@ -404,22 +406,101 @@ export class AuthService {
     return { wallet: addressFromMessage, accessToken };
   }
 
+  async verifyStellarAndIssueToken(input: {
+    wallet: string;
+    signature: string;
+    message: string;
+    nonce: string;
+  }): Promise<{ wallet: string; accessToken: string }> {
+    const { signature, message, nonce } = input;
+    const wallet = normalizeWallet(input.wallet);
+    const now = new Date();
+
+    this.logger.log(
+      `verifyStellarAndIssueToken IN wallet=${wallet} nonce=${nonce} at=${now.toISOString()}`,
+    );
+
+    const stored = await this.nonceRepo.findOne({
+      where: {
+        nonce,
+        used: false,
+        expiresAt: MoreThan(now),
+      },
+    });
+
+    if (!stored) {
+      this.logger.warn(`Invalid or expired Stellar nonce=${nonce}`);
+      throw new UnauthorizedException('Invalid or expired nonce');
+    }
+
+    let messageBytes: Buffer;
+    let signatureBytes: Buffer;
+    try {
+      messageBytes = Buffer.from(message, 'base64');
+      signatureBytes = Buffer.from(signature, 'base64');
+    } catch {
+      throw new UnauthorizedException('Invalid Stellar signature payload');
+    }
+
+    const decodedMessage = messageBytes.toString('utf8');
+    if (!decodedMessage.includes(nonce)) {
+      this.logger.warn(`Stellar signed message missing nonce=${nonce}`);
+      throw new UnauthorizedException('Signed message nonce mismatch');
+    }
+
+    let isValid = false;
+    try {
+      const { verifyAsync: verifyEd25519 } = (await import(
+        '@noble/ed25519'
+      )) as typeof import('@noble/ed25519');
+      const sep53MessageHash = createHash('sha256')
+        .update('Stellar Signed Message:\n', 'utf8')
+        .update(messageBytes)
+        .digest();
+      isValid = await verifyEd25519(
+        signatureBytes,
+        sep53MessageHash,
+        decodeStellarPublicKey(wallet),
+      );
+    } catch (err: unknown) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `Stellar signature verification exception wallet=${wallet}: ${errMessage}`,
+      );
+    }
+
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid Stellar signature');
+    }
+
+    stored.used = true;
+    await this.nonceRepo.save(stored);
+
+    const accessToken = await this.createAccessToken(wallet);
+    this.logger.log(
+      `Stellar auth OK wallet=${wallet} token=${accessToken.slice(0, 6)}...`,
+    );
+
+    return { wallet, accessToken };
+  }
+
   // =========== ACCESS TOKEN ===========
 
   private async createAccessToken(wallet: string): Promise<string> {
     const token = randomBytes(24).toString('hex'); // 48 chars
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+    const walletAddress = normalizeWallet(wallet);
 
     const entity = this.tokenRepo.create({
       token,
-      walletAddress: wallet.toLowerCase(),
+      walletAddress,
       expiresAt,
     });
 
     await this.tokenRepo.save(entity);
 
     this.logger.log(
-      `AccessToken persisted wallet=${wallet.toLowerCase()} token=${token.slice(
+      `AccessToken persisted wallet=${walletAddress} token=${token.slice(
         0,
         6,
       )}... expiresAt=${expiresAt.toISOString()}`,

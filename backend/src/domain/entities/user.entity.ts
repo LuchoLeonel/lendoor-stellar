@@ -9,6 +9,7 @@ import {
   UpdateDateColumn,
   Check,
 } from 'typeorm';
+import { walletAddressTransformer } from 'src/common/normalize-wallet';
 
 const lowercase = {
   to: (v?: string | null) => (v == null ? null : v.toLowerCase()),
@@ -31,8 +32,8 @@ export class User {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  /** Wallet address (minúsculas). Único. */
-  @Column({ type: 'text', transformer: lowercase })
+  /** Wallet address. EVM is lowercase; Stellar StrKeys preserve case. */
+  @Column({ type: 'text', transformer: walletAddressTransformer })
   walletAddress!: string;
 
   /** Plataforma de origen: 'lemon' | 'farcaster' | 'webapp'. */

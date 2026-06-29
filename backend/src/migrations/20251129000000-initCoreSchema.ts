@@ -384,17 +384,39 @@ export class InitCoreSchema1712080000001 implements MigrationInterface {
     `);
 
     await queryRunner.query(`
-      ALTER TABLE "user_achievements"
-        ADD CONSTRAINT "FK_user_achievements_user"
-        FOREIGN KEY ("userId") REFERENCES "users" ("id")
-        ON DELETE NO ACTION ON UPDATE NO ACTION;
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'FK_user_achievements_user'
+            AND conrelid = 'user_achievements'::regclass
+        ) THEN
+          ALTER TABLE "user_achievements"
+            ADD CONSTRAINT "FK_user_achievements_user"
+            FOREIGN KEY ("userId") REFERENCES "users" ("id")
+            ON DELETE NO ACTION ON UPDATE NO ACTION;
+        END IF;
+      END
+      $$;
     `);
 
     await queryRunner.query(`
-      ALTER TABLE "user_achievements"
-        ADD CONSTRAINT "FK_user_achievements_achievement"
-        FOREIGN KEY ("achievementId") REFERENCES "achievements" ("id")
-        ON DELETE NO ACTION ON UPDATE NO ACTION;
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'FK_user_achievements_achievement'
+            AND conrelid = 'user_achievements'::regclass
+        ) THEN
+          ALTER TABLE "user_achievements"
+            ADD CONSTRAINT "FK_user_achievements_achievement"
+            FOREIGN KEY ("achievementId") REFERENCES "achievements" ("id")
+            ON DELETE NO ACTION ON UPDATE NO ACTION;
+        END IF;
+      END
+      $$;
     `);
 
     await queryRunner.query(`

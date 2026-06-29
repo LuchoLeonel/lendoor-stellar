@@ -59,6 +59,17 @@ export class HealthController {
       where: { key: 'db_chain_loan_diff' },
     });
 
+    if ((process.env.BLOCKCHAIN_GATEWAY ?? '').toLowerCase() === 'soroban') {
+      return {
+        diff: null,
+        updatedAt: metric?.updatedAt ?? null,
+        healthy: true,
+        threshold: 3,
+        skipped: true,
+        reason: 'EVM subgraph parity metric is disabled in Soroban mode',
+      };
+    }
+
     const diff = metric ? Number(metric.value) : null;
     const healthy = diff !== null && Math.abs(diff) < 3;
 

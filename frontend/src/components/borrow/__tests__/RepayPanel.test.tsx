@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
@@ -178,13 +178,17 @@ describe('RepayPanel', () => {
     expect(onConnect).toHaveBeenCalled()
   })
 
-  // ── Confirmation flow ──
+  // ── Submit flow ──
 
-  it('opens confirmation dialog on submit', async () => {
+  it('submits directly on pay', async () => {
     const user = userEvent.setup()
     render(<RepayPanel {...baseProps} />)
     await user.click(screen.getByText('Pay'))
-    expect(screen.getByTestId('confirm-dialog')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(mockSubmit).toHaveBeenCalledWith('10.50', 10_500_000n, {
+        wasOnTime: true,
+      })
+    })
   })
 
   // ── Progress bar ──

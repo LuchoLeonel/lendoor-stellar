@@ -32,6 +32,18 @@ export class AppController {
       where: { key: 'db_chain_loan_diff' },
     });
     const THRESHOLD = 3;
+
+    if ((process.env.BLOCKCHAIN_GATEWAY ?? '').toLowerCase() === 'soroban') {
+      return {
+        diff: null,
+        updatedAt: metric?.updatedAt ?? null,
+        healthy: true,
+        threshold: THRESHOLD,
+        skipped: true,
+        reason: 'EVM subgraph parity metric is disabled in Soroban mode',
+      };
+    }
+
     const diff = metric ? Number(metric.value) : null;
     const healthy = diff !== null && Math.abs(diff) < THRESHOLD;
     const snapshot = {

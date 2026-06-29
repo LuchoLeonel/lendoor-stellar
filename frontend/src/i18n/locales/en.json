@@ -148,6 +148,7 @@
       "progressStart": "Day 1",
       "termProgressLabel": "Credit term",
       "termProgressEnd": "Deadline",
+      "deadlineOverdue": "Deadline passed",
       "depositAmountCta": "Add {{amount}} USDC to pay",
       "payWithBalance": "Pay with available balance"
     }
@@ -787,11 +788,13 @@
         "syncRecovered": {
           "title": "Credit synced",
           "desc": "Your credit has been successfully recorded."
-        }
+        },
+        "viewTx": "View tx"
       },
       "errors": {
         "insufficientCash": "No funds available right now. Try again later.",
-        "unknownCustom": "Something went wrong processing your credit. Try again."
+        "unknownCustom": "Something went wrong processing your credit. Try again.",
+        "stellarFailed": "Something went wrong processing your Stellar credit. Try again."
       }
     },
     "useCreditLine": {

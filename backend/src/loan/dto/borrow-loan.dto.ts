@@ -1,5 +1,6 @@
 import { IsString, IsNotEmpty, IsInt, IsIn, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { WALLET_ADDRESS_PATTERN } from 'src/common/normalize-wallet';
 
 export class BorrowLoanDto {
   /** Human-readable amount, e.g. "50" for 50 USDC (6 decimals) */
@@ -15,14 +16,14 @@ export class BorrowLoanDto {
   })
   amountHuman!: string;
 
-  /** EVM address that will receive the funds (borrower wallet) */
+  /** Wallet address that will receive the funds (borrower wallet) */
   @ApiProperty({
-    description: 'EVM address that will receive the funds (borrower wallet)',
-    example: '0xabc123...',
+    description: 'Wallet address that will receive the funds (borrower wallet)',
+    example: 'GABC...',
   })
   @IsString()
   @IsNotEmpty()
-  @Matches(/^0x[0-9a-fA-F]{40}$/, { message: 'Invalid wallet address format' })
+  @Matches(WALLET_ADDRESS_PATTERN, { message: 'Invalid wallet address format' })
   receiver!: string;
 
   /** Loan tenor in days — only 7, 14, or 21 allowed */

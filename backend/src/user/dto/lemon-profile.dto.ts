@@ -2,13 +2,14 @@
 import {
   IsBoolean,
   IsEmail,
-  IsEthereumAddress,
   IsOptional,
   IsString,
   Length,
   MaxLength,
+  Matches,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { WALLET_ADDRESS_PATTERN } from 'src/common/normalize-wallet';
 
 /**
  * Spec 044 — payload accepted by `POST /user/lemon-profile`.
@@ -18,8 +19,9 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
  * user may grant only a subset of the 6 claims.
  */
 export class LemonProfileDto {
-  @ApiProperty({ description: 'EVM wallet address (lowercase)' })
-  @IsEthereumAddress()
+  @ApiProperty({ description: 'Wallet address' })
+  @IsString()
+  @Matches(WALLET_ADDRESS_PATTERN, { message: 'Invalid wallet address format' })
   walletAddress!: string;
 
   @ApiPropertyOptional({ description: 'First name (NAME claim)' })

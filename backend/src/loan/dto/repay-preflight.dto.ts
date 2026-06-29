@@ -7,15 +7,16 @@
 // (via accrueLate) and (b) get the live-ticker payload.
 import { IsString, IsNotEmpty, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { WALLET_ADDRESS_PATTERN } from 'src/common/normalize-wallet';
 
 export class RepayPreflightDto {
-  /** Wallet EVM del borrower (0x...) */
+  /** Wallet del borrower */
   @ApiProperty({
-    description: 'EVM wallet address of the borrower preparing to repay',
-    example: '0xabc123...',
+    description: 'Wallet address of the borrower preparing to repay',
+    example: 'GABC...',
   })
   @IsString()
   @IsNotEmpty()
-  @Matches(/^0x[0-9a-fA-F]{40}$/, { message: 'Invalid wallet address format' })
+  @Matches(WALLET_ADDRESS_PATTERN, { message: 'Invalid wallet address format' })
   walletAddress!: string;
 }

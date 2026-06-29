@@ -1,3 +1,5 @@
+import { normalizeWalletAddress } from '@/lib/wallet-address'
+
 const STORAGE_KEY = 'lendoor:pendingRepayments'
 
 export type PendingRepayment = {
@@ -30,8 +32,10 @@ function writeAll(items: PendingRepayment[]): void {
 }
 
 export function getPendingForWallet(wallet: string): PendingRepayment[] {
-  const normalized = wallet.toLowerCase()
-  return readAll().filter((r) => r.walletAddress.toLowerCase() === normalized)
+  const normalized = normalizeWalletAddress(wallet) ?? wallet
+  return readAll().filter(
+    (r) => normalizeWalletAddress(r.walletAddress) === normalized,
+  )
 }
 
 export function addPending(
@@ -39,7 +43,7 @@ export function addPending(
 ): PendingRepayment {
   const item: PendingRepayment = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    walletAddress: entry.walletAddress.toLowerCase(),
+    walletAddress: normalizeWalletAddress(entry.walletAddress) ?? entry.walletAddress,
     amountPaidHuman: entry.amountPaidHuman,
     txHash: entry.txHash,
     createdAt: Date.now(),

@@ -634,6 +634,8 @@ function EmailStep({
     await handleSendOtp();
   };
 
+  const autoSubmittedOtpRef = React.useRef<string | null>(null);
+
   const handleOtpSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!otp.trim() || otp.trim().length !== 6) return;
@@ -641,17 +643,26 @@ function EmailStep({
   };
 
   // Auto-submit when all 6 digits are entered
-  const autoSubmitRef = React.useRef(false);
   React.useEffect(() => {
-    if (otp.trim().length === 6 && !verifying && !otpVerifiedFlash && !autoSubmitRef.current) {
-      autoSubmitRef.current = true;
+    const normalizedOtp = otp.trim();
+
+    if (normalizedOtp.length < 6) {
+      autoSubmittedOtpRef.current = null;
+      return;
+    }
+
+    if (
+      normalizedOtp.length === 6 &&
+      !verifying &&
+      !otpVerifiedFlash &&
+      !verifyError &&
+      autoSubmittedOtpRef.current !== normalizedOtp
+    ) {
+      autoSubmittedOtpRef.current = normalizedOtp;
       handleOtpSubmit();
     }
-    if (otp.trim().length < 6) {
-      autoSubmitRef.current = false;
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [otp, verifying, otpVerifiedFlash]);
+  }, [otp, verifying, otpVerifiedFlash, verifyError]);
 
   return (
     <div>

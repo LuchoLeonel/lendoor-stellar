@@ -6,11 +6,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
-
-const lowercase = {
-  to: (v?: string | null) => (v == null ? null : v.toLowerCase()),
-  from: (v?: string | null) => (v == null ? null : v.toLowerCase()),
-};
+import { walletAddressTransformer } from 'src/common/normalize-wallet';
 
 @Entity({ name: 'access_tokens' })
 @Index('idx_access_token_value', ['token'], { unique: true })
@@ -22,7 +18,7 @@ export class AccessToken {
   @Column({ type: 'text' })
   token!: string;
 
-  @Column({ type: 'text', transformer: lowercase })
+  @Column({ type: 'text', transformer: walletAddressTransformer })
   walletAddress!: string;
 
   @Column({ type: 'timestamptz', nullable: true })
