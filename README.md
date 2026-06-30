@@ -1,10 +1,18 @@
-# Lendoor Stellar
+# Lendoor · Stellar
 
-**Embedded credit infrastructure for Latin America's credit-invisible, on Stellar.**
+**Embedded, uncollateralized credit for Latin America's credit-invisible — built on Stellar.**
 
 Built for the **PULSO Hackathon** (NearX × Stellar Development Foundation, Argentina track).
 
-Lendoor is the credit layer that a wallet plugs into to extend uncollateralized, on-chain credit to the 186M+ adults in LatAm the formal financial system can't score. This repo ports that base from Celo/EVM to **Stellar (Soroban)**, with the credit lifecycle running in USDC on Stellar.
+Lendoor is the credit layer a wallet plugs into to extend uncollateralized, on-chain credit to the **186M+ adults** in LatAm the formal system can't score. The full lifecycle — **borrow → repay → score** — runs on **Soroban** and is **live end-to-end on Stellar testnet**.
+
+### Links
+
+- 🟢 **Live app:** https://stellar.lendoor.xyz/borrow
+- 🎥 **Demo video:** https://youtu.be/ga_5pt-i9Ns
+- 🐦 **Project:** [@LendoorProtocol](https://x.com/LendoorProtocol) · **Founder:** [@lucho_leonel1](https://x.com/lucho_leonel1)
+
+> To try it: connect **Freighter** on **Test Net** and run a borrow → repay. (Testnet XLM via [friendbot](https://friendbot.stellar.org).)
 
 ---
 
@@ -14,65 +22,98 @@ There is a live version of Lendoor already running on Celo, distributed inside t
 
 > **Lemon on Celo → Bitso on Stellar.**
 
-Same thesis (embedded credit for the credit-invisible), swapped to the rails where it can scale fastest in the region: **Bitso** as the distribution surface (one of LatAm's largest crypto wallets, already a Stellar ecosystem player) and **Stellar + USDC** as the money rail. The goal of this repo is to be *what Lendoor is, but inside Bitso and on Stellar*.
+Same thesis (embedded credit for the credit-invisible), swapped to the rails where it can scale fastest in the region: an exchange like **Bitso** as the distribution surface, and **Stellar + USDC** as the money rail.
 
 ## Why now (and why Stellar)
 
-- **186M+ credit-invisible adults** in LatAm: people the formal system can't underwrite, so they never get credit.
-- Argentina's **Transferencias 3.0** is redefining local payment flows, while demand for **digital dollars** is among the highest in the region.
-- The payment rails are getting solved. The missing layer is **credit on top of those rails**, for people no one can score without collateral.
-- Stellar gives us cheap, fast USDC settlement and a real LatAm anchor/wallet ecosystem (Bitso among them) to reach those users.
+- **186M+ credit-invisible adults** in LatAm — people the formal system can't underwrite, so they never get credit.
+- The payment rails are getting solved (Argentina's **Transferencias 3.0**, the region's high demand for **digital dollars**). The missing layer is **credit on top of those rails**, for people no one can score without collateral.
+- Stellar gives us cheap, ~5s USDC settlement and a real LatAm anchor/wallet ecosystem to reach those users.
 
 ## How it works
 
-1. **Identity comes from the exchange, not from us.** Because Lendoor is embedded inside the wallet/exchange, it **leverages the exchange's KYC**: the user is already identity-verified, so there is no separate onboarding/KYC step. The exchange passes verified identity claims (name, etc.) to the credit layer. (The live version already does this via Lemon's `authenticate()`; the Stellar version does it via the exchange, e.g. Bitso.)
-2. The protocol issues a small **uncollateralized** USDC loan on Stellar, sized by the user's on-chain credit limit.
-3. Repaying on time **raises the limit** — a credit ladder ($1 → larger tickets) that compounds trust.
-4. The repayment history becomes a **portable on-chain score** that travels with the user across integrations.
+1. **Onboard once.** The user connects a Stellar wallet (Freighter) and verifies via email + WhatsApp OTP. *In production this is replaced by the exchange's existing KYC — the user is already identity-verified, so there's no separate onboarding.*
+2. The protocol issues a small **uncollateralized** loan on Stellar, sized by the user's on-chain credit limit, disbursed instantly.
+3. Repaying on time **raises the limit** — a credit ladder that compounds trust.
+4. The repayment history becomes a **portable on-chain credit score** that travels with the user across integrations.
 
-The hard, defensible part is not the lending pool. It is **underwriting the invisible without collateral**, riding the exchange's KYC for frictionless onboarding, and owning the **portable repayment data**.
+The hard, defensible part is not the lending pool. It is **underwriting the invisible without collateral**: limits start tiny and grow only with on-time repayment (exposure is always *earned* and capped), recovery rides identity + score consequences instead of seizing assets, and the repayment data is **portable and on-chain**.
 
-> **For the demo:** we mock being embedded inside an exchange — it hands the credit layer a KYC-verified identity (e.g. a random name pulled from a fake exchange directory), so the loan flow starts from an already-verified user, exactly as it would inside Bitso. No re-KYC, no forms.
+## Architecture
+
+```mermaid
+graph TD
+  U["User · embedded in an exchange (web)"]
+  FR["Freighter wallet"]
+  FE["Frontend · React + Vite"]
+  BE["Backend · NestJS + Postgres"]
+  RPC["Soroban RPC"]
+  VA["Vault · Rust/Soroban<br/>liquidity · borrow · repay · deposit/withdraw"]
+  LM["Loan Manager · Rust/Soroban<br/>credit registry: limit + score"]
+  USDC["USDC · Stellar Asset Contract"]
+
+  U --> FE
+  U -->|connect + sign| FR
+  FE -->|SEP-53 auth · email + WhatsApp OTP| BE
+  FE -->|read credit line| RPC --> LM
+  FR -->|sign borrow / repay| RPC --> VA
+  VA -->|disburse / collect| USDC
+  VA -.->|reads limit + score| LM
+```
+
+The credit lifecycle, as a compounding loop:
+
+```mermaid
+graph LR
+  B["Borrow USDC"] --> R["Repay on time"]
+  R --> S["Score ↑ · Limit ↑"]
+  S --> B
+```
 
 ## Stellar integration (load-bearing, not on a slide)
 
-The credit lifecycle itself runs on Stellar — this is the load-bearing integration the hackathon asks for:
+The entire credit protocol runs on Stellar — it is the integration, not a bolt-on:
 
-- **Soroban smart contracts** (in `contratos/`, written in Rust — see below): a credit registry that holds each wallet's score/limit, and a loan manager that disburses and collects **USDC on Stellar** uncollateralized, updating the score on repayment.
-- **USDC on Stellar** as the money rail for disbursement and repayment (testnet for the hackathon, mainnet as a scoring advantage).
-- Optional: **anchor integration (SEP-24/31)** for fiat on/off-ramp of the loan, tying into the Transferencias 3.0 reality.
+- **Soroban smart contracts (Rust):** two composed contracts in `contratos/` — a **Vault** (liquidity + uncollateralized borrow/repay/deposit/withdraw, ERC-4626-style) and a **Loan Manager** (per-wallet credit limit + score). The full borrow → repay → score lifecycle runs on-chain.
+- **Freighter** for wallet connect and transaction signing; **SEP-53 signed messages** for backend auth.
+- **`@stellar/stellar-sdk` + Soroban RPC** for contract invocation and reads; contracts deployed and seeded with the **Stellar CLI**.
+- **Settlement in USDC** (Stellar Asset Contract) for disbursement and repayment.
 
-> `contratos/` is reserved for the **Soroban (Rust)** contracts and is built in a separate workstream. This README orients the project; it does not implement the contracts.
+### Live on testnet
+
+| Contract | Address |
+|---|---|
+| Vault | `CDEJOQBQEZ7LUXSWXM4RF6EPBZLMJHMTGKC5GNWK5TNJR36TBHQLCULP` |
+| Loan Manager | `CDIHUCP6DWKW7B6IUECP3SCK5WCI3W5ITNQDZEK2TNI55WLXDM6Y4WJJ` |
+| USDC (SAC) | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
+
+> On testnet the settlement asset is the **native XLM Stellar Asset Contract standing in for USDC** (6-decimal accounting); on mainnet this is Stellar USDC. The contract logic is asset-agnostic.
 
 ## Repo structure
 
 ```
 lendoor-stellar/
-├── frontend/    # the Lendoor mobile app front (admin + email/voice tooling removed)
-├── backend/     # base: wallet auth (SIWE) + blockchain sync + DB persistence + email/phone verification
-├── contratos/   # Soroban smart contracts (Rust) — separate workstream
-└── specs/       # hackathon orientation: thesis, Stellar integration, customer discovery, submission checklist
+├── frontend/    # Lendoor web app — Freighter + Soroban wired (borrow, repay, lend, account)
+├── backend/     # NestJS — SEP-53 wallet auth, email + WhatsApp OTP, blockchain sync, Postgres
+├── contratos/   # Soroban smart contracts (Rust): vault + loan-manager (+ tests, parity & migration docs)
+├── packages/    # generated Soroban TypeScript bindings (vault-client, loan-manager-client)
+├── shared/      # types shared across frontend/backend
+└── specs/       # thesis, Stellar integration, customer discovery, submission checklist
 ```
 
-> **Doing the contract↔backend↔frontend wiring?** Start at [`specs/004-wiring-task.md`](specs/004-wiring-task.md) — it points you to the narrative, the product, and your exact task (the EVM→Soroban swap), plus the migration how-to in `contratos/`.
+- **frontend/** — React + Vite. The wallet/contract layer targets Stellar: `src/lib/stellar-wallet.ts` (Freighter) and `src/lib/stellar-contracts.ts` (Soroban calls). Borrow, repay, the account funds block (deposit/withdraw to the vault) and the lend market all run against Soroban.
+- **backend/** — NestJS, pruned to the base: SEP-53 wallet login, real email (ZeptoMail) + WhatsApp (Kapso) OTP, chain sync, DB persistence (TypeORM + Postgres).
+- **contratos/** — the Rust contracts, with a test suite, `PARITY.md` (EVM↔Soroban equivalence) and `MIGRATION_EVM_TO_SOROBAN.md`.
 
-### frontend/
-The same mobile app front as Lendoor (Home, Borrow, Lend, Stats, Wallet Link). The wallet/contract layer currently targets EVM (wagmi/viem) and is the seam to re-point to Stellar (Freighter + Soroban).
+## Tech stack
 
-### backend/
-NestJS, pruned to the base: SIWE wallet login, blockchain connection + chain-sync, DB persistence (TypeORM + Postgres), and email + phone verification (dev OTP placeholders). The EVM chain integration is the seam to swap for `@stellar/stellar-sdk` / Soroban RPC. Compiles clean (`tsc --noEmit`).
+Rust / Soroban · `@stellar/stellar-sdk` · Freighter · React + Vite + TypeScript · NestJS + TypeORM + Postgres · Docker.
 
-## Deliberately out of scope (kept lean for the port)
+## Status
 
-Risk model, emailing/notification system, admin panel, and AI collections were **not** carried over from the Lendoor original. This is a clean base.
-
-## How this maps to the judging criteria
-
-- **Integration depth & technical complexity** — the full credit lifecycle (disburse, repay, score) runs on Soroban + USDC, two composed contracts, not a single call.
-- **Impact on the Stellar ecosystem** — uncollateralized credit for the credit-invisible is a use case Stellar doesn't have today, and it plugs into the AR digital-dollar reality.
-- **Customer discovery & validation** — see `specs/002-customer-discovery.md` (real Bitso/wallet users + a fintech operator).
-- **Quality of testnet/mainnet deployment** — load-bearing testnet deploy; the live Celo version is evidence the model already works.
+- ✅ **Live:** Soroban contracts on testnet; full borrow → repay → score lifecycle; Freighter auth; email + WhatsApp OTP onboarding; vault deposit/withdraw; web app at `stellar.lendoor.xyz`.
+- 🛣️ **Roadmap:** mainnet USDC, anchor on/off-ramp (SEP-24/31), external LPs, the identity-based recovery layer (reminders / AI voice), and the in-exchange KYC handoff.
 
 ## Team & origin
 
-Derived from the live Lendoor codebase (Celo/EVM, cashflow-positive, real loans on mainnet). This is the Stellar-native base for the PULSO build.
+Built by Argentine builders shipping on Stellar. Derived from the live Lendoor codebase (Celo/EVM, real loans on mainnet) — this is the Stellar-native build for PULSO.
