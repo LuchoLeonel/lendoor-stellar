@@ -29,11 +29,11 @@ export function Header() {
   React.useEffect(() => setMounted(true), []);
 
   const { ready } = useContracts();
-  const { isMiniApp } = useWallet();
+  const { isMiniApp, mode } = useWallet();
   const { t } = useTranslation();
 
   // Hide header entirely in mini-app mode — Lemon/Farcaster provide their own nav bar
-  if (isMiniApp) return null;
+  if (isMiniApp || mode === 'stellar') return null;
 
   return (
     <header className="border-b border-primary/20 bg-background/95 backdrop-blur-md sticky top-0 z-50 overflow-x-hidden">

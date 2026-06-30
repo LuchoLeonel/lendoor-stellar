@@ -3,6 +3,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { randomInt } from 'crypto';
+import * as nodemailer from 'nodemailer';
 
 import { User } from 'src/domain/entities/user.entity';
 import { NotVerifiedUser } from 'src/domain/entities/not-verified-user.entity';
@@ -12,6 +13,34 @@ import { EarlyAccessService } from './early-access.service';
 import { UserQueryService } from './user-query.service';
 
 type UserPlatform = 'lemon' | 'farcaster' | 'webapp';
+
+/** Mask email PII for logs: "johnsmith@gmail.com" -> "joh***@gmail.com" */
+function maskEmail(email: string): string {
+  const at = email.indexOf('@');
+  if (at <= 0) return '***';
+  return `${email.slice(0, 3)}***@${email.slice(at + 1)}`;
+}
+
+// Lazy ZeptoMail (Zoho) transport — mirrors the live Lendoor backend
+// (smtp.zeptomail.com:465, SSL). Built once from env on first use.
+let cachedMailer: nodemailer.Transporter | null = null;
+function getOtpMailer(): nodemailer.Transporter | null {
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_APP_PASS;
+  if (!user || !pass) return null;
+  if (!cachedMailer) {
+    cachedMailer = nodemailer.createTransport({
+      host: 'smtp.zeptomail.com',
+      port: 465,
+      secure: true,
+      pool: true,
+      maxConnections: 2,
+      maxMessages: 50,
+      auth: { user, pass },
+    });
+  }
+  return cachedMailer;
+}
 
 @Injectable()
 export class UserOnboardingService {
@@ -115,8 +144,32 @@ export class UserOnboardingService {
 
     await this.pendingRepo.save(pending);
 
-    // In stellar base there is no email provider — log OTP for dev use only.
-    if (process.env.NODE_ENV !== 'production') {
+    // Send the OTP by email (ZeptoMail, same provider as the live Lendoor).
+    const mailer = getOtpMailer();
+    const from = process.env.SMTP_SENDER;
+    if (mailer && from) {
+      try {
+        await mailer.sendMail({
+          from,
+          to: pending.email,
+          subject: 'Tu código de Lendoor',
+          text: `Tu código de verificación de Lendoor es ${code}. Vence en 10 minutos.`,
+          html:
+            `<div style="font-family:system-ui,sans-serif;max-width:420px">` +
+            `<p>Tu código de verificación de Lendoor es:</p>` +
+            `<p style="font-size:28px;font-weight:700;letter-spacing:6px;margin:12px 0">${code}</p>` +
+            `<p style="color:#666">Vence en 10 minutos. Si no fuiste vos, ignorá este mail.</p>` +
+            `</div>`,
+        });
+        this.logger.log(`OTP email sent to ${maskEmail(pending.email)}`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.error(
+          `OTP email send FAILED to ${maskEmail(pending.email)}: ${msg}`,
+        );
+      }
+    } else if (process.env.NODE_ENV !== 'production') {
+      // Dev fallback when SMTP isn't configured.
       this.logger.log(`[DEV] OTP for ${pending.email}: ${code}`);
     }
   }

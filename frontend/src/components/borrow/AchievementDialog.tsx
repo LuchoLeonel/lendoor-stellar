@@ -8,6 +8,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogTitle,
 } from '@/components/ui/dialog';
 import { useGamificationStore } from '@/stores/gamificationStore';
 import { useTranslation } from '@/i18n/useTranslation';
@@ -136,6 +137,7 @@ function CatalogAchievementDialog({
             '0 20px 60px rgba(0,0,0,0.15), 0 4px 16px rgba(0,0,0,0.08)',
         }}
       >
+        <DialogTitle className="sr-only">{main.title}</DialogTitle>
         <DialogDescription className="sr-only">
           {main.description}
         </DialogDescription>
@@ -298,6 +300,7 @@ function RepGainDialog({
             '0 20px 60px rgba(0,0,0,0.15), 0 4px 16px rgba(0,0,0,0.08)',
         }}
       >
+        <DialogTitle className="sr-only">{title}</DialogTitle>
         <DialogDescription className="sr-only">{subtitle}</DialogDescription>
 
         {/* Top accent bar — same visual identity as CatalogAchievementDialog */}

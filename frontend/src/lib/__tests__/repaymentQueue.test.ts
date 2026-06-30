@@ -10,6 +10,13 @@ import {
 
 const STORAGE_KEY = 'lendoor:pendingRepayments';
 
+// Direcciones EVM completas (40 hex) para los casos de normalización: el patrón
+// EVM exige el largo completo, así que los fixtures cortos ('0xabc') no se
+// normalizaban. Lower/Upper de la MISMA address para verificar case-insensitive.
+const W1_LOWER = '0xabc0000000000000000000000000000000000abc';
+const W1_UPPER = '0xABC0000000000000000000000000000000000ABC';
+const W2_LOWER = '0xdef0000000000000000000000000000000000def';
+
 beforeEach(() => {
   localStorage.clear();
 });
@@ -46,22 +53,22 @@ describe('getPendingForWallet', () => {
   });
 
   it('returns only items matching the wallet (case-insensitive)', () => {
-    const item1 = makeItem({ id: '1', walletAddress: '0xabc' });
-    const item2 = makeItem({ id: '2', walletAddress: '0xdef' });
+    const item1 = makeItem({ id: '1', walletAddress: W1_LOWER });
+    const item2 = makeItem({ id: '2', walletAddress: W2_LOWER });
     seedStorage([item1, item2]);
 
-    const result = getPendingForWallet('0xABC');
+    const result = getPendingForWallet(W1_UPPER);
 
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('1');
   });
 
   it('normalises wallet address to lowercase when comparing', () => {
-    const item = makeItem({ walletAddress: '0xABCDEF' });
+    const item = makeItem({ walletAddress: W1_UPPER });
     seedStorage([item]);
 
-    expect(getPendingForWallet('0xabcdef')).toHaveLength(1);
-    expect(getPendingForWallet('0xABCDEF')).toHaveLength(1);
+    expect(getPendingForWallet(W1_LOWER)).toHaveLength(1);
+    expect(getPendingForWallet(W1_UPPER)).toHaveLength(1);
   });
 
   it('returns empty array when no items match the wallet', () => {
@@ -71,10 +78,10 @@ describe('getPendingForWallet', () => {
 
   it('returns multiple items for the same wallet', () => {
     seedStorage([
-      makeItem({ id: '1', walletAddress: '0xabc' }),
-      makeItem({ id: '2', walletAddress: '0xabc' }),
+      makeItem({ id: '1', walletAddress: W1_LOWER }),
+      makeItem({ id: '2', walletAddress: W1_LOWER }),
     ]);
-    expect(getPendingForWallet('0xabc')).toHaveLength(2);
+    expect(getPendingForWallet(W1_LOWER)).toHaveLength(2);
   });
 
   it('returns empty array when storage contains malformed JSON', () => {
@@ -102,8 +109,8 @@ describe('addPending', () => {
   });
 
   it('normalises walletAddress to lowercase', () => {
-    const item = addPending({ walletAddress: '0xABCDEF', amountPaidHuman: '10', txHash: null });
-    expect(item.walletAddress).toBe('0xabcdef');
+    const item = addPending({ walletAddress: W1_UPPER, amountPaidHuman: '10', txHash: null });
+    expect(item.walletAddress).toBe(W1_LOWER);
   });
 
   it('assigns a unique id to each item', () => {

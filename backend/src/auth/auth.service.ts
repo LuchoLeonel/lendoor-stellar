@@ -436,7 +436,11 @@ export class AuthService {
     let messageBytes: Buffer;
     let signatureBytes: Buffer;
     try {
-      messageBytes = Buffer.from(message, 'base64');
+      // The frontend signs the plain UTF-8 auth message (buildStellarAuthMessage)
+      // and sends it as-is, so decode it as utf8 — NOT base64. These are the exact
+      // bytes Freighter signed per SEP-53; base64-decoding a plain string yields
+      // garbage and breaks both the nonce check and signature verification.
+      messageBytes = Buffer.from(message, 'utf8');
       signatureBytes = Buffer.from(signature, 'base64');
     } catch {
       throw new UnauthorizedException('Invalid Stellar signature payload');

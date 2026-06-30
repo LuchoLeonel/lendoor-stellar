@@ -153,27 +153,67 @@ export async function getFreighterStatus(): Promise<StellarWalletStatus> {
 }
 
 export async function requestFreighterAddress(): Promise<string> {
-  if (!(await isFreighterAvailable())) {
-    throw new Error(
-      "Freighter wallet extension not detected. Install Freighter for Firefox or Chrome, unlock it, and reload this page.",
+  // NO pre-gateamos con isFreighterAvailable(): esa detección (isConnected) es
+  // racy en la PRIMERA conexión y rechazaba "no detectado" antes de que el popup
+  // siquiera apareciera (fallaba la 1ra vez, andaba la 2da). Llamamos
+  // requestAccess() directo — abre Freighter si está instalado — y sólo si eso
+  // falla de verdad caemos al mensaje de "no instalado".
+  let result: Awaited<ReturnType<typeof requestAccess>>;
+  try {
+    result = await withTimeout(
+      requestAccess(),
+      FREIGHTER_REQUEST_TIMEOUT_MS,
+      "Freighter connection",
     );
+  } catch (err) {
+    if (!(await isFreighterAvailable())) {
+      throw new Error(
+        "Freighter wallet extension not detected. Install Freighter for Firefox or Chrome, unlock it, and reload this page.",
+      );
+    }
+    throw err instanceof Error ? err : new Error(String(err));
   }
 
+  const message = errorMessage(result);
+  const address = result.address?.trim();
+  if (address) return address;
+  if (message) throw new Error(message);
+  throw new Error(
+    "Freighter did not return an address. Approve site access in the Freighter popup and try again.",
+  );
+}
+
+/**
+ * Guarantees the current site is authorized in Freighter before any signing
+ * call. Freighter drops the per-site grant when the user switches networks
+ * (Main Net ↔ Test Net), after which `signTransaction`/`signMessage` throw
+ * "<host> is not currently connected to Freighter" even though the app still
+ * holds a cached address. Re-requesting access (only when not already allowed)
+ * re-establishes the grant via the Freighter popup.
+ */
+export async function ensureFreighterAllowed(): Promise<void> {
+  if (!(await isFreighterAvailable())) {
+    throw new Error(
+      "Freighter wallet extension not detected. Install Freighter, unlock it, and reload this page.",
+    );
+  }
+  try {
+    const allowedResult = await isAllowed();
+    const allowed =
+      typeof allowedResult === "boolean"
+        ? allowedResult
+        : allowedResult.isAllowed === true;
+    if (allowed) return;
+  } catch {
+    // fall through to requestAccess
+  }
   const result = await withTimeout(
     requestAccess(),
     FREIGHTER_REQUEST_TIMEOUT_MS,
     "Freighter connection",
   );
   const message = errorMessage(result);
-  const address = result.address?.trim();
-  if (address) return address;
   if (message) throw new Error(message);
-  if (!address) {
-    throw new Error(
-      "Freighter did not return an address. Approve site access in the Freighter popup and try again.",
-    );
-  }
-  return address;
 }
 
 export async function signFreighterTransaction(
@@ -183,6 +223,7 @@ export async function signFreighterTransaction(
     networkPassphrase?: string | null;
   },
 ): Promise<string> {
+  await ensureFreighterAllowed();
   const result = await signTransaction(xdr, {
     address: opts.address,
     networkPassphrase: opts.networkPassphrase ?? undefined,
@@ -199,6 +240,7 @@ export async function signFreighterMessage(
   message: string,
   address: string,
 ): Promise<string> {
+  await ensureFreighterAllowed();
   const result = await signMessage(message, { address });
   const error = errorMessage(result);
   if (error) throw new Error(error);

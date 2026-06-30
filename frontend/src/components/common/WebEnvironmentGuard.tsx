@@ -23,7 +23,8 @@ function isAllowedHost(hostname: string | null): boolean {
   if (!hostname) return false;
 
   // Stellar/Freighter local dev — keep Lemon-only gate for EVM web builds.
-  if (isStellarMode() && isLocalhost(hostname)) return true;
+  // Stellar is web-native (Freighter) — never gate to Lemon, on any host.
+  if (isStellarMode()) return true;
 
   // Dev tunnels (VS Code, etc.)
   if (hostname.endsWith(".devtunnels.ms")) return true;

@@ -106,6 +106,43 @@ export function formatUSDCAmount(value: bigint | string): string {
   return formatAmount(units, DECIMALS, 0, 6)
 }
 
+/**
+ * Exacto (no 2dp) → muestra el polvo/sobrante si lo hay, para poder retirarlo.
+ * Ej: 2104600n → "2.1046" · 2100000n → "2.10" · 2000000n → "2.00".
+ */
+export function formatUSDCAmountExact(value: bigint | string): string {
+  const units =
+    typeof value === 'bigint' ? value : decimalToUnits(value, DECIMALS)
+  if (units == null) return typeof value === 'string' ? value : '—'
+  const neg = units < 0n
+  const v = neg ? -units : units
+  const base = 10n ** BigInt(DECIMALS)
+  const whole = v / base
+  let frac = (v % base).toString().padStart(Number(DECIMALS), '0').replace(/0+$/, '')
+  if (frac.length < 2) frac = frac.padEnd(2, '0')
+  return `${neg ? '-' : ''}${whole.toString()}.${frac}`
+}
+
+/**
+ * Parsea un monto USDC tipeado por el user (6 decimales) a units crudas (bigint).
+ * Acepta '.' o ',' como separador decimal (convención AR/EU), TRUNCA más allá de
+ * 6 decimales (no redondea) y devuelve null si es inválido. Lo usan los flujos de
+ * depósito/retiro/lend donde el monto exacto tipeado debe matchear las units
+ * on-chain (cero dust). Distinto de `decimalToUnits` (que trata la coma como
+ * separador de miles y redondea).
+ */
+export function parseUsdcAmount(raw: string): bigint | null {
+  const v = (raw || '').replace(',', '.').trim()
+  if (!v || !/^\d*\.?\d*$/.test(v)) return null
+  const [i, f = ''] = v.split('.')
+  const frac = (f + '000000').slice(0, 6)
+  try {
+    return BigInt(i || '0') * 1_000_000n + BigInt(frac || '0')
+  } catch {
+    return null
+  }
+}
+
 /** Public API — exactamente 2 decimales, con redondeo correcto. */
 export function formatUSDCAmount2dp(value: bigint | string): string {
   const units =

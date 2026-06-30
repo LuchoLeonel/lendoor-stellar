@@ -23,6 +23,23 @@ try {
   /* no-op */
 }
 
+// Auto-recuperación de chunks viejos tras un deploy: si un import dinámico falla
+// porque su archivo hasheado ya no existe en el server (bundle viejo en cache),
+// recargamos UNA vez para bajar el index.html + chunks frescos. Guard de 10s
+// para no entrar en loop si la falla es por red (no por chunk stale).
+try {
+  window.addEventListener("vite:preloadError", (event) => {
+    event.preventDefault();
+    const KEY = "lendoor:chunkReloadAt";
+    const last = Number(sessionStorage.getItem(KEY) || "0");
+    if (Date.now() - last < 10_000) return;
+    sessionStorage.setItem(KEY, String(Date.now()));
+    window.location.reload();
+  });
+} catch {
+  /* no-op */
+}
+
 // Debe correr antes de cualquier import que cargue el SDK de Farcaster.
 import { installLemonComlinkShield } from "@/lib/lemon-comlink-shield";
 installLemonComlinkShield();

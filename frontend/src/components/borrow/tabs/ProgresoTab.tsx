@@ -379,7 +379,7 @@ export function ProgresoTab({
             <div className="rounded-2xl px-4" style={{ background: 'rgba(0,0,0,0.025)' }}>
               {/* Cuenta Lendoor = la smart wallet (la que el SDK crea para la
                   mini-app, users.walletAddress). Todo user la tiene desde el día 1
-                  → siempre conectada. La EOA "Cuenta Lemon" se resuelve aparte
+                  → siempre conectada. La EOA "Cuenta Bitso" se resuelve aparte
                   (penny-drop) y vive en "Conectá tus cuentas → On-chain". */}
               <div className="flex items-center gap-3 py-3.5">
                 <img src="/favicon.png" alt="Lendoor" className="h-10 w-10 rounded-full shrink-0" style={{ background: '#fff' }} />
@@ -433,9 +433,9 @@ export function ProgresoTab({
             On-chain
           </p>
           <div className="rounded-2xl px-4 mb-7" style={{ background: 'rgba(0,0,0,0.025)' }}>
-            {/* Cuenta Lemon = la EOA principal del user (su billetera gastable).
+            {/* Cuenta Bitso = la cuenta principal del user (su billetera gastable).
                 Se conecta vía penny-drop (resolución por retiro) — flujo futuro. */}
-            <ConnectRow name="Cuenta Lemon" sub="Conectá tu billetera principal" logo="/lemon-icon.png" fill last={false} soon />
+            <ConnectRow name="Cuenta Bitso" sub="Conectá tu cuenta principal" logo="/bitso-icon.png" fill last={false} soon />
             <ConnectRow name="Conectar wallet" last onClick={onWalletConnect} />
           </div>
 

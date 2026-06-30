@@ -610,6 +610,9 @@ export function CreditMarket({ setShowQR, userEmail, userPhoneVerified, userPhon
   // la home queda visible detrás. Toda la lógica de gesto/transición vive en
   // <BottomSheet>.
   const [showConfig, setShowConfig] = React.useState(false);
+  // Back de la cortina Cuenta: si hay sub-vista abierta (deposit/withdraw/legal),
+  // el ConfigTab reporta su handler acá → la flecha del header vuelve a 'main'.
+  const [configBack, setConfigBack] = React.useState<(() => void) | null>(null);
   const [showProgreso, setShowProgreso] = React.useState(false);
   const [progresoImprove, setProgresoImprove] = React.useState(false); // sub-vista "Mejorar score"
   const [progresoWalletConnect, setProgresoWalletConnect] = React.useState(false); // sub-vista "Conectar wallet"
@@ -628,7 +631,7 @@ export function CreditMarket({ setShowQR, userEmail, userPhoneVerified, userPhon
     if (progresoImprove) { setProgresoImprove(false); return true; }
     if (showProgreso) { setShowProgreso(false); setProgresoImprove(false); setProgresoWalletConnect(false); return true; }
     if (showHistorial) { setShowHistorial(false); return true; }
-    if (showConfig) { setShowConfig(false); return true; }
+    if (showConfig) { if (configBack) { configBack(); return true; } setShowConfig(false); return true; }
     if (showPrestar) {
       if (subView === 'terms') { setSubView('main'); return true; }
       setShowPrestar(false); return true;
@@ -758,7 +761,7 @@ export function CreditMarket({ setShowQR, userEmail, userPhoneVerified, userPhon
   }
 
   // ===================== MINI-APP: tabbed layout =====================
-  if (isMiniApp) {
+  if (isMiniApp || mode === 'stellar') {
     return (
       <TooltipProvider delayDuration={150}>
         {/* Tab content with crossfade */}
@@ -910,41 +913,10 @@ export function CreditMarket({ setShowQR, userEmail, userPhoneVerified, userPhon
 
         </div>
 
-        {/* Fixed action buttons — cooldown: Retirar + Ver progreso.
-            Spec 046 — only when there is no pending debt to repay.
-            Users in post-writeOff state (hasDebt=true while cooldown still
-            active) must see Depositar + Repagar instead. */}
-        {activeTab === 'inicio' && cooldownActive && !hasDebt && (
-          <div
-            className="fixed left-0 right-0 z-30 px-5"
-            style={{ bottom: '80px' }}
-          >
-            <div className="mx-auto max-w-md flex gap-3">
-              <button
-                type="button"
-                className="flex-1 rounded-2xl h-[52px] text-[15px] font-semibold active:scale-[0.98] transition-all"
-                style={{ backgroundColor: '#ffffff', color: '#F97415', border: '2px solid #F97415' }}
-                onClick={() => setOpenWithdraw(true)}
-              >
-                Retirar
-              </button>
-              <button
-                type="button"
-                className="flex-1 rounded-2xl h-[52px] text-[15px] font-semibold active:scale-[0.98] transition-all"
-                style={{ backgroundColor: '#F97415', color: '#ffffff', boxShadow: '0 4px 16px rgba(249,116,21,0.25)' }}
-                onClick={() => setActiveTab('progreso')}
-              >
-                <span className="flex items-center justify-center gap-2">
-                  Ver progreso
-                  <ArrowRight className="h-4.5 w-4.5" strokeWidth={2.5} />
-                </span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* (Barra fija Depositar/Solicitar removida por pedido UX — el acceso
-            a esas acciones se reubicará en el card de acciones flotante.) */}
+        {/* Botones fijos de cooldown (Retirar + Ver progreso) removidos: no van
+            en la versión nueva. "Ver progreso" hacía setActiveTab('progreso')
+            (tab sin vista → pantalla blanca). El acceso al progreso sigue por el
+            score badge (cortina). */}
 
         {/* Solicitar/Pagar — cortina reutilizable (se abre desde los botones Solicitar) */}
         <BottomSheet open={showPrestar} onClose={() => setShowPrestar(false)}>
@@ -952,8 +924,17 @@ export function CreditMarket({ setShowQR, userEmail, userPhoneVerified, userPhon
         </BottomSheet>
 
         {/* Cuenta — cortina reutilizable (se abre desde el avatar) */}
-        <BottomSheet open={showConfig} onClose={() => setShowConfig(false)}>
-          <ConfigTab email={userEmail} phoneVerified={userPhoneVerified} phoneMasked={userPhoneMasked} />
+        <BottomSheet
+          open={showConfig}
+          onClose={() => { setConfigBack(null); setShowConfig(false); }}
+          onBack={configBack ?? undefined}
+        >
+          <ConfigTab
+            email={userEmail}
+            phoneVerified={userPhoneVerified}
+            phoneMasked={userPhoneMasked}
+            onBackChange={(fn) => setConfigBack(() => fn)}
+          />
         </BottomSheet>
 
         {/* Progreso — cortina reutilizable (se abre tocando el score/nivel).

@@ -8,10 +8,13 @@
 import { useEffect, useRef } from 'react';
 import { useAnalyticsSession } from '@/providers/AnalyticsProvider';
 import { BACKEND_URL } from '@/lib/constants';
+import { isStellarMode } from '@/lib/stellar-wallet';
 
 const FLUSH_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 
 function firePost(path: string, body: Record<string, unknown>) {
+  // Sin endpoints de analytics en el backend de Stellar → no disparamos (evita 404).
+  if (isStellarMode()) return;
   try {
     fetch(`${BACKEND_URL}${path}`, {
       method: 'POST',

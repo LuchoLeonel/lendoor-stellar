@@ -10,6 +10,7 @@ import { useVaultStats } from '@/hooks/lend/useVaultStats'
 import { useVaultShares } from '@/hooks/lend/useVaultShares'
 import { useWallet } from '@/providers/WalletProvider'
 import { useVaultApy15d } from '@/hooks/useVaultApy15d'
+import { useStellarLend } from '@/hooks/lend/useStellarLend'
 import { VaultActivityList } from '@/components/lend/VaultActivityList'
 import { UsdcIcon } from '@/components/icons/UsdcIcon'
 import { SpotlightCard } from '@/components/reactbits/SpotlightCard'
@@ -28,24 +29,42 @@ export function LendMarket() {
   // Si no lo usás en UI, podés comentar
   useVaultApy15d()
 
-  const { submit: submitDeposit, submitting: submittingDeposit } =
+  // Wiring de Soroban (solo activo en modo stellar). En EVM no-opea.
+  const stellar = useStellarLend()
+  const isStellar = stellar.enabled
+
+  const { submit: submitDepositEvm, submitting: submittingDepositEvm } =
     useApproveAndDepositUSDC()
 
   const {
-    submit: submitWithdraw,
-    submitting: submittingWithdraw,
-    availableUi,
+    submit: submitWithdrawEvm,
+    submitting: submittingWithdrawEvm,
+    availableUi: availableUiEvm,
   } = useWithdrawUSDC()
 
-  const { display: usdcBalanceDisplay } = useUsdcBalance()
-  const { raw: userSharesRaw, display: userSharesDisplay } = useVaultShares()
+  const { display: usdcBalanceDisplayEvm } = useUsdcBalance()
+  const { raw: userSharesRawEvm, display: userSharesDisplayEvm } = useVaultShares()
 
   const {
-    totalAssetsDisplay,
-    sharePriceDisplay,
-    sharePrice,
-    loading: loadingVault,
+    totalAssetsDisplay: totalAssetsDisplayEvm,
+    sharePriceDisplay: sharePriceDisplayEvm,
+    sharePrice: sharePriceEvm,
+    loading: loadingVaultEvm,
   } = useVaultStats()
+
+  // Unificado: en stellar → vault de Soroban; si no → EVM.
+  const submitDeposit = isStellar ? stellar.submitDeposit : submitDepositEvm
+  const submittingDeposit = isStellar ? stellar.submittingDeposit : submittingDepositEvm
+  const submitWithdraw = isStellar ? stellar.submitWithdraw : submitWithdrawEvm
+  const submittingWithdraw = isStellar ? stellar.submittingWithdraw : submittingWithdrawEvm
+  const availableUi = isStellar ? stellar.availableUi : availableUiEvm
+  const usdcBalanceDisplay = isStellar ? stellar.walletUsdcDisplay : usdcBalanceDisplayEvm
+  const userSharesRaw = isStellar ? stellar.userSharesRaw : userSharesRawEvm
+  const userSharesDisplay = isStellar ? stellar.userSharesDisplay : userSharesDisplayEvm
+  const totalAssetsDisplay = isStellar ? stellar.totalAssetsDisplay : totalAssetsDisplayEvm
+  const sharePriceDisplay = isStellar ? stellar.sharePriceDisplay : sharePriceDisplayEvm
+  const sharePrice = isStellar ? stellar.sharePrice : sharePriceEvm
+  const loadingVault = isStellar ? stellar.loading : loadingVaultEvm
 
   const SHARE_DECIMALS = 6
   const userShares =

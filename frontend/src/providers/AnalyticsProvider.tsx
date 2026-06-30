@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useMemo, useCallback } fr
 import { useLocation } from 'react-router-dom';
 import { initClarity } from '@/lib/clarity';
 import { BACKEND_URL } from '@/lib/constants';
+import { isStellarMode } from '@/lib/stellar-wallet';
 
 // ── Session context ──────────────────────────────────────────────────
 
@@ -35,6 +36,9 @@ function generateSessionId(): string {
 
 /** Fire-and-forget POST — never throws, never blocks */
 function firePost(path: string, body: Record<string, unknown>) {
+  // El backend de Stellar no tiene endpoints de analytics → evitamos los 404
+  // ruidosos en consola (analytics no aplica a este deploy).
+  if (isStellarMode()) return;
   try {
     fetch(`${BACKEND_URL}${path}`, {
       method: 'POST',

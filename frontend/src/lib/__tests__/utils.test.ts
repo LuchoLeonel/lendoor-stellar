@@ -5,6 +5,8 @@ import {
   formatAmount,
   formatUSDCAmount,
   formatUSDCAmount2dp,
+  formatUSDCAmountExact,
+  parseUsdcAmount,
   normalizeErrorMessage,
   getScoreNumber,
   getLevelInfoFromXp,
@@ -120,6 +122,56 @@ describe('formatUSDCAmount2dp', () => {
 
   it('formats zero as "0.00"', () => {
     expect(formatUSDCAmount2dp(0n)).toBe('0.00');
+  });
+});
+
+describe('formatUSDCAmountExact', () => {
+  it('keeps at least 2 decimals for round amounts', () => {
+    expect(formatUSDCAmountExact(2_000_000n)).toBe('2.00');
+    expect(formatUSDCAmountExact(1_000_000n)).toBe('1.00');
+  });
+
+  it('shows the dust (3rd-6th decimals) when present', () => {
+    expect(formatUSDCAmountExact(2_104_600n)).toBe('2.1046');
+    expect(formatUSDCAmountExact(2_100_000n)).toBe('2.10');
+    expect(formatUSDCAmountExact(1n)).toBe('0.000001');
+  });
+
+  it('handles zero and negatives', () => {
+    expect(formatUSDCAmountExact(0n)).toBe('0.00');
+    expect(formatUSDCAmountExact(-2_500_000n)).toBe('-2.50');
+  });
+
+  it('accepts a decimal string and returns it verbatim when unparseable', () => {
+    expect(formatUSDCAmountExact('abc')).toBe('abc');
+  });
+});
+
+describe('parseUsdcAmount', () => {
+  it('parses whole and decimal amounts to 6-decimal units', () => {
+    expect(parseUsdcAmount('1')).toBe(1_000_000n);
+    expect(parseUsdcAmount('2.5')).toBe(2_500_000n);
+    expect(parseUsdcAmount('0.000001')).toBe(1n);
+  });
+
+  it('treats comma as the decimal separator (AR/EU convention)', () => {
+    expect(parseUsdcAmount('5,5')).toBe(5_500_000n);
+  });
+
+  it('truncates beyond 6 decimals (no rounding → cero dust)', () => {
+    expect(parseUsdcAmount('1.0000009')).toBe(1_000_000n);
+    expect(parseUsdcAmount('1.2345678')).toBe(1_234_567n);
+  });
+
+  it('supports a leading dot and integer-only input', () => {
+    expect(parseUsdcAmount('.5')).toBe(500_000n);
+    expect(parseUsdcAmount('100')).toBe(100_000_000n);
+  });
+
+  it('returns null for empty or invalid input', () => {
+    expect(parseUsdcAmount('')).toBeNull();
+    expect(parseUsdcAmount('abc')).toBeNull();
+    expect(parseUsdcAmount('1.2.3')).toBeNull();
   });
 });
 

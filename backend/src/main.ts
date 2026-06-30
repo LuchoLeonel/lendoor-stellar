@@ -50,10 +50,12 @@ async function bootstrap() {
   const isProd = env.NODE_ENV === 'production';
 
   const corsOrigins = isProd
-    ? ['https://lendoor.xyz', 'https://staging.lendoor.xyz']
+    ? ['https://lendoor.xyz', 'https://staging.lendoor.xyz',
+        'https://stellar.lendoor.xyz', 'https://stellar.lendoor.xyz']
     : [
         'https://lendoor.xyz',
         'https://staging.lendoor.xyz',
+        'https://stellar.lendoor.xyz',
         'http://localhost:3000',
         'http://localhost:5173',
         /\.trycloudflare\.com$/,

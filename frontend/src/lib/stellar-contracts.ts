@@ -10,9 +10,21 @@ import {
   type UserRisk,
 } from "../../../packages/loan-manager-client/src/index";
 import { signFreighterTransaction } from "@/lib/stellar-wallet";
+import {
+  Address,
+  BASE_FEE,
+  Contract,
+  TransactionBuilder,
+  scValToNative,
+  rpc as StellarRpc,
+} from "@stellar/stellar-sdk";
 
 const DEFAULT_RPC_URL = "https://soroban-testnet.stellar.org";
 const DEFAULT_NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
+// Token usado como "USDC" por el vault (SAC nativo de XLM en testnet por defecto).
+// El contract id es público (no secreto); se puede sobreescribir con VITE_SOROBAN_USDC.
+const DEFAULT_USDC_SAC =
+  "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
 
 function envString(name: string): string | null {
   const value = (import.meta.env[name] as string | undefined)?.trim();
@@ -165,4 +177,139 @@ export async function stellarRepay(params: {
     throw new Error("Stellar transaction submitted without a transaction hash");
   }
   return hash;
+}
+
+/** Vault client wired to sign with Freighter (for deposit/withdraw writes). */
+function signingVaultClient(publicKey: string): VaultClient {
+  const config = stellarConfig();
+  return new VaultClient({
+    contractId: config.vaultContractId,
+    networkPassphrase: config.networkPassphrase,
+    rpcUrl: config.rpcUrl,
+    publicKey,
+    allowHttp: config.allowHttp,
+    signTransaction: async (xdr, opts) => ({
+      signedTxXdr: await signFreighterTransaction(xdr, {
+        address: opts?.address ?? publicKey,
+        networkPassphrase: opts?.networkPassphrase ?? config.networkPassphrase,
+      }),
+    }),
+  });
+}
+
+function vaultTxHash(sent: {
+  getTransactionResponse?: { txHash?: string };
+  sendTransactionResponse?: { hash?: string };
+}): string {
+  const hash =
+    sent.getTransactionResponse?.txHash ?? sent.sendTransactionResponse?.hash;
+  if (!hash) {
+    throw new Error("Stellar transaction submitted without a transaction hash");
+  }
+  return hash;
+}
+
+function usdcSacId(): string {
+  return (
+    envString("VITE_SOROBAN_USDC") ??
+    envString("VITE_STELLAR_USDC") ??
+    DEFAULT_USDC_SAC
+  );
+}
+
+/**
+ * Balance del token "USDC" (SAC) en la wallet del user — units crudas (que la
+ * app trata como USDC de 6 decimales). Es el "Disponible" gastable: cuando el
+ * user toma un loan, los fondos caen acá. Se lee simulando `balance(account)`
+ * sobre el contrato del token. Devuelve 0 si la cuenta no existe / no fondeada.
+ */
+export async function stellarReadWalletUsdc(account: string): Promise<bigint> {
+  const config = stellarConfig();
+  const server = new StellarRpc.Server(config.rpcUrl, {
+    allowHttp: config.allowHttp,
+  });
+  let source;
+  try {
+    source = await server.getAccount(account);
+  } catch {
+    return 0n; // cuenta inexistente / sin fondear
+  }
+  const contract = new Contract(usdcSacId());
+  const tx = new TransactionBuilder(source, {
+    fee: BASE_FEE,
+    networkPassphrase: config.networkPassphrase,
+  })
+    .addOperation(contract.call("balance", new Address(account).toScVal()))
+    .setTimeout(30)
+    .build();
+  const sim = await server.simulateTransaction(tx);
+  if (StellarRpc.Api.isSimulationError(sim)) return 0n;
+  const retval = sim.result?.retval;
+  if (!retval) return 0n;
+  const val = scValToNative(retval) as unknown;
+  return typeof val === "bigint" ? val : BigInt((val as number | string) ?? 0);
+}
+
+export type StellarVaultBalance = {
+  shares: bigint;
+  assets: bigint;
+  totalAssets: bigint;
+  totalSupply: bigint;
+};
+
+/**
+ * User's vault position: shares held plus their USDC value (assets), derived
+ * from the live share price (total_assets / total_supply). Also returns the
+ * vault totals (TVL + supply) so the lend market can show TVL and share price.
+ */
+export async function stellarReadVaultBalance(
+  account: string,
+): Promise<StellarVaultBalance> {
+  const config = stellarConfig();
+  const client = new VaultClient({
+    contractId: config.vaultContractId,
+    networkPassphrase: config.networkPassphrase,
+    rpcUrl: config.rpcUrl,
+    publicKey: account,
+    allowHttp: config.allowHttp,
+  });
+  const options = { timeoutInSeconds: 20 };
+  const [shares, totalAssets, totalSupply] = await Promise.all([
+    client.balance_of({ account }, options),
+    client.total_assets(options),
+    client.total_supply(options),
+  ]);
+  const s = shares.result;
+  const ta = totalAssets.result;
+  const ts = totalSupply.result;
+  const assets = ts > 0n ? (s * ta) / ts : 0n;
+  return { shares: s, assets, totalAssets: ta, totalSupply: ts };
+}
+
+/** Deposit `assets` USDC into the vault from the user's wallet (Freighter-signed). */
+export async function stellarDeposit(params: {
+  from: string;
+  assets: bigint;
+}): Promise<string> {
+  const client = signingVaultClient(params.from);
+  const assembled = await client.deposit(
+    { from: params.from, assets: params.assets },
+    { timeoutInSeconds: 60 },
+  );
+  const sent = await assembled.signAndSend();
+  return vaultTxHash(sent);
+}
+
+/** Withdraw an EXACT `assets` USDC amount from the vault (Freighter-signed). */
+export async function stellarWithdraw(params: {
+  from: string;
+  assets: bigint;
+}): Promise<string> {
+  const client = signingVaultClient(params.from);
+  const assembled = await client.withdraw(
+    { from: params.from, assets: params.assets },
+    { timeoutInSeconds: 60 },
+  );
+  const sent = await assembled.signAndSend();
+  return vaultTxHash(sent);
 }
