@@ -100,7 +100,7 @@ flowchart TD
 ## 5. Final-tranche on-chain metric + methodology
 
 - **Metric type:** cumulative loans originated on Stellar mainnet — an on-chain usage measure (the credit-protocol equivalent of a volume metric).
-- **Threshold:** ≥ 100 loans originated to KYC-verified borrowers (repeat borrowers count — e.g. ~40 borrowers cycling to 100 loans).
-- **Definition:** unique loan-disbursement events emitted by the mainnet Loan Manager contract, each to a KYC-verified borrower. A borrower may take multiple loans (the credit ladder); distinct borrowers are not required. The KYC gate is what keeps the count from being sybil-inflatable.
+- **Threshold:** ≥ 100 loans originated to KYC-verified borrowers.
+- **Definition:** unique loan-disbursement events emitted by the mainnet Loan Manager contract, each to a KYC-verified borrower (KYC-gated, so the count is not sybil-inflatable).
 - **Window:** 4 weeks from the mainnet cutover (T3 / D3.2).
 - **Verification:** the deployed Loan Manager contract ID on Stellar.Expert, plus a public query over its disbursement events.
