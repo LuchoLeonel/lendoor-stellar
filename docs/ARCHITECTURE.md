@@ -46,7 +46,7 @@ Lets a borrower onboard without seed-phrase friction and sign Soroban transactio
 
 - User authenticates with email / social / passkey via the Privy SDK; Privy provisions a self-custodial **Stellar keypair**.
 - First-use setup creates the account and establishes the **USDC trustline** (`changeTrust`).
-- Privy signs the Soroban transaction auth entries for `borrow` / `repay`; signed XDRs are submitted via Soroban RPC.
+- Privy signs the Soroban `borrow` / `repay` transaction (full-transaction signing: the wallet is both source and authorizer); signed XDRs are submitted via Soroban RPC.
 - The wallet address is bound to its Loan Manager record (limit + score).
 - **Deliverable:** a testnet run of a user onboarding via Privy and signing a Soroban transaction + PR.
 
@@ -54,7 +54,7 @@ Lets a borrower onboard without seed-phrase friction and sign Soroban transactio
 flowchart LR
   A["Login (email / social / passkey)"] --> B["Privy provisions self-custodial Stellar keypair"]
   B --> C["Account setup + USDC trustline (changeTrust)"]
-  C --> D["Sign Soroban auth entries (borrow / repay)"]
+  C --> D["Sign Soroban borrow / repay transaction (source = authorizer)"]
   D --> E["Submit signed XDR via Soroban RPC"]
 ```
 
