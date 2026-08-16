@@ -72,7 +72,7 @@ Protocol treasury / capital efficiency, **not a retail yield product**.
 flowchart TD
   C["USDC on Celo"] -->|"CCTP burn + attestation"| BR["CCTP bridge"]
   BR -->|"mint on Stellar"| V["Vault"]
-  P["Privy embedded wallet"] -->|"KYC gate via didit"| G{"KYC ok?"}
+  P["Privy embedded wallet"] -->|"KYC gate (off-chain)"| G{"KYC ok?"}
   G -->|yes| V
   V -->|"borrow / repay USDC"| P
   V <-->|"idle buffer routing in tranches"| D["DeFindex strategy"]
@@ -83,7 +83,7 @@ flowchart TD
 
 ## 3. Supporting components
 
-- **KYC gate (didit):** a wallet must pass identity verification before `borrow` is enabled.
+- **KYC gate (off-chain):** a wallet must pass identity verification through an off-chain KYC provider before `borrow` is enabled.
 - **Indexer (off-chain, proprietary):** ingests contract events via Soroban RPC `getEvents` (durable cursor, backfill, retention-window handling), reconciles on-chain state to the database, and powers monitoring/alerting.
 - **Hardening (for LP-fund custody):** multisig + timelock on admin/upgrade, emergency pause, least-privilege roles, a real decimals-offset + enforced seed deposit, and checked/`mul_div` math. Completed before audit; audited via the Soroban Audit Bank.
 - **Open source:** the Vault + Loan Manager contracts are open-sourced under Apache-2.0 in this repository; the risk model and indexer stay off-chain/proprietary.
