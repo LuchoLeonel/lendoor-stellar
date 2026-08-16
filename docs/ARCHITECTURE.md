@@ -32,12 +32,12 @@ Off-chain: frontend (React + Vite) connects the wallet and signs Soroban transac
 
 ```mermaid
 flowchart LR
-  U[User wallet] -->|SEP-53 auth, sign Soroban tx| FE[Frontend React/Vite]
-  FE --> BE[Backend NestJS + Postgres]
-  BE -->|underwriter role writes score| LM[Loan Manager<br/>limit + score]
-  U -->|borrow / repay USDC| V[Vault<br/>ERC-4626-style]
+  U["User wallet"] -->|"SEP-53 auth, sign Soroban tx"| FE["Frontend (React/Vite)"]
+  FE --> BE["Backend (NestJS + Postgres)"]
+  BE -->|"underwriter role writes score"| LM["Loan Manager (limit + score)"]
+  U -->|"borrow / repay USDC"| V["Vault (ERC-4626-style)"]
   V <-->|composed| LM
-  V -->|settles in| USDC[(USDC · Stellar Asset Contract)]
+  V -->|"settles in"| USDC["USDC (Stellar Asset Contract)"]
 ```
 
 ---
@@ -78,21 +78,21 @@ flowchart LR
 3. On **borrow demand**, liquidity is pulled back from DeFindex in tranches so the Vault can always serve a loan; idle capital never exceeds the buffer.
 4. Yield accrues to the protocol (team + institutional LPs), reflected in Vault accounting.
 
+**Worked example:** with $10,000 of Vault liquidity and $3,000 out on loans, the remaining ~$7,000 is deployed into DeFindex in $1,000 tranches; as borrow demand rises, tranches are pulled back $1,000 at a time so the idle-but-uninvested balance stays at or below the ~$1,000 buffer. Protocol capital stays productive without ever failing to serve a borrow.
+
 **Deliverable measure:** an end-to-end testnet run — idle USDC deposited into DeFindex, yield accrual visible, funds pulled back to serve a borrow.
 
 ```mermaid
 flowchart TD
-  subgraph SRC[Celo]
-    C[USDC] -->|CCTP burn + attestation| BR
-  end
-  BR[CCTP bridge] -->|mint on Stellar| V[Vault]
-  P[Privy embedded wallet] -->|borrow / repay USDC| V
-  P -->|KYC gate: didit before borrow| G{KYC ok?}
+  C["USDC on Celo"] -->|"CCTP burn + attestation"| BR["CCTP bridge"]
+  BR -->|"mint on Stellar"| V["Vault"]
+  P["Privy embedded wallet"] -->|"KYC gate via didit"| G{"KYC ok?"}
   G -->|yes| V
-  V <-->|idle buffer routing in tranches| D[DeFindex strategy]
-  V <-->|limit + score| LM[Loan Manager]
-  V --> IDX[Indexer + monitoring]
-  IDX --> APP[App: live on-chain state]
+  V -->|"borrow / repay USDC"| P
+  V <-->|"idle buffer routing in tranches"| D["DeFindex strategy"]
+  V <-->|"limit + score"| LM["Loan Manager"]
+  V --> IDX["Indexer + monitoring"]
+  IDX --> APP["App: live on-chain state"]
 ```
 
 ---
