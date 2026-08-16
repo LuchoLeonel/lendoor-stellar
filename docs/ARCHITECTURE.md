@@ -4,7 +4,7 @@
 
 Lendoor is an uncollateralized on-chain credit protocol. The `borrow → repay → score` lifecycle runs on **Soroban** and settles in **USDC (Stellar Asset Contract)**. The same protocol runs in production on Celo (EVM); this document covers the **Stellar/Soroban** deployment and the plan to integrate the three chosen building blocks. It is live end-to-end on Stellar testnet today.
 
-**Use case for Stellar:** micro-credit only works on cheap rails. Stellar's sub-cent fees and ~5s USDC settlement make loans as small as 1–5 USDC economically viable, where EVM gas would eat the margin; the loan itself executes on Soroban, so Stellar is load-bearing here, not a bolt-on.
+**Use case for Stellar:** small-ticket credit only works on cheap rails. Stellar's sub-cent fees and ~5s USDC settlement make small-ticket loans economically viable, where EVM gas would eat the margin; the loan itself executes on Soroban, so Stellar is load-bearing here, not a bolt-on.
 
 ---
 
