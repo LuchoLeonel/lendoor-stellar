@@ -50,6 +50,14 @@ Lets a borrower onboard without seed-phrase friction and sign Soroban transactio
 - The wallet address is bound to its Loan Manager record (limit + score).
 - **Deliverable:** a testnet run of a user onboarding via Privy and signing a Soroban transaction + PR.
 
+```mermaid
+flowchart LR
+  A["Login (email / social / passkey)"] --> B["Privy provisions self-custodial Stellar keypair"]
+  B --> C["Account setup + USDC trustline (changeTrust)"]
+  C --> D["Sign Soroban auth entries (borrow / repay)"]
+  D --> E["Submit signed XDR via Soroban RPC"]
+```
+
 ### 2.3 DeFindex — idle-liquidity capital efficiency
 
 Protocol treasury / capital efficiency, **not a retail yield product**.
