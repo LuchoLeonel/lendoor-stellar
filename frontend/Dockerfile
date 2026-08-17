@@ -24,8 +24,12 @@ WORKDIR /app/frontend
 # El repo es público, o sea que el problema es sólo el protocolo: reescribimos
 # ssh→https y git lo clona sin credenciales. Va acá y no editando el lockfile
 # para no tocar los hashes de integridad.
-RUN git config --global url."https://github.com/".insteadOf "ssh://git@github.com/" \
- && git config --global url."https://github.com/".insteadOf "git@github.com:"
+# OJO con --add: `insteadOf` es multi-valor, y un `git config` sin --add PISA
+# el valor anterior en vez de sumarlo. Sin eso, la segunda regla borraba a la
+# primera y la que quedaba no era la que hacía falta.
+RUN git config --global --add url."https://github.com/".insteadOf "ssh://git@github.com/" \
+ && git config --global --add url."https://github.com/".insteadOf "git@github.com:" \
+ && git config --global --list | grep insteadof
 RUN yarn install --frozen-lockfile
 
 COPY frontend/ .
