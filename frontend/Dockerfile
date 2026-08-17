@@ -18,6 +18,14 @@ COPY shared/ ./shared/
 # Copy frontend
 COPY frontend/package.json frontend/yarn.lock ./frontend/
 WORKDIR /app/frontend
+# El yarn.lock trae node-forge desde un fork de GitHub resuelto por SSH
+# (git+ssh://git@github.com/remicolin/forge.git). Dentro del builder no hay
+# cliente ssh ni claves, así que yarn moría con "ssh: not found" / exit 128.
+# El repo es público, o sea que el problema es sólo el protocolo: reescribimos
+# ssh→https y git lo clona sin credenciales. Va acá y no editando el lockfile
+# para no tocar los hashes de integridad.
+RUN git config --global url."https://github.com/".insteadOf "ssh://git@github.com/" \
+ && git config --global url."https://github.com/".insteadOf "git@github.com:"
 RUN yarn install --frozen-lockfile
 
 COPY frontend/ .
