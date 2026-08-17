@@ -656,11 +656,29 @@ function Nav() {
               sin salida — sólo saca la posibilidad de cambiarlo a mano en
               una pantalla donde no hay lugar. */}
           <div
-            className="hidden rounded-full p-0.5 sm:flex"
+            className="hidden items-center rounded-full p-0.5 sm:flex"
             role="group"
             aria-label="Idioma / Language / Idioma"
             style={{ border: `1px solid ${INK_10}`, background: "rgba(255,255,255,0.7)" }}
           >
+            {/* El globo: sin él, tres siglas sueltas ("ES EN PT") se leen como
+                un filtro cualquiera. El ícono dice "esto es el idioma" antes
+                de que leas nada, y es la convención que todo el mundo ya
+                reconoce. Va como SVG inline y no como emoji 🌐, que se
+                renderiza distinto en cada sistema y rompe la alineación. */}
+            <svg
+              viewBox="0 0 24 24"
+              className="ml-1.5 mr-1 h-[13px] w-[13px] shrink-0"
+              fill="none"
+              stroke={INK_45}
+              strokeWidth="2"
+              strokeLinecap="round"
+              aria-hidden
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M3 12h18" />
+              <path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18" />
+            </svg>
             {(["es", "en", "pt"] as Lang[]).map((l) => (
               <button
                 key={l}
