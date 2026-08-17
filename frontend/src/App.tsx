@@ -8,6 +8,9 @@ import Home from "@/pages/Home";
 // Spec 084 — companion "firmá desde la computadora" (solo web, fuera de Lemon).
 import WalletLink from "@/pages/WalletLink";
 import LandingV2 from "@/pages/LandingV2";
+// La landing nueva (la misma que sirve lendoor.xyz). Trae su propia barra de
+// navegación, así que en su ruta el Header global no se monta.
+import LandingV4 from "@/pages/LandingV4";
 import LendPage from "@/pages/Lend";
 import StatsPage from "@/pages/Stats";
 import TermsPage from "@/pages/Terms";
@@ -58,18 +61,23 @@ function InteractionTrackerComponent() {
 }
 
 export default function App() {
+  const enLanding = useLocation().pathname === "/";
   return (
     <div className="min-h-screen flex flex-col overflow-x-hidden">
       <ScrollToTop />
       <ScrollShiftGuard />
       <ClientConsoleBridge />
       <InteractionTrackerComponent />
-      <Header />
+      {/* LandingV4 trae su propia barra de navegación. Montar además el Header
+          global dejaba dos barras apiladas en la raíz. */}
+      {!enLanding && <Header />}
 
       <div className="relative flex-1 overflow-x-hidden">
         <Routes>
-          {/* Home renders full-width — no container wrapper */}
-          <Route path="/" element={<Home />} />
+          {/* La raíz sirve la MISMA landing que lendoor.xyz. El Home anterior
+              sigue accesible en /home para no perderlo. */}
+          <Route path="/" element={<LandingV4 />} />
+          <Route path="/home" element={<Home />} />
 
           {/* Landing v2 — LaaS narrative (for partners). Lives in parallel
               to Home while we iterate. */}
