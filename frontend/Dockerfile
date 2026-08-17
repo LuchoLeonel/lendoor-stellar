@@ -15,6 +15,13 @@ RUN apt-get update \
 # Copy shared types first
 COPY shared/ ./shared/
 
+# Los clientes de contratos Soroban. `src/lib/stellar-contracts.ts` los importa
+# como ../../../packages/vault-client/src/index, que desde /app/frontend/src/lib
+# resuelve a /app/packages — o sea que tienen que estar acá o el build muere en
+# "Could not resolve". Faltaban en el Dockerfile: la imagen que corre hoy es
+# anterior al wiring de Soroban, por eso nunca se notó.
+COPY packages/ ./packages/
+
 # Copy frontend
 COPY frontend/package.json frontend/yarn.lock ./frontend/
 WORKDIR /app/frontend
