@@ -2734,17 +2734,29 @@ function LoQuePonemos({ side, entreMedio }: { side: Side; entreMedio?: ReactNode
                 type="button"
                 onClick={() => elegir(i)}
                 aria-label={`Ver ${i + 1} de 3`}
-                // El punto mide 4px de alto: imposible de tocar. El área
-                // táctil se agranda con padding y se compensa con margen
-                // negativo, así el indicador se ve igual pero se puede pulsar.
-                className="block cursor-pointer rounded-full border-0 px-1.5 py-3 [background-clip:content-box] -my-3"
-                style={{
-                  height: 28,
-                  width: activo === i ? 30 : 14,
-                  backgroundColor: activo === i ? ACCENT : "rgba(42,23,16,0.14)",
-                  transition: `width 460ms ${EASE}, background-color 460ms ${EASE}`,
-                }}
-              />
+                // El PUNTO y el ÁREA TÁCTIL son dos elementos distintos, y
+                // tienen que serlo. Antes era uno solo, con el fondo recortado
+                // por `background-clip: content-box` para que el padding
+                // hiciera de target — pero ese truco pierde el `rounded-full`
+                // (el radio se aplica a la caja de padding, no al recorte), así
+                // que los puntos inactivos se veían CUADRADOS.
+                //
+                // Ahora el botón es puro espacio para el pulgar —44px de alto,
+                // medido: antes eran 28— y el span de adentro es lo único que
+                // se pinta. El margen negativo cancela el padding, así el
+                // indicador ocupa lo mismo en el layout que antes.
+                className="flex cursor-pointer items-center justify-center border-0 bg-transparent px-3.5 py-5 -mx-1.5 -my-5"
+              >
+                <span
+                  className="block rounded-full"
+                  style={{
+                    height: 4,
+                    width: activo === i ? 22 : 4,
+                    backgroundColor: activo === i ? ACCENT : "rgba(42,23,16,0.14)",
+                    transition: `width 460ms ${EASE}, background-color 460ms ${EASE}`,
+                  }}
+                />
+              </button>
             ))}
           </div>
 
