@@ -699,56 +699,15 @@ function Nav() {
           ))}
         </div>
         <div className="ml-auto flex items-center gap-3 md:ml-0">
-          {/* Selector de idioma: con 3 opciones el toggle que cicla confunde
-              (no se sabe cuál está activo ni cuál viene) — segmentado con el
-              activo marcado, como el switch del hero */}
-          {/* Oculto en mobile: con el wordmark y el CTA, los tres no entran
-              en 390px y el botón se partía en dos líneas. El idioma se
-              autodetecta del navegador, así que esconderlo no deja a nadie
-              sin salida — sólo saca la posibilidad de cambiarlo a mano en
-              una pantalla donde no hay lugar. */}
-          <div
-            className="hidden items-center rounded-full p-0.5 sm:flex"
-            role="group"
-            aria-label="Idioma / Language / Idioma"
-            style={{ border: `1px solid ${INK_10}`, background: "rgba(255,255,255,0.7)" }}
-          >
-            {/* El globo: sin él, tres siglas sueltas ("ES EN PT") se leen como
-                un filtro cualquiera. El ícono dice "esto es el idioma" antes
-                de que leas nada, y es la convención que todo el mundo ya
-                reconoce. Va como SVG inline y no como emoji 🌐, que se
-                renderiza distinto en cada sistema y rompe la alineación. */}
-            <svg
-              viewBox="0 0 24 24"
-              className="ml-1.5 mr-1 h-[13px] w-[13px] shrink-0"
-              fill="none"
-              stroke={INK_45}
-              strokeWidth="2"
-              strokeLinecap="round"
-              aria-hidden
-            >
-              <circle cx="12" cy="12" r="9" />
-              <path d="M3 12h18" />
-              <path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18" />
-            </svg>
-            {(["es", "en", "pt"] as Lang[]).map((l) => (
-              <button
-                key={l}
-                type="button"
-                onClick={() => setLang(l)}
-                aria-pressed={lang === l}
-                className="cursor-pointer rounded-full px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.1em]"
-                style={{
-                  border: 0,
-                  backgroundColor: lang === l ? INK : "transparent",
-                  color: lang === l ? "#fff" : INK_45,
-                  transition: `background-color 0.25s ${EASE}, color 0.25s ${EASE}`,
-                }}
-              >
-                {l}
-              </button>
-            ))}
-          </div>
+          {/* Selector de idioma: globo + el idioma actual, y un desplegable
+              con los nombres completos. Antes eran tres píldoras a la vista;
+              con el nombre escrito ("Português", no "PT") nadie tiene que
+              descifrar una sigla, y la barra deja de cargar tres controles
+              donde alcanza uno.
+              Oculto en mobile: con el wordmark y el CTA, los tres no entran en
+              390px. El idioma se autodetecta del navegador, así que esconderlo
+              no deja a nadie sin salida. */}
+          <SelectorIdioma />
           <Cta href="#acceso" size="sm">
             {t("Solicitar acceso", "Request access")}
           </Cta>
@@ -757,6 +716,135 @@ function Nav() {
         </div>
       </nav>
     </header>
+  );
+}
+
+// ── SELECTOR DE IDIOMA ──────────────────────────────────────────────
+// Globo + el idioma actual, y al tocarlo un desplegable con los nombres
+// escritos. Tres píldoras a la vista ("ES EN PT") obligan a descifrar siglas
+// y ocupan tres controles en la barra donde alcanza uno; acá el que ya está
+// bien servido no ve nada, y el que necesita cambiar lee "Português" en vez
+// de adivinar.
+const IDIOMAS: [Lang, string][] = [
+  ["es", "Español"],
+  ["en", "English"],
+  ["pt", "Português"],
+];
+
+function SelectorIdioma() {
+  const { lang, setLang } = useLang();
+  const [abierto, setAbierto] = useState(false);
+  const caja = useRef<HTMLDivElement>(null);
+
+  // Cerrar al tocar afuera y con Escape: un menú que sólo se cierra
+  // volviendo a tocar el botón se siente trabado.
+  useEffect(() => {
+    if (!abierto) return;
+    const fuera = (e: MouseEvent) => {
+      if (caja.current && !caja.current.contains(e.target as Node)) setAbierto(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setAbierto(false);
+    document.addEventListener("mousedown", fuera);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", fuera);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [abierto]);
+
+  return (
+    <div ref={caja} className="relative hidden sm:block">
+      <button
+        type="button"
+        onClick={() => setAbierto((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={abierto}
+        aria-label="Idioma / Language / Idioma"
+        className="flex cursor-pointer items-center gap-1.5 rounded-full py-[5px] pl-2.5 pr-2"
+        style={{
+          border: `1px solid ${INK_10}`,
+          background: "rgba(255,255,255,0.7)",
+          transition: `background-color 0.2s ${EASE}`,
+        }}
+      >
+        {/* SVG inline y no el emoji 🌐, que se renderiza distinto en cada
+            sistema y descuadra la pastilla. */}
+        <svg
+          viewBox="0 0 24 24"
+          className="h-[13px] w-[13px] shrink-0"
+          fill="none"
+          stroke={INK_45}
+          strokeWidth="2"
+          strokeLinecap="round"
+          aria-hidden
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="M3 12h18" />
+          <path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18" />
+        </svg>
+        <span
+          className="font-mono text-[10.5px] font-bold uppercase tracking-[0.1em]"
+          style={{ color: INK }}
+        >
+          {lang}
+        </span>
+        <svg
+          viewBox="0 0 24 24"
+          className="h-[11px] w-[11px] shrink-0"
+          fill="none"
+          stroke={INK_45}
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ transform: abierto ? "rotate(180deg)" : "none", transition: `transform 0.2s ${EASE}` }}
+          aria-hidden
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+
+      {abierto && (
+        <div
+          role="listbox"
+          className="absolute right-0 z-50 mt-2 min-w-[168px] overflow-hidden rounded-[14px] bg-white py-1.5"
+          style={{ border: `1px solid ${INK_10}`, boxShadow: "0 18px 40px -20px rgba(11,32,73,0.42)" }}
+        >
+          {IDIOMAS.map(([code, nombre]) => {
+            const activo = lang === code;
+            return (
+              <button
+                key={code}
+                type="button"
+                role="option"
+                aria-selected={activo}
+                onClick={() => {
+                  setLang(code);
+                  setAbierto(false);
+                }}
+                className="flex w-full cursor-pointer items-center justify-between gap-4 border-0 bg-transparent px-3.5 py-2 text-left text-[14px]"
+                style={{
+                  color: activo ? INK : INK_65,
+                  fontWeight: activo ? 600 : 400,
+                  transition: `background-color 0.15s ${EASE}`,
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(42,23,16,0.045)")}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+              >
+                {nombre}
+                {/* El tilde marca el activo sin teñir la fila entera: en un
+                    menú de tres, un fondo pintado pesa más que la diferencia
+                    que tiene que señalar. */}
+                {activo && (
+                  <svg viewBox="0 0 24 24" className="h-[14px] w-[14px] shrink-0" fill="none" stroke={ACCENT} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
