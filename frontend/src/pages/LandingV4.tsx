@@ -3503,11 +3503,15 @@ function Hero({ side, onSide }: { side: Side; onSide: (s: Side) => void }) {
             serif del kit. */}
         <div style={anim}>
         <h1
-          className="mx-auto mt-6 max-w-[17ch]"
+          className="mx-auto mt-5 max-w-[17ch] md:mt-6"
           style={{
             color: INK,
             fontWeight: 600,
-            fontSize: "clamp(2.9rem, 6.4vw, 4.6rem)",
+            // El MINIMO de la clamp es el que manda en mobile: a 390px el
+            // 6.4vw da 25px, asi que nunca gana y siempre queda el piso. A
+            // 2.9rem (46px) el titular de dos lineas se comia 103px de un
+            // viewport de 844. 2.35rem sigue siendo grande y devuelve ~35px.
+            fontSize: "clamp(2.35rem, 6.4vw, 4.6rem)",
             letterSpacing: "-0.042em",
             lineHeight: 1.02,
           }}
@@ -3518,7 +3522,7 @@ function Hero({ side, onSide }: { side: Side; onSide: (s: Side) => void }) {
           {c.headB}
         </h1>
 
-        <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5 md:mt-7 md:gap-3">
           <Cta href="#acceso" size="lg">
             {t("Solicitar acceso", "Request access")}
           </Cta>
@@ -3549,7 +3553,14 @@ function Hero({ side, onSide }: { side: Side; onSide: (s: Side) => void }) {
             hasta el CTA "Mejorar score", que es donde la pantalla cierra su
             idea; cortar antes dejaba la lista de cuentas colgando. */}
         <div
-          className="mt-10 flex justify-center overflow-hidden"
+          // El alto va por CLASE y no por `style`, así puede ser distinto en
+          // mobile: a 520px fijos el hero medía 938 contra un viewport de 844
+          // y el teléfono quedaba cortado por el borde de la pantalla, no por
+          // el de la tarjeta —que es el efecto que se buscaba—. A 420 el
+          // recorte vuelve a caer adentro del lienzo.
+          className={`mt-7 flex justify-center overflow-hidden md:mt-10 ${
+            visible === "fintech" ? "h-[368px] md:h-[520px]" : ""
+          }`}
           style={{
             // El teléfono SÍ lleva altura fija: se corta a propósito y el
             // recorte tiene que caer siempre en el mismo lugar.
@@ -3558,7 +3569,6 @@ function Hero({ side, onSide }: { side: Side; onSide: (s: Side) => void }) {
             // contenido. Fijada en 900 se veía bien en desktop pero en un
             // viewport de 390 el globo mide ~334 y sobraban 560px de vacío
             // adentro de la tarjeta.
-            height: visible === "fintech" ? 520 : undefined,
             minHeight: undefined,
             transition: `height 460ms ${EASE}, min-height 460ms ${EASE}`,
           }}
