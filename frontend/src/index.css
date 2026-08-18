@@ -7,14 +7,18 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Block iOS swipe-back gesture inside mini-app webview */
+/* Bloquea el swipe-back de iOS adentro del webview de la mini-app.
+   El eje Y se apaga por DEFECTO —la mini-app vive dentro de Lemon y ahí el
+   rebote deja ver el fondo del host y pelea con su pull-to-refresh— y se
+   vuelve a habilitar SOLO en la landing, más abajo. Este archivo lo comparten
+   las dos, así que lo que se toca acá le pasa a las dos. */
 html, body {
   overscroll-behavior-x: none;
   overscroll-behavior-y: none;
   -webkit-overflow-scrolling: touch;
 }
 
-/* Lock horizontal scroll and overscroll bounce on the document */
+/* Sin scroll horizontal en el documento */
 html, body {
   overflow-x: hidden;
   overscroll-behavior-x: none;
@@ -30,6 +34,20 @@ html, body {
   height: 100dvh;
   overscroll-behavior-y: none;
   -webkit-overflow-scrolling: touch;
+}
+
+/* EL REBOTE, sólo en la landing.
+   La landing marca <html data-landing> mientras está montada, y ahí sí
+   devolvemos el rubber-band vertical de iOS: sin él la página frena en seco
+   al llegar al final y se siente como un WebView viejo.
+   Van los tres selectores porque el bloqueo estaba en los tres lugares, y el
+   de #root es el que más pesa: #root ES el contenedor de scroll, así que si
+   queda en `none` no importa lo que digan html y body.
+   El eje X NO se toca: el swipe-back se sigue bloqueando en los dos lados. */
+html[data-landing],
+html[data-landing] body,
+html[data-landing] #root {
+  overscroll-behavior-y: auto;
 }
 
 /* Mini-app UX: deshabilita selección de texto y el callout iOS (los handles
@@ -602,6 +620,19 @@ textarea,
 }
 .lk-step-in { animation: lk-step-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
+/* Slide direccional al cambiar de pantalla dentro de una cortina — misma curva
+   que la cortina del Score (cubic-bezier(0.22,1,0.36,1), 400ms). */
+@keyframes lk-slide-in-right {
+  from { opacity: 0; transform: translateX(26%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes lk-slide-in-left {
+  from { opacity: 0; transform: translateX(-26%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.lk-slide-r { animation: lk-slide-in-right 400ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.lk-slide-l { animation: lk-slide-in-left 400ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
 /* Respect reduced-motion preferences */
 @media (prefers-reduced-motion: reduce) {
   .dialog-slide-in,
@@ -620,4 +651,70 @@ textarea,
   }
   /* Sin animación, el check igual tiene que quedar dibujado. */
   .lk-draw { stroke-dashoffset: 0; }
+}
+
+/* ===== CTA primario estandarizado (una sola fuente de verdad) =====
+   Naranja sólido con lenguaje "glass": sheen (gradiente) + filo de luz (inset)
+   + glow de color. Fake-3D barato: SIN backdrop-blur, todo se pinta una vez y se
+   cachea (cero costo por-frame, ok en gama baja). Usar en Solicitar/Continuar/
+   Repagar/Mejorar score, etc. para que NUNCA se desincronicen. */
+.btn-cta-primary {
+  background: linear-gradient(180deg, #fb8a2e 0%, #f97415 52%, #ee6a0d 100%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 5px 16px rgba(249, 116, 21, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.10);
+  color: #ffffff;
+}
+.btn-cta-primary:disabled { opacity: 0.5; }
+
+/* Variante VIOLETA (retirar): mismo lenguaje/glow que el naranja, en violeta. */
+.btn-cta-violet {
+  background: linear-gradient(180deg, #8b5cf6 0%, #7c3aed 52%, #6d28d9 100%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 5px 16px rgba(124, 58, 237, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.10);
+  color: #ffffff;
+}
+.btn-cta-violet:disabled { opacity: 0.5; }
+
+/* Variante VERDE (Ver detalle / cooldown): mismo lenguaje/glow, en verde. */
+.btn-cta-green {
+  background: linear-gradient(180deg, #34d399 0%, #16a34a 52%, #15803d 100%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 5px 16px rgba(22, 163, 74, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.10);
+  color: #ffffff;
+}
+.btn-cta-green:disabled { opacity: 0.5; }
+
+/* Variante chica (pills tipo "Conectar"): mismo lenguaje, glow más sutil. */
+.btn-cta-primary-sm {
+  background: linear-gradient(180deg, #fb8a2e 0%, #f97415 55%, #ef6d0f 100%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow:
+    0 3px 9px rgba(249, 116, 21, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+}
+/* Marquee (tira de logos) — keyframes + pausa al hover */
+@keyframes marquee-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.pause { animation-play-state: paused; }
+
+/* Marco de luz de la landing v4: la capa de color respira con transform
+   (compositor) en vez de repintar el degradado. */
+@keyframes marcoRespira {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.07) rotate(0.8deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="marcoRespira"] { animation: none !important; }
 }

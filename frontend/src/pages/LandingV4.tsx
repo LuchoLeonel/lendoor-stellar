@@ -2432,6 +2432,23 @@ function IntegracionCuerpo() {
 // Julio y agosto quedan FUERA a propósito: sus préstamos todavía no vencieron
 // todos, así que su mora está subestimada y meterlos exageraría la mejora.
 // Esa es la diferencia entre mostrar el dato y elegirlo.
+// Coordenadas de la pendiente. El eje Y va de 0 (piso, 200px) al máximo de
+// la serie (35,8% arriba, 40px), así la caída ocupa todo el alto disponible:
+// escalado a 0-100% la línea quedaría casi plana y el argumento se perdería.
+// Coordenadas en PORCENTAJE del contenedor, para que sirvan igual al svg
+// (viewBox 0-100) y al HTML posicionado encima.
+// El eje Y se escala al máximo de la serie (35,8% arriba) y no a 0-100%:
+// contra 100 la caída quedaría casi plana y el argumento se perdería.
+const MAX_MORA = 35.8;
+const yDe = (pct: number) => (1 - pct / MAX_MORA) * 100;
+// El X no llega a los bordes: los porcentajes van CENTRADOS sobre su punto,
+// así que a 9/91 la mitad del "11,1%" se salía del lienzo en mobile.
+const PTS: [number, number][] = [
+  [13, yDe(35.8)],
+  [50, yDe(17.3)],
+  [86, yDe(11.1)],
+];
+
 const COHORTES: { et: string; pct: number; n: string; fuerte?: boolean; final?: boolean }[] = [
   { et: "Primera cohorte\ndic 2025", pct: 35.8, n: "924 préstamos", fuerte: true },
   { et: "Promedio 2026", pct: 17.3, n: "2.835 préstamos" },
@@ -2476,63 +2493,80 @@ function ModeloAprende() {
         </p>
       </div>
 
-      <div className="mx-auto mt-12 max-w-[760px]">
-        {/* El área del gráfico: las columnas se alinean al PISO y el % viaja
-            pegado arriba de cada una. A altura fija los porcentajes quedaban
-            flotando lejos de las columnas cortas y el ojo tenía que unirlos. */}
-        <div className="relative grid grid-cols-3 gap-6 md:gap-10" style={{ height: ALTO + 78 }}>
+      {/* LA PENDIENTE, y no tres columnas.
+          El titular afirma una TRAYECTORIA ("la mora baja"), y una línea que
+          cae la dice antes de que leas un número; tres columnas piden que
+          compares alturas y recién ahí concluyas la tendencia.
+
+          GEOMETRÍA EN SVG, TEXTO EN HTML. Es la parte importante: con todo
+          adentro de un viewBox fijo, a 390px de ancho el dibujo se escalaba a
+          310×106 y arrastraba la tipografía con él —los porcentajes quedaban
+          en ~14px y las etiquetas en ~5px, ilegibles—. Ahora el svg dibuja
+          SOLO la línea y el área, con preserveAspectRatio="none" (deformar
+          segmentos rectos no se nota), y los puntos y los textos son HTML
+          posicionado en porcentajes: el tipo queda en px reales y se lee igual
+          a 390 que a 1600. */}
+      {/* pt-10: el porcentaje se dibuja ARRIBA de su punto, y el primero está
+          en el tope del área — sin este aire quedaba pisando el párrafo. */}
+      <div className="mx-auto mt-8 w-full max-w-[760px] pt-10">
+        <div className="relative h-[190px] md:h-[240px]">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden>
+            <defs>
+              <linearGradient id="bajoCurva" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={ORANGE_DEEP} stopOpacity="0.14" />
+                <stop offset="100%" stopColor={ORANGE_DEEP} stopOpacity="0" />
+              </linearGradient>
+              {/* El área se revela con un clip que se abre de izquierda a
+                  derecha: animar el `d` de un path no interpola de forma
+                  confiable entre navegadores, y un clip sí. */}
+              <clipPath id="revela" clipPathUnits="objectBoundingBox">
+                <rect x="0" y="0" height="1" width={visible ? 1 : 0}
+                      style={{ transition: "width 1500ms cubic-bezier(0.22, 1, 0.36, 1)" }} />
+              </clipPath>
+            </defs>
+            <g clipPath="url(#revela)">
+              <polygon points={`${PTS[0][0]},${PTS[0][1]} ${PTS[1][0]},${PTS[1][1]} ${PTS[2][0]},${PTS[2][1]} ${PTS[2][0]},100 ${PTS[0][0]},100`}
+                       fill="url(#bajoCurva)" />
+              <polyline points={`${PTS[0][0]},${PTS[0][1]} ${PTS[1][0]},${PTS[1][1]} ${PTS[2][0]},${PTS[2][1]}`}
+                        fill="none" stroke={ORANGE_DEEP} strokeWidth="0.7"
+                        vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+            </g>
+          </svg>
+
+          {/* el piso: una hairline, sin grilla ni ejes */}
+          <div className="absolute inset-x-0 bottom-0 h-px" style={{ backgroundColor: "rgba(42,23,16,0.12)" }} aria-hidden />
+
           {COHORTES.map((c, i) => (
-            <div key={c.et} className="flex flex-col items-center justify-end">
-              <p
-                className="mb-3 font-bold tracking-tight [font-variant-numeric:tabular-nums]"
-                style={{
-                  color: c.final ? ORANGE_DEEP : c.fuerte ? INK_45 : INK,
-                  // grandes de verdad: el % ES el argumento de la sección, y
-                  // a 1.95rem competía de igual a igual con la etiqueta
-                  // el mínimo baja de 2.6/2rem a 1.5/1.25: en mobile cada
-                  // columna mide ~110px y los números se montaban sobre las
-                  // barras de al lado
-                  fontSize: c.final ? "clamp(1.5rem, 4.6vw, 4rem)" : "clamp(1.25rem, 3.4vw, 3rem)",
-                  lineHeight: 1,
-                }}
-              >
+            <div
+              key={c.et}
+              className="absolute -translate-x-1/2 -translate-y-1/2"
+              style={{ left: `${PTS[i][0]}%`, top: `${PTS[i][1]}%`,
+                       opacity: visible ? 1 : 0, transition: `opacity 420ms ease ${750 + i * 260}ms` }}
+            >
+              <div className="relative flex items-center justify-center">
+                {c.final && <span className="absolute h-6 w-6 rounded-full" style={{ backgroundColor: ORANGE_DEEP, opacity: 0.16 }} />}
+                <span className="relative block rounded-full"
+                      style={{ height: c.final ? 12 : 9, width: c.final ? 12 : 9,
+                               backgroundColor: c.final ? ORANGE_DEEP : "#fff",
+                               boxShadow: `inset 0 0 0 2.5px ${ORANGE_DEEP}` }} />
+              </div>
+              <p className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap font-bold tracking-tight [font-variant-numeric:tabular-nums]"
+                 style={{ bottom: c.final ? 22 : 18, color: c.final ? ORANGE_DEEP : INK_45,
+                          fontSize: c.final ? "clamp(1.6rem, 3.4vw, 2.2rem)" : "clamp(1.05rem, 2.2vw, 1.4rem)", lineHeight: 1 }}>
                 {c.pct.toLocaleString("es-AR", { minimumFractionDigits: 1 })}%
               </p>
-              <div
-                className="w-full max-w-[92px] rounded-t-[10px]"
-                style={{
-                  height: visible ? (c.pct / 35.8) * ALTO : 0,
-                  // Dos tonos y no tres: la historia es NEUTRO (lo que fue)
-                  // → MARCA (lo que logramos). El naranja al 55% del medio se
-                  // lavaba sobre el crema —naranja claro sobre fondo cálido
-                  // claro— y el remate va en ORANGE_DEEP, que sobre esta
-                  // superficie tiene bastante más peso que el #F97415.
-                  backgroundColor: c.fuerte
-                    ? "rgba(42,23,16,0.14)"
-                    : c.final
-                    ? ORANGE_DEEP
-                    : "rgba(42,23,16,0.30)",
-                  transition: `height 1000ms cubic-bezier(0.22, 1, 0.36, 1) ${i * 150}ms`,
-                }}
-              />
             </div>
           ))}
-          {/* una sola línea de base, continua: tres segmentos sueltos se leen
-              como tres gráficos en vez de uno */}
-          <div
-            className="absolute inset-x-0 bottom-0"
-            style={{ height: 1, backgroundColor: "rgba(42,23,16,0.14)" }}
-            aria-hidden
-          />
         </div>
 
-        <div className="mt-3.5 grid grid-cols-3 gap-6 md:gap-10">
+        {/* Las etiquetas van ABAJO y en su propia grilla, no colgando de cada
+            punto: a 390px el texto de los extremos se salía del lienzo. */}
+        <div className="mt-3.5 grid grid-cols-3 gap-2">
           {COHORTES.map((c) => (
-            <div key={c.et} className="text-center">
-              <p className="whitespace-pre-line text-[13px] leading-snug" style={{ color: c.final ? INK : INK_65 }}>
-                {c.et}
-              </p>
-            </div>
+            <p key={c.et} className="whitespace-pre-line text-center text-[11.5px] leading-snug md:text-[13px]"
+               style={{ color: c.final ? INK : INK_65 }}>
+              {c.et}
+            </p>
           ))}
         </div>
       </div>
@@ -3566,12 +3600,16 @@ function Hero({ side, onSide }: { side: Side; onSide: (s: Side) => void }) {
             idea; cortar antes dejaba la lista de cuentas colgando. */}
         <div
           // El alto va por CLASE y no por `style`, así puede ser distinto en
-          // mobile: a 520px fijos el hero medía 938 contra un viewport de 844
-          // y el teléfono quedaba cortado por el borde de la pantalla, no por
-          // el de la tarjeta —que es el efecto que se buscaba—. A 420 el
-          // recorte vuelve a caer adentro del lienzo.
+          // mobile, y en `svh` y no en px fijos.
+          //
+          // svh = "small viewport height": el alto CON las barras del navegador
+          // a la vista. Es el que importa, porque es lo que ve el usuario en el
+          // primer pintado. Medir contra `innerHeight` (844 en un iPhone 14)
+          // miente: Safari se come ~100px con la barra de direcciones abajo y
+          // la de estado arriba, así que lo usable son ~745 y la tarjeta seguía
+          // cortándose en un teléfono de verdad aunque en el test "entrara".
           className={`mt-7 flex justify-center overflow-hidden md:mt-10 ${
-            visible === "fintech" ? "h-[368px] md:h-[520px]" : ""
+            visible === "fintech" ? "h-[clamp(190px,30svh,368px)] md:h-[520px]" : ""
           }`}
           style={{
             // El teléfono SÍ lleva altura fija: se corta a propósito y el
@@ -5351,6 +5389,11 @@ export default function LandingV3() {
     // nadie mira. La bajada vive en la meta description, que es su lugar:
     // ahí sí la lee Google y la muestran los previews al compartir el link.
     document.title = "Lendoor";
+    // Marca el documento mientras la landing está montada. index.css lo usa
+    // para devolver el rubber-band vertical de iOS SOLO acá: el mismo CSS lo
+    // comparte la mini-app dentro de Lemon, y ahí el rebote deja ver el fondo
+    // del host y pelea con su pull-to-refresh, así que allá sigue apagado.
+    document.documentElement.dataset.landing = "1";
     const md = document.querySelector('meta[name="description"]');
     if (md) {
       md.setAttribute(
@@ -5363,6 +5406,14 @@ export default function LandingV3() {
       );
     }
   }, [lang]);
+
+  // El flag se limpia al desmontar. Sin esto, navegar de la landing a
+  // /borrow dejaba el atributo puesto y la mini-app heredaba el rebote —que
+  // es exactamente lo que no queremos adentro de Lemon.
+  useEffect(() => {
+    return () => { delete document.documentElement.dataset.landing; };
+  }, []);
+
   // Los anchors del nav (#como, #prueba, #acceso) transicionan en
   // vez de saltar. El scroller es #root (no <html>), y lo seteamos solo
   // mientras la landing está montada: en la app, ScrollToTop resetea scrollTop
