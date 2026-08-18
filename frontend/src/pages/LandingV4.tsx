@@ -110,8 +110,6 @@ const PT: Record<string, string> = {
   "El flujo que ve tu usuario. Dos taps, cero formularios.":
     "O fluxo que o seu usuário vê. Dois toques, zero formulários.",
   "PASO": "PASSO",
-  "Ecosistema: Lemon, Celo, USDC y MetaMask alrededor de Lendoor":
-    "Ecossistema: Lemon, Celo, USDC e MetaMask ao redor da Lendoor",
   "Acceso": "Acesso",
   "Abrí la puerta en tu app.": "Abra a porta no seu app.",
   "Contanos qué construís y te decimos en la primera llamada si tiene sentido.":
@@ -177,6 +175,60 @@ function useT() {
   const { lang } = useLang();
   return (es: string, en: string) => traducir(lang, es, en);
 }
+
+// ── CADENA ──────────────────────────────────────────────────────────
+// La MISMA landing sirve dos deployments sobre cadenas distintas:
+// lendoor.xyz (Celo) y stellar.lendoor.xyz (Stellar/Soroban). Todo lo que
+// cambia entre las dos vive acá y en ningún otro lado.
+//
+// La alternativa era duplicar el archivo en el repo de stellar, pero son
+// ~5.000 líneas que empiezan a divergir con el primer cambio de copy — y el
+// copy de esta página se toca seguido. Acá lo que difiere son SEIS datos, no
+// lógica, así que una sola landing los sirve a las dos.
+//
+// Se elige en build con VITE_CHAIN. Sin la variable queda Celo, que es el
+// deployment de producción: si alguien olvida pasarla, la landing dice la
+// verdad de lendoor.xyz en vez de inventar una tercera cosa.
+type Cadena = {
+  red: string;
+  redLogo: string;
+  /** el protocolo sobre el que corre el vault, con su logo (o sin él) */
+  vault: { nombre: string; logo?: string; nota: [string, string] };
+  /** el explorador donde se verifica el contrato real */
+  contratoUrl: string;
+  /** testnet: la landing habla en presente de producción, y eso sólo es cierto en Celo */
+  testnet: boolean;
+};
+
+const CADENAS: Record<string, Cadena> = {
+  celo: {
+    red: "Celo",
+    redLogo: "/celo_logo.png",
+    vault: {
+      nombre: "Euler v2",
+      logo: "/logos/euler.svg",
+      nota: ["El vault, auditado", "The vault, audited"],
+    },
+    contratoUrl: "https://celoscan.io/address/0x3E1536CC066C626Ee96D79bb00d1c9dC7d4D86b6",
+    testnet: false,
+  },
+  stellar: {
+    red: "Stellar",
+    redLogo: "/logos/stellar.svg",
+    vault: {
+      // En Stellar no hay Euler: el vault y el loan manager son dos contratos
+      // Soroban propios, en Rust. El argumento se da vuelta — en Celo pesa que
+      // el vault sea de un tercero auditado; acá pesa que el código es nuestro.
+      nombre: "Soroban",
+      nota: ["Contratos propios en Rust", "Our own contracts, in Rust"],
+    },
+    contratoUrl:
+      "https://stellar.expert/explorer/testnet/contract/CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+    testnet: true,
+  },
+};
+
+const CADENA: Cadena = CADENAS[import.meta.env.VITE_CHAIN as string] ?? CADENAS.celo;
 
 // ── TOKENS (BRAND_KIT §1) ───────────────────────────────────────────
 const ACCENT = "#F97415"; // el naranja: puerta, acentos, CTA
@@ -1604,7 +1656,7 @@ const NODOS: { x: number; y: number; logo?: string; alt?: string; round?: boolea
   { x: 130, y: 80, logo: "/logos/metamask.svg", alt: "MetaMask" },
   { x: 85, y: 180, logo: "/lemon.png", alt: "Lemon", round: true },
   { x: 70, y: 280 },
-  { x: 85, y: 380, logo: "/celo_logo.png", alt: "Celo" },
+  { x: 85, y: 380, logo: CADENA.redLogo, alt: CADENA.red },
   { x: 130, y: 480 - 20, logo: "/usdc.svg", alt: "USDC" },
 ];
 
@@ -1668,7 +1720,7 @@ function FlujoInterior() {
               "verificalo" y aterriza en la home de Celoscan asume que no hay
               nada que verificar. */}
           <div className="mt-8">
-            <Cta variante="suave" href="https://celoscan.io/address/0x3E1536CC066C626Ee96D79bb00d1c9dC7d4D86b6">
+            <Cta variante="suave" href={CADENA.contratoUrl}>
               {t("Verificalo vos mismo", "Verify it yourself")}
             </Cta>
           </div>
@@ -4697,6 +4749,28 @@ function ComoFunciona({ side }: { side: Side }) {
               "Tell us what you are building and we will tell you on the first call whether it makes sense."
             )}
           </p>
+
+          {/* RESPALDO, y va acá y no en el loop de integraciones a propósito.
+              Ese loop dice "con qué está enchufado el producto" — Celo, USDC,
+              MetaMask. Pygma no está integrada con nada: nos respaldó. Metida
+              ahí adentro se diluye justo en lo único que la hace valer, y de
+              paso vuelve mentira la etiqueta del loop.
+              Al lado del CTA porque es donde alguien que está por escribirte
+              se pregunta quién más te creyó. */}
+          <div className="mt-8 flex items-center gap-3.5">
+            <span
+              className="shrink-0 font-mono text-[10.5px] font-bold uppercase tracking-[0.16em]"
+              style={{ color: META }}
+            >
+              {t("Con el respaldo de", "Backed by")}
+            </span>
+            <img
+              src="/logos/pygma.png"
+              alt="Pygma"
+              draggable={false}
+              className="h-[19px] w-auto opacity-70 transition-opacity duration-300 hover:opacity-100"
+            />
+          </div>
         </div>
 
         <div className="md:justify-self-end">
@@ -4742,11 +4816,16 @@ const FAQ_ES: [string, string][] = [
     "Una llamada a la API para abrir la línea y una pantalla para mostrarla. Podés consumir los endpoints y diseñarla vos. No hay custodia, nodos ni contratos que mantener.",
   ],
   [
-    // El vault no es contrato propio: es Euler v2 (EVK), auditado. Lo nuestro
-    // es el módulo de crédito sin colateral que va encima. Un CTO que evalúa
-    // riesgo de smart contract pregunta esto primero.
+    // Un CTO que evalúa riesgo de smart contract pregunta esto primero, y la
+    // respuesta HONESTA cambia según la cadena: en Celo el vault es Euler v2
+    // (EVK), de un tercero auditado, y lo nuestro es el módulo de crédito que
+    // va encima; en Stellar el vault y el loan manager son contratos Soroban
+    // propios. Decir "Euler" en la landing de Stellar sería mentir sobre lo
+    // único que ese CTO vino a verificar.
     "¿Sobre qué contratos corre el vault?",
-    "Sobre Euler v2, un protocolo auditado y con años en producción. Lo nuestro es el módulo de crédito que va encima.",
+    CADENA.red === "Celo"
+      ? "Sobre Euler v2, un protocolo auditado y con años en producción. Lo nuestro es el módulo de crédito que va encima."
+      : "Sobre contratos Soroban propios, escritos en Rust: un vault de liquidez y un loan manager con el límite y el score de cada wallet.",
   ],
   [
     "¿En qué países operan?",
@@ -4765,7 +4844,9 @@ const FAQ_PT: [string, string][] = [
   ],
   [
     "Sobre quais contratos roda o vault?",
-    "Sobre a Euler v2, um protocolo auditado e com anos em produção. O nosso é o módulo de crédito que vai por cima.",
+    CADENA.red === "Celo"
+      ? "Sobre a Euler v2, um protocolo auditado e com anos em produção. O nosso é o módulo de crédito que vai por cima."
+      : "Sobre contratos Soroban próprios, escritos em Rust: um vault de liquidez e um loan manager com o limite e o score de cada wallet.",
   ],
   [
     "Em quais países vocês operam?",
@@ -4784,7 +4865,9 @@ const FAQ_EN: [string, string][] = [
   ],
   [
     "Which contracts does the vault run on?",
-    "On Euler v2, an audited protocol with years in production. Ours is the credit module on top.",
+    CADENA.red === "Celo"
+      ? "On Euler v2, an audited protocol with years in production. Ours is the credit module on top."
+      : "On our own Soroban contracts, written in Rust: a liquidity vault and a loan manager holding each wallet's limit and score.",
   ],
   [
     "Which countries do you operate in?",
@@ -4965,9 +5048,11 @@ function CeldaLogo({
  * traen usuarios y las apps de las que leemos ingresos.
  */
 const LOOP_LOGOS: { src?: string; alt: string; nota: [string, string]; round?: boolean }[] = [
-  // Símbolo oficial, bajado de euler.finance/brand
-  { src: "/logos/euler.svg", alt: "Euler v2", nota: ["El vault, auditado", "The vault, audited"] },
-  { src: "/celo_logo.png", alt: "Celo", nota: ["La red que liquida", "The chain that settles"] },
+  // Los dos primeros salen de CADENA: en lendoor.xyz son Euler v2 + Celo, en
+  // stellar.lendoor.xyz son Soroban + Stellar. Símbolo de Euler bajado de
+  // euler.finance/brand.
+  { src: CADENA.vault.logo, alt: CADENA.vault.nombre, nota: CADENA.vault.nota },
+  { src: CADENA.redLogo, alt: CADENA.red, nota: ["La red que liquida", "The chain that settles"] },
   { src: "/usdc.svg", alt: "USDC", nota: ["La moneda de cada préstamo", "The currency of every loan"] },
   { src: "/lemon.png", alt: "Lemon", round: true, nota: ["Mini-app en producción", "Mini-app in production"] },
   { src: "/logos/metamask.svg", alt: "MetaMask", nota: ["Wallets externas", "External wallets"] },
@@ -5089,7 +5174,7 @@ function Footer() {
       [t("Prueba viva", "Living proof"), "#prueba"],
     ]],
     [t("Recursos", "Resources"), [
-      [t("Contrato verificable", "Verifiable contract"), "https://celoscan.io/address/0x3E1536CC066C626Ee96D79bb00d1c9dC7d4D86b6"],
+      [t("Contrato verificable", "Verifiable contract"), CADENA.contratoUrl],
       [t("Mini-app en Lemon", "Mini-app on Lemon"), "https://app.lendoor.xyz"],
     ]],
     [t("Compañía", "Company"), [

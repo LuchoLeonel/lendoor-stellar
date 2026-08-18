@@ -46,6 +46,12 @@ RUN rm -rf shared && ln -s ../shared shared
 ARG VITE_APP_BASE_URL=https://lendoor.xyz
 ARG VITE_PUBLIC_BACKEND_URL=https://api.lendoor.xyz
 ARG VITE_GRAPH_API_KEY
+# Este repo SIEMPRE es el deployment de Stellar, así que el default va acá y no
+# depende de que quien deploya se acuerde de pasarlo. La landing lee VITE_CHAIN
+# para decidir si habla de Celo/Euler o de Stellar/Soroban, y si queda vacía cae
+# a Celo — que en esta imagen sería mentira.
+ARG VITE_CHAIN=stellar
+ENV VITE_CHAIN=${VITE_CHAIN}
 
 ENV VITE_NODE_ENV="production"
 ENV VITE_APP_BASE_URL=${VITE_APP_BASE_URL}
