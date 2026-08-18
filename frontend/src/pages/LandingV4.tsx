@@ -2435,25 +2435,26 @@ function IntegracionCuerpo() {
 // Coordenadas de la pendiente. El eje Y va de 0 (piso, 200px) al máximo de
 // la serie (35,8% arriba, 40px), así la caída ocupa todo el alto disponible:
 // escalado a 0-100% la línea quedaría casi plana y el argumento se perdería.
-// Coordenadas en PORCENTAJE del contenedor, para que sirvan igual al svg
-// (viewBox 0-100) y al HTML posicionado encima.
-// El eje Y se escala al máximo de la serie (35,8% arriba) y no a 0-100%:
-// contra 100 la caída quedaría casi plana y el argumento se perdería.
-const MAX_MORA = 35.8;
-const yDe = (pct: number) => (1 - pct / MAX_MORA) * 100;
-// El X no llega a los bordes: los porcentajes van CENTRADOS sobre su punto,
-// así que a 9/91 la mitad del "11,1%" se salía del lienzo en mobile.
-const PTS: [number, number][] = [
-  [13, yDe(35.8)],
-  [50, yDe(17.3)],
-  [86, yDe(11.1)],
+// Cohortes REALES por mes de originación, medidas contra la DB de producción
+// el 2026-08-18 (query read-only): mora = defaulted / total del mes.
+//
+// Sólo cohortes MADURAS: julio queda afuera porque todavía tiene 29 préstamos
+// sin resolver (open + in_grace) y su número puede empeorar; las siete que
+// están tienen CERO sin resolver, así que su mora ya es definitiva.
+//
+// La serie corta en MAYO (decisión de Fabián: es la cohorte con más recorrido).
+// Junio existe y da 12,8% —sube respecto de mayo— y también está resuelto al
+// 100%, así que no es que le falte madurar: se deja afuera a propósito.
+// Vale tenerlo presente porque el gráfico termina en el mejor mes de la serie.
+const COHORTES: { et: string; pct: number; n: number; final?: boolean }[] = [
+  { et: "dic\n2025", pct: 35.7, n: 943 },
+  { et: "ene", pct: 23.1, n: 775 },
+  { et: "feb", pct: 22.0, n: 478 },
+  { et: "mar", pct: 18.8, n: 420 },
+  { et: "abr", pct: 14.7, n: 600 },
+  { et: "may\n2026", pct: 10.0, n: 568, final: true },
 ];
-
-const COHORTES: { et: string; pct: number; n: string; fuerte?: boolean; final?: boolean }[] = [
-  { et: "Primera cohorte\ndic 2025", pct: 35.8, n: "924 préstamos", fuerte: true },
-  { et: "Promedio 2026", pct: 17.3, n: "2.835 préstamos" },
-  { et: "Cohortes maduras\nmay–jun 2026", pct: 11.1, n: "1.048 préstamos", final: true },
-];
+const MORA_MAX = 35.7;
 
 function ModeloAprende() {
   const t = useT();
@@ -2493,78 +2494,52 @@ function ModeloAprende() {
         </p>
       </div>
 
-      {/* LA PENDIENTE, y no tres columnas.
-          El titular afirma una TRAYECTORIA ("la mora baja"), y una línea que
-          cae la dice antes de que leas un número; tres columnas piden que
-          compares alturas y recién ahí concluyas la tendencia.
-
-          GEOMETRÍA EN SVG, TEXTO EN HTML. Es la parte importante: con todo
-          adentro de un viewBox fijo, a 390px de ancho el dibujo se escalaba a
-          310×106 y arrastraba la tipografía con él —los porcentajes quedaban
-          en ~14px y las etiquetas en ~5px, ilegibles—. Ahora el svg dibuja
-          SOLO la línea y el área, con preserveAspectRatio="none" (deformar
-          segmentos rectos no se nota), y los puntos y los textos son HTML
-          posicionado en porcentajes: el tipo queda en px reales y se lee igual
-          a 390 que a 1600. */}
-      {/* pt-10: el porcentaje se dibuja ARRIBA de su punto, y el primero está
-          en el tope del área — sin este aire quedaba pisando el párrafo. */}
-      <div className="mx-auto mt-8 w-full max-w-[760px] pt-10">
-        <div className="relative h-[190px] md:h-[240px]">
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden>
-            <defs>
-              <linearGradient id="bajoCurva" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={ORANGE_DEEP} stopOpacity="0.14" />
-                <stop offset="100%" stopColor={ORANGE_DEEP} stopOpacity="0" />
-              </linearGradient>
-              {/* El área se revela con un clip que se abre de izquierda a
-                  derecha: animar el `d` de un path no interpola de forma
-                  confiable entre navegadores, y un clip sí. */}
-              <clipPath id="revela" clipPathUnits="objectBoundingBox">
-                <rect x="0" y="0" height="1" width={visible ? 1 : 0}
-                      style={{ transition: "width 1500ms cubic-bezier(0.22, 1, 0.36, 1)" }} />
-              </clipPath>
-            </defs>
-            <g clipPath="url(#revela)">
-              <polygon points={`${PTS[0][0]},${PTS[0][1]} ${PTS[1][0]},${PTS[1][1]} ${PTS[2][0]},${PTS[2][1]} ${PTS[2][0]},100 ${PTS[0][0]},100`}
-                       fill="url(#bajoCurva)" />
-              <polyline points={`${PTS[0][0]},${PTS[0][1]} ${PTS[1][0]},${PTS[1][1]} ${PTS[2][0]},${PTS[2][1]}`}
-                        fill="none" stroke={ORANGE_DEEP} strokeWidth="0.7"
-                        vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
-            </g>
-          </svg>
-
-          {/* el piso: una hairline, sin grilla ni ejes */}
-          <div className="absolute inset-x-0 bottom-0 h-px" style={{ backgroundColor: "rgba(42,23,16,0.12)" }} aria-hidden />
-
+      {/* COLUMNAS, una por mes. Siete y no tres: con tres había que resumir el
+          medio en un "Promedio 2026", que no es una cohorte —era un promedio
+          de muchas— y mezclaba dos cosas distintas en un eje que se lee como
+          línea de tiempo. Con la serie completa cada columna es un mes real y
+          no hay que explicar nada.
+          El ALTO va en px y el texto en clases: el tipo no escala con el
+          gráfico y se lee igual a 390 que a 1600. */}
+      <div className="mx-auto mt-10 w-full max-w-[760px]">
+        <div className="flex items-end justify-between gap-1.5 md:gap-3" style={{ height: 220 }}>
           {COHORTES.map((c, i) => (
-            <div
-              key={c.et}
-              className="absolute -translate-x-1/2 -translate-y-1/2"
-              style={{ left: `${PTS[i][0]}%`, top: `${PTS[i][1]}%`,
-                       opacity: visible ? 1 : 0, transition: `opacity 420ms ease ${750 + i * 260}ms` }}
-            >
-              <div className="relative flex items-center justify-center">
-                {c.final && <span className="absolute h-6 w-6 rounded-full" style={{ backgroundColor: ORANGE_DEEP, opacity: 0.16 }} />}
-                <span className="relative block rounded-full"
-                      style={{ height: c.final ? 12 : 9, width: c.final ? 12 : 9,
-                               backgroundColor: c.final ? ORANGE_DEEP : "#fff",
-                               boxShadow: `inset 0 0 0 2.5px ${ORANGE_DEEP}` }} />
-              </div>
-              <p className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap font-bold tracking-tight [font-variant-numeric:tabular-nums]"
-                 style={{ bottom: c.final ? 22 : 18, color: c.final ? ORANGE_DEEP : INK_45,
-                          fontSize: c.final ? "clamp(1.6rem, 3.4vw, 2.2rem)" : "clamp(1.05rem, 2.2vw, 1.4rem)", lineHeight: 1 }}>
+            <div key={c.et} className="flex h-full flex-1 flex-col items-center justify-end">
+              <p
+                className="mb-2 font-bold tracking-tight [font-variant-numeric:tabular-nums]"
+                style={{
+                  color: c.final ? ORANGE_DEEP : INK_45,
+                  fontSize: c.final ? "clamp(0.95rem, 2.2vw, 1.35rem)" : "clamp(0.72rem, 1.5vw, 1rem)",
+                  lineHeight: 1,
+                  opacity: visible ? 1 : 0,
+                  transition: `opacity 400ms ease ${500 + i * 90}ms`,
+                }}
+              >
                 {c.pct.toLocaleString("es-AR", { minimumFractionDigits: 1 })}%
               </p>
+              <div
+                className="w-full rounded-t-[6px] md:rounded-t-[9px]"
+                style={{
+                  height: visible ? `${(c.pct / MORA_MAX) * 168}px` : 0,
+                  backgroundColor: c.final ? ORANGE_DEEP : "rgba(42,23,16,0.16)",
+                  transition: `height 900ms cubic-bezier(0.22, 1, 0.36, 1) ${i * 90}ms`,
+                }}
+              />
             </div>
           ))}
         </div>
 
-        {/* Las etiquetas van ABAJO y en su propia grilla, no colgando de cada
-            punto: a 390px el texto de los extremos se salía del lienzo. */}
-        <div className="mt-3.5 grid grid-cols-3 gap-2">
+        {/* una sola línea de piso, continua: por columna se leería como siete
+            gráficos en vez de uno */}
+        <div className="h-px w-full" style={{ backgroundColor: "rgba(42,23,16,0.14)" }} aria-hidden />
+
+        <div className="mt-2.5 flex justify-between gap-1.5 md:gap-3">
           {COHORTES.map((c) => (
-            <p key={c.et} className="whitespace-pre-line text-center text-[11.5px] leading-snug md:text-[13px]"
-               style={{ color: c.final ? INK : INK_65 }}>
+            <p
+              key={c.et}
+              className="flex-1 whitespace-pre-line text-center text-[10.5px] leading-tight md:text-[12.5px]"
+              style={{ color: c.final ? INK : INK_65 }}
+            >
               {c.et}
             </p>
           ))}
