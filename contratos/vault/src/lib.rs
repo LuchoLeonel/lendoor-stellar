@@ -216,6 +216,38 @@ impl Vault {
         shares
     }
 
+    /// CCTP / on-ramp entry: `payer` funds the deposit, `beneficiary` receives
+    /// the shares. The award architecture (docs/ARCHITECTURE.md §2.1) promises
+    /// CCTP minting "directly into the Vault" with LP share accounting —
+    /// `deposit()` cannot express that: it requires the share recipient's own
+    /// auth and shares are not transferable, so a bridge could only donate
+    /// (inflating PPS) or split the flow in two transactions. Here the ONLY
+    /// auth is the payer's (their funds move); receiving shares needs no
+    /// consent, same as receiving a token transfer. Mirrors `deposit` exactly —
+    /// same conversion, same ZeroShares/donation guard — so it adds no new
+    /// PPS-inflation surface: shares are always minted at the current price
+    /// against assets actually pulled in.
+    pub fn deposit_from(e: Env, payer: Address, beneficiary: Address, assets: i128) -> i128 {
+        payer.require_auth();
+        if assets <= 0 {
+            panic_with_error!(&e, Error::ZeroAmount);
+        }
+        let c = cfg(&e);
+        let shares = Self::to_shares(&e, &c, assets);
+        if shares <= 0 {
+            panic_with_error!(&e, Error::ZeroShares);
+        }
+        usdc_client(&e, &c).transfer(&payer, &e.current_contract_address(), &assets);
+        set_shares_of(&e, &beneficiary, shares_of(&e, &beneficiary) + shares);
+        set_total_shares(&e, total_shares(&e) + shares);
+        bump_instance(&e);
+        e.events().publish(
+            (symbol_short!("dep_from"), payer, beneficiary),
+            (assets, shares),
+        );
+        shares
+    }
+
     /// ERC-4626 `withdraw`: burn shares to receive an EXACT `assets` amount of
     /// USDC. This is the entry point the frontend uses (`evault.withdraw(amount,
     /// receiver, owner)` — the user types a USDC amount). Returns shares burned.

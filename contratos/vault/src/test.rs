@@ -2052,3 +2052,100 @@ fn donation_does_not_lock_existing_lp_funds() {
     let out = s.vault.redeem(&lp, &sh);
     assert!(out >= 100_000, "existing LP is not locked and even captures the donation");
 }
+
+// ─────────────── LP side: deposit_from (CCTP / on-ramp, tranche 0) ───────────
+// El award promete que CCTP mintea "directly into the Vault" con shares para el
+// LP. `deposit()` no puede: exige la auth del receptor y las shares no se
+// transfieren. `deposit_from` separa payer (autoriza, pone los fondos) de
+// beneficiary (recibe las shares), con la MISMA matemática y la MISMA guarda
+// anti-donación que `deposit`.
+
+#[test]
+fn deposit_from_credits_shares_to_beneficiary_not_payer() {
+    let s = setup();
+    let relayer = Address::generate(&s.e);
+    let lp = Address::generate(&s.e);
+    s.usdc_admin.mint(&relayer, &100_000);
+
+    let shares = s.vault.deposit_from(&relayer, &lp, &100_000);
+    assert_eq!(shares, 100_000); // primer depósito ~1:1
+    assert_eq!(s.vault.balance_of(&lp), 100_000);
+    assert_eq!(s.vault.balance_of(&relayer), 0); // el que paga NO recibe shares
+    assert_eq!(s.vault.total_supply(), 100_000);
+    assert_eq!(s.vault.total_assets(), 100_000); // invariante: cash + borrows
+    assert_eq!(s.usdc.balance(&relayer), 0); // la plata salió del payer
+}
+
+#[test]
+fn deposit_from_mints_at_current_price_existing_holder_unharmed() {
+    // Con un holder previo, un deposit_from de un tercero NO le mueve el valor.
+    let s = setup();
+    let lp0 = Address::generate(&s.e);
+    s.usdc_admin.mint(&lp0, &1_000_000);
+    s.vault.deposit(&lp0, &1_000_000);
+
+    let claim_before =
+        s.vault.total_assets() * s.vault.balance_of(&lp0) / s.vault.total_supply();
+
+    let relayer = Address::generate(&s.e);
+    let lp1 = Address::generate(&s.e);
+    s.usdc_admin.mint(&relayer, &250_000);
+    let shares = s.vault.deposit_from(&relayer, &lp1, &250_000);
+    assert_eq!(shares, 250_000); // precio 1:1 → mismas shares que assets
+
+    let claim_after =
+        s.vault.total_assets() * s.vault.balance_of(&lp0) / s.vault.total_supply();
+    assert_eq!(claim_before, claim_after); // el holder previo ni gana ni pierde
+    assert_eq!(s.vault.balance_of(&lp1), 250_000);
+}
+
+#[test]
+fn deposit_from_rejects_zero_and_negative() {
+    let s = setup();
+    let relayer = Address::generate(&s.e);
+    let lp = Address::generate(&s.e);
+    s.usdc_admin.mint(&relayer, &10);
+    assert_eq!(
+        s.vault.try_deposit_from(&relayer, &lp, &0),
+        Err(Ok(Error::ZeroAmount.into()))
+    );
+    assert_eq!(
+        s.vault.try_deposit_from(&relayer, &lp, &-5),
+        Err(Ok(Error::ZeroAmount.into()))
+    );
+}
+
+#[test]
+fn deposit_from_donation_guard_still_bites_no_fund_loss() {
+    // La donación a un vault con supply 0 infla el precio; deposit_from tiene la
+    // misma guarda que deposit: revienta ZeroShares y la plata del payer no se mueve.
+    let s = setup();
+    let attacker = Address::generate(&s.e);
+    s.usdc_admin.mint(&attacker, &1_000);
+    s.usdc.transfer(&attacker, &s.vault.address, &1_000); // donación directa
+
+    let relayer = Address::generate(&s.e);
+    let lp = Address::generate(&s.e);
+    s.usdc_admin.mint(&relayer, &1);
+    assert_eq!(
+        s.vault.try_deposit_from(&relayer, &lp, &1),
+        Err(Ok(Error::ZeroShares.into()))
+    );
+    assert_eq!(s.usdc.balance(&relayer), 1); // sin pérdida de fondos
+    assert_eq!(s.vault.total_supply(), 0);
+}
+
+#[test]
+fn deposit_from_requires_payer_auth_never_beneficiary() {
+    // mock_all_auths registra QUÉ auths exigió el contrato: tiene que estar la
+    // del payer y NO puede estar la del beneficiario (recibir shares no pide firma).
+    let s = setup();
+    let relayer = Address::generate(&s.e);
+    let lp = Address::generate(&s.e);
+    s.usdc_admin.mint(&relayer, &50_000);
+
+    s.vault.deposit_from(&relayer, &lp, &50_000);
+    let auths = s.e.auths();
+    assert!(auths.iter().any(|(who, _)| *who == relayer));
+    assert!(!auths.iter().any(|(who, _)| *who == lp));
+}
