@@ -12,7 +12,7 @@ import Decimal from 'decimal.js';
 import { User } from 'src/domain/entities/user.entity';
 import { Loan, LoanStatus } from 'src/domain/entities/loan.entity';
 import { InformRepaymentDto } from './dto/inform-repayment.dto';
-import { toUnits } from 'src/common/amount-units';
+import { TOKEN_UNIT, toUnits } from 'src/common/amount-units';
 import { BlockchainGatewayPort } from 'src/domain/ports/outbound/blockchain-gateway.port';
 import { CreditPolicyService } from 'src/domain/services/credit-policy.service';
 import { normalizeWallet } from 'src/common/normalize-wallet';
@@ -21,7 +21,7 @@ import { getGroupLabelForScore } from '@shared/tierHelpers';
 import type { ReputationGainPayload } from '@shared/types/api';
 
 const DEFAULT_SCORE = 1;
-const DEFAULT_CREDIT_LIMIT_USDC = toUnits(1, 6);
+const DEFAULT_CREDIT_LIMIT_USDC = toUnits(1);
 // Grace period: align with LoanManagerV3.defaultGracePeriod (= 1 days).
 const REPAID_ON_TIME_GRACE_MS = 24 * 60 * 60 * 1000;
 
@@ -178,7 +178,7 @@ export class LoanRepaymentService {
       }
     }
 
-    const amtDueNum = Number(accruedAmountDue) / 1e6;
+    const amtDueNum = Number(accruedAmountDue) / TOKEN_UNIT;
     const ratePerSecNum = Number(ratePerSecWad) / 1e18;
     const perDayDelta = isPastGrace ? amtDueNum * ratePerSecNum * 86400 : 0;
 
@@ -318,7 +318,7 @@ export class LoanRepaymentService {
           chainPaidUnits !== null
             ? Number(
                 new Decimal(chainPaidUnits.toString())
-                  .div(1_000_000)
+                  .div(TOKEN_UNIT)
                   .toFixed(6),
               )
             : null;
@@ -343,7 +343,7 @@ export class LoanRepaymentService {
           onChainDueUnits > 0n
             ? Number(
                 new Decimal(onChainDueUnits.toString())
-                  .div(1_000_000)
+                  .div(TOKEN_UNIT)
                   .toFixed(2),
               )
             : (loan.amountDueAtOpen ?? amountPaidNum);
@@ -408,7 +408,7 @@ export class LoanRepaymentService {
 
       const ladderLimitUsdc =
         this.creditPolicy.getStepForScore(newScore).limitUsdc;
-      const ladderLimitUnitsNum = Number(toUnits(ladderLimitUsdc, 6));
+      const ladderLimitUnitsNum = Number(toUnits(ladderLimitUsdc));
       newLimitUnitsNum = Math.max(newLimitUnitsNum, ladderLimitUnitsNum);
 
       const currentXp = user.xp ?? 1;
@@ -450,7 +450,7 @@ export class LoanRepaymentService {
       newScore = Math.max(1, currentScore - 2);
       const newLadderLimitUsdc =
         this.creditPolicy.getStepForScore(newScore).limitUsdc;
-      newLimitUnitsNum = Number(toUnits(newLadderLimitUsdc, 6));
+      newLimitUnitsNum = Number(toUnits(newLadderLimitUsdc));
 
       this.logger.log(
         `[LoanRepaymentService] post-default penalty: wallet=${wallet} ` +
@@ -484,7 +484,7 @@ export class LoanRepaymentService {
     } else {
       const ladderLimitUsdc =
         this.creditPolicy.getStepForScore(newScore).limitUsdc;
-      const ladderLimitUnitsNum = Number(toUnits(ladderLimitUsdc, 6));
+      const ladderLimitUnitsNum = Number(toUnits(ladderLimitUsdc));
       const renewLimitUnitsNum = Math.max(
         newLimitUnitsNum,
         ladderLimitUnitsNum,

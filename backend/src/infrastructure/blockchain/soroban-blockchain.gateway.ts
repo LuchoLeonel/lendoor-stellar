@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import {
   BlockchainGatewayPort,
   ChainLoanClosedEvent,
@@ -17,10 +17,13 @@ import {
   scU64,
   sendLoanManagerCall,
   simulateLoanManagerCall,
+  simulateUsdcSacDecimals,
   sorobanServer,
   SOROBAN_LOAN_MANAGER,
+  SOROBAN_USDC_SAC,
   toUnits,
 } from 'src/config/sorobanConfig';
+import { TOKEN_DECIMALS } from 'src/common/amount-units';
 
 type SorobanLoan = {
   principal?: bigint;
@@ -134,7 +137,41 @@ function normalizePremium(premium: SorobanPremium): {
 }
 
 @Injectable()
-export class SorobanBlockchainGateway implements BlockchainGatewayPort {
+export class SorobanBlockchainGateway
+  implements BlockchainGatewayPort, OnModuleInit
+{
+  private readonly logger = new Logger(SorobanBlockchainGateway.name);
+
+  /**
+   * Guardia de decimales (checklist 003 §4 ítem 1.3): si decimals() del SAC
+   * configurado no coincide con TOKEN_DECIMALS, TODOS los montos quedan
+   * corridos 10× en ambas direcciones — mejor no arrancar. Un error de red no
+   * frena el boot (warn y seguimos): el chequeo es best-effort, el mismatch no.
+   */
+  async onModuleInit(): Promise<void> {
+    let onChain: number | null = null;
+    try {
+      onChain = await simulateUsdcSacDecimals();
+    } catch (e) {
+      this.logger.warn(
+        `No se pudo verificar decimals() de ${SOROBAN_USDC_SAC}: ${String(
+          (e as { message?: string })?.message ?? e,
+        ).slice(0, 160)} — sigo asumiendo TOKEN_DECIMALS=${TOKEN_DECIMALS}`,
+      );
+      return;
+    }
+    if (onChain !== TOKEN_DECIMALS) {
+      throw new Error(
+        `SAC ${SOROBAN_USDC_SAC} tiene decimals()=${onChain} pero el backend ` +
+          `opera con TOKEN_DECIMALS=${TOKEN_DECIMALS}. Corregí la constante o ` +
+          `el contrato configurado antes de arrancar.`,
+      );
+    }
+    this.logger.log(
+      `decimals() del SAC verificado on-chain: ${onChain} == TOKEN_DECIMALS`,
+    );
+  }
+
   async readCreditLimitOnChain(borrower: string): Promise<bigint> {
     assertStellarAccount(borrower);
     const value = await simulateLoanManagerCall<bigint>('credit_limit', [
@@ -146,7 +183,7 @@ export class SorobanBlockchainGateway implements BlockchainGatewayPort {
   async giveCreditScoreAndLimit(
     borrower: string,
     score: number = 1,
-    limit: bigint = toUnits(1, 6),
+    limit: bigint = toUnits(1),
     kycOk: boolean = true,
     validUntil?: number,
     priority: TxPriority = 'low',
@@ -196,7 +233,7 @@ export class SorobanBlockchainGateway implements BlockchainGatewayPort {
       throw new Error(`Invalid feeBps: ${feeBps}`);
     }
 
-    const maxAmount = toUnits(amountHuman, 6);
+    const maxAmount = toUnits(amountHuman);
     if (maxAmount <= 0n) {
       throw new Error(`Invalid amountHuman: ${amountHuman}`);
     }

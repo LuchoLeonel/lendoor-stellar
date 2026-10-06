@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useWallet } from '@/providers/WalletProvider';
 import { dedupeToast as toast } from '@/lib/dedupeToast';
-import { formatUSDCAmount2dp, parseUsdcAmount } from '@/lib/utils';
+import { DECIMALS, formatUSDCAmount2dp, parseUsdcAmount } from '@/lib/utils';
 import {
   stellarDeposit,
   stellarWithdraw,
@@ -55,7 +55,7 @@ export function useStellarLend() {
     if (enabled) void refresh();
   }, [enabled, refresh]);
 
-  // Share price = total_assets / total_supply (ambos 6-dec → ratio adimensional).
+  // Share price = total_assets / total_supply (misma escala → ratio adimensional).
   const sharePrice =
     totalSupply != null && totalSupply > 0n && totalAssets != null
       ? Number(totalAssets) / Number(totalSupply)
@@ -120,7 +120,8 @@ export function useStellarLend() {
     userSharesRaw: sharesRaw,
     userSharesDisplay: sharesRaw != null ? formatUSDCAmount2dp(sharesRaw) : '—',
     /** USDC retirable (posición valuada) — para el label "available" del retiro. */
-    availableUi: positionAssets != null ? Number(positionAssets) / 1e6 : 0,
+    availableUi:
+      positionAssets != null ? Number(positionAssets) / 10 ** DECIMALS : 0,
     /** TVL + share price. */
     totalAssetsDisplay: totalAssets != null ? formatUSDCAmount2dp(totalAssets) : '—',
     sharePrice,

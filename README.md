@@ -87,7 +87,7 @@ The entire credit protocol runs on Stellar — it is the integration, not a bolt
 | Loan Manager | `CDIHUCP6DWKW7B6IUECP3SCK5WCI3W5ITNQDZEK2TNI55WLXDM6Y4WJJ` |
 | USDC (SAC) | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
 
-> On testnet the settlement asset is the **native XLM Stellar Asset Contract standing in for USDC** (6-decimal accounting); on mainnet this is Stellar USDC. The contract logic is asset-agnostic.
+> On testnet the settlement asset is the **native XLM Stellar Asset Contract standing in for USDC** (**7-decimal accounting** — classic Stellar assets, mainnet USDC included, use 7 decimals, unlike EVM USDC's 6); on mainnet this is Stellar USDC. The contract logic is asset-agnostic.
 
 ## Repo structure
 
