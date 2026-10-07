@@ -81,6 +81,8 @@ ENV VITE_SELF_VERIFY_PATH="/self/verify"
 ARG VITE_ADMIN_WALLETS=""
 ENV VITE_ADMIN_WALLETS=${VITE_ADMIN_WALLETS}
 
+# El build con el SDK de Privy supera el heap default de node (SIGABRT local 07/10)
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN yarn build
 
 

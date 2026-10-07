@@ -9,7 +9,7 @@ import {
   type PremiumConfig,
   type UserRisk,
 } from "../../../packages/loan-manager-client/src/index";
-import { signFreighterTransaction } from "@/lib/stellar-wallet";
+import { signActiveStellarTransaction } from "@/lib/stellar-signer-registry";
 import {
   Address,
   BASE_FEE,
@@ -119,7 +119,7 @@ export async function stellarBorrowWithTerm(params: {
     publicKey: params.borrower,
     allowHttp: config.allowHttp,
     signTransaction: async (xdr, opts) => ({
-      signedTxXdr: await signFreighterTransaction(xdr, {
+      signedTxXdr: await signActiveStellarTransaction(xdr, {
         address: opts?.address ?? params.borrower,
         networkPassphrase: opts?.networkPassphrase ?? config.networkPassphrase,
       }),
@@ -156,7 +156,7 @@ export async function stellarRepay(params: {
     publicKey: params.payer,
     allowHttp: config.allowHttp,
     signTransaction: async (xdr, opts) => ({
-      signedTxXdr: await signFreighterTransaction(xdr, {
+      signedTxXdr: await signActiveStellarTransaction(xdr, {
         address: opts?.address ?? params.payer,
         networkPassphrase: opts?.networkPassphrase ?? config.networkPassphrase,
       }),
@@ -189,7 +189,7 @@ function signingVaultClient(publicKey: string): VaultClient {
     publicKey,
     allowHttp: config.allowHttp,
     signTransaction: async (xdr, opts) => ({
-      signedTxXdr: await signFreighterTransaction(xdr, {
+      signedTxXdr: await signActiveStellarTransaction(xdr, {
         address: opts?.address ?? publicKey,
         networkPassphrase: opts?.networkPassphrase ?? config.networkPassphrase,
       }),

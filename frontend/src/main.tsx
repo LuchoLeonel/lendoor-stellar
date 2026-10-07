@@ -47,6 +47,7 @@ installLemonComlinkShield();
 import { WagmiProvider } from "@/providers/WagmiProvider";
 import { ContractsProvider } from "@/providers/ContractsProvider";
 import { WalletProvider } from "./providers/WalletProvider";
+import { PrivyStellarProvider } from "./providers/PrivyStellarProvider";
 import { AnalyticsProvider } from "./providers/AnalyticsProvider";
 import { LemonShell } from "@/components/common/LemonShell";
 
@@ -161,6 +162,7 @@ createRoot(document.getElementById("root")!).render(
       <SimpleErrorBoundary>
         <AnalyticsProvider>
           <WagmiProvider>
+            <PrivyStellarProvider>
             <WalletProvider>
               <ContractsProvider>
                 <AppErrorBoundary>
@@ -186,6 +188,7 @@ createRoot(document.getElementById("root")!).render(
                 </AppErrorBoundary>
               </ContractsProvider>
             </WalletProvider>
+            </PrivyStellarProvider>
           </WagmiProvider>
         </AnalyticsProvider>
       </SimpleErrorBoundary>
