@@ -122,7 +122,16 @@
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
+      "^.+\\.(t|j)s$": [
+        "ts-jest",
+        {
+          "tsconfig": {
+            "allowJs": true
+          },
+          "isolatedModules": true,
+          "diagnostics": false
+        }
+      ]
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"
@@ -149,7 +158,10 @@
         "lines": 90,
         "statements": 90
       }
-    }
+    },
+    "transformIgnorePatterns": [
+      "/node_modules/(?!(\\.pnpm/[^/]+/node_modules/)?(@stellar/|@noble/|uint8array-extras|base32|toml))"
+    ]
   },
   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }
