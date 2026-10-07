@@ -394,7 +394,7 @@
       }
     }
   },
-   "stats": {
+  "stats": {
     "pageTitle": "Estadísticas del protocolo",
     "pageSubtitle": "Datos en tiempo real del vault y la actividad de créditos.",
     "totalAssets": "Activos totales",
@@ -525,7 +525,8 @@
       "badge": "EARLY ACCESS",
       "title": "Conectá tu wallet",
       "body": "Conectá tu wallet para ser uno de nuestros primeros usuarios y solicitar tu crédito en USDC.",
-      "cta": "Conectar wallet"
+      "cta": "Conectar wallet",
+      "emailCta": "Continuar con email"
     },
     "onWaitlist": {
       "title": "Tu perfil está en la lista de espera",
@@ -657,7 +658,14 @@
         "title": "Crédito sin colateral",
         "subtitle": "Convertimos tu reputación digital en poder crediticio. Tu crédito crece con cada repago.",
         "cta": "Solicitar crédito",
-        "rotating": ["que crece con vos.", "basado en reputación.", "en minutos.", "las 24 horas.", "desde tu celular.", "para LATAM."]
+        "rotating": [
+          "que crece con vos.",
+          "basado en reputación.",
+          "en minutos.",
+          "las 24 horas.",
+          "desde tu celular.",
+          "para LATAM."
+        ]
       },
       "stats": {
         "protocol": "Blockchain",

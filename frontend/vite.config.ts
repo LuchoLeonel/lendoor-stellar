@@ -75,7 +75,10 @@ export default defineConfig({
     // /__api/user/... → http://localhost:5000/user/...
     proxy: {
       '/__api': {
-        target: 'http://localhost:5000',
+        // DEV_API_PROXY_TARGET permite apuntar el mismo proxy a staging
+        // (p. ej. https://stellar.api.lendoor.xyz) cuando no hay backend
+        // local: el navegador habla same-origin y el CORS del server no juega.
+        target: process.env.DEV_API_PROXY_TARGET ?? 'http://localhost:5000',
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/__api/, ''),
       },

@@ -3,9 +3,13 @@ import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { useTranslation } from "@/i18n/useTranslation";
 import { GridBackground } from "@/components/common/GridBackground";
+import { usePrivyStellar } from "@/providers/PrivyStellarProvider";
 
 const NotLoggedIn = ({ setShowAuthFlow }: { setShowAuthFlow: (show?: boolean) => void }) => {
   const { t } = useTranslation();
+  // D1.2: con Privy configurado, el onboarding por email es ELEGIBLE, no solo
+  // fallback — un usuario con Freighter instalado igual puede entrar sin ella.
+  const { privyEnabled, loginWithPrivy } = usePrivyStellar();
 
   return (
     <div data-testid="connect-wallet-prompt" className="flex min-h-[calc(100vh-4rem)] items-center justify-center relative overflow-hidden px-4">
@@ -33,6 +37,19 @@ const NotLoggedIn = ({ setShowAuthFlow }: { setShowAuthFlow: (show?: boolean) =>
         >
           {t("onboarding.notLoggedIn.cta")} {/* Conectar wallet */}
         </Button>
+
+        {privyEnabled && (
+          <Button
+            type="button"
+            size="xl"
+            variant="outline"
+            onClick={() => loginWithPrivy()}
+            className="mt-2 w-full text-base font-semibold"
+            data-testid="privy-email-login"
+          >
+            {t("onboarding.notLoggedIn.emailCta")} {/* Continuar con email */}
+          </Button>
+        )}
       </Card>
     </div>
   );
