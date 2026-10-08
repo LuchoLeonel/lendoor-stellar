@@ -2301,3 +2301,19 @@ fn partial_on_defaulted_loan_is_rejected_full_still_heals() {
     assert_eq!(paid, 10_500);
     assert!(!s.lm.get_loan(&borrower).active);
 }
+
+#[test]
+fn deposit_from_rejects_vault_itself_as_beneficiary() {
+    // (review PR #3) shares acreditadas al propio vault = fondos bloqueados
+    // para siempre (no se transfieren, no hay self-redeem). El default
+    // plausible de un bridge mal cableado se corta aca.
+    let s = setup();
+    let relayer = Address::generate(&s.e);
+    s.usdc_admin.mint(&relayer, &10_000);
+    assert!(
+        s.vault
+            .try_deposit_from(&relayer, &s.vault.address, &10_000)
+            .is_err()
+    );
+    assert_eq!(s.usdc.balance(&relayer), 10_000, "sin pull: los fondos no se mueven");
+}

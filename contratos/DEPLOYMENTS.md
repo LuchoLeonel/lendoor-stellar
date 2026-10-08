@@ -172,3 +172,8 @@ _Not deployed yet._
 > pero sin el pull-exacto-con-vuelto de `repay_partial` (la testnet real demostró que el
 > recálculo temporal rompe la auth firmada). El PAR VIGENTE es el de la tabla de arriba.
 > Checklist ampliado: el FEE SINK también necesita trustline de USDC antes del primer repago.
+
+> Nota (review PR #3, 2026-10-08): el par Instaward vigente es ANTERIOR al guard
+> de `deposit_from` contra beneficiary==vault y al doble evento deposit/dep_from.
+> Su evidencia ya esta capturada; NO se re-deploya por esto. Todo par nuevo sale
+> con ambos fixes.

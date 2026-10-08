@@ -56,9 +56,21 @@ describe('cctp transfer state machine', () => {
     expect(LEGAL_TRANSITIONS.submitting).toContain('attested');
   });
 
-  it('delivered y failed son terminales en la tabla', () => {
+  it('delivered es terminal; failed solo revive hacia delivered (verdad on-chain)', () => {
     expect(LEGAL_TRANSITIONS.delivered).toHaveLength(0);
-    expect(LEGAL_TRANSITIONS.failed).toHaveLength(0);
+    expect(LEGAL_TRANSITIONS.failed).toEqual(['delivered']);
+  });
+
+  it('resubmision: submitting→submitting con mintTxHash NUEVO lo aplica (review PR #3)', () => {
+    const t = base({ state: 'submitting', mintTxHash: 'tx-A' });
+    const re = transition(t, 'submitting', { mintTxHash: 'tx-B' });
+    expect(re.mintTxHash).toBe('tx-B'); // el poller deja de mirar el tx muerto
+  });
+
+  it('avanzar limpia el lastError viejo (la entrega sana no queda "errada")', () => {
+    const t = base({ state: 'attested', lastError: 'tx timeout' });
+    const sub = transition(t, 'submitting');
+    expect(sub.lastError).toBeUndefined();
   });
 });
 
@@ -91,9 +103,11 @@ describe('reconcile — idempotencia anclada en la cadena', () => {
     expect(t.attestation).toBe('0xatt');
   });
 
-  it('pending + iris pending = esperar, sin mutar', () => {
+  it('pending + iris pending = esperar, CONTANDO el intento (review PR #3)', () => {
     const t0 = base();
-    expect(reconcile(t0, { kind: 'pending' }, false)).toBe(t0);
+    const t1 = reconcile(t0, { kind: 'pending' }, false);
+    expect(t1.state).toBe('pending');
+    expect(t1.attempts).toBe(1); // la politica de retries por fin tiene datos
   });
 
   it('error real de Iris mueve a failed con el motivo', () => {
@@ -120,5 +134,47 @@ describe('reconcile — idempotencia anclada en la cadena', () => {
   it('nonce consumido sobre un delivered es no-op (replay del replay)', () => {
     const t0 = base({ state: 'delivered' });
     expect(reconcile(t0, { kind: 'pending' }, true)).toBe(t0);
+  });
+});
+
+
+describe('contrato de Iris — las reglas que queman plata (review PR #3)', () => {
+  it('200 con el sentinel "PENDING" NO es complete', () => {
+    expect(irisStatusFromHttp(200, { attestation: 'PENDING', status: 'pending_confirmations' })).toEqual({
+      kind: 'pending',
+    });
+  });
+
+  it('200 con attestation null y status pending_confirmations = pending, jamas error', () => {
+    expect(irisStatusFromHttp(200, { attestation: null, status: 'pending_confirmations' })).toEqual({
+      kind: 'pending',
+    });
+  });
+
+  it('401/403 (credencial NUESTRA vencida) = backoff, nunca terminal', () => {
+    expect(irisStatusFromHttp(401).kind).toBe('backoff');
+    expect(irisStatusFromHttp(403).kind).toBe('backoff');
+  });
+
+  it('429 honra Retry-After cuando el caller lo pasa', () => {
+    expect(irisStatusFromHttp(429, undefined, 30)).toEqual({ kind: 'backoff', retryAfterMs: 30_000 });
+  });
+
+  it('un 4xx desconocido tampoco es terminal desde el polling', () => {
+    expect(irisStatusFromHttp(418).kind).toBe('backoff');
+  });
+});
+
+describe('chain-truth sobre failed y preservación de datos (review PR #3)', () => {
+  it('failed + nonce consumido = delivered (la cadena manda sobre la DB)', () => {
+    const t = reconcile(base({ state: 'failed', lastError: 'operador la marco mal' }), { kind: 'pending' }, true);
+    expect(t.state).toBe('delivered');
+    expect(t.lastError).toBeUndefined(); // la entrega sana no arrastra el error
+  });
+
+  it('el walk del chain-truth conserva la attestation que Iris trajo en el mismo poll', () => {
+    const t = reconcile(base(), { kind: 'complete', attestation: '0xatt' }, true);
+    expect(t.state).toBe('delivered');
+    expect(t.attestation).toBe('0xatt');
   });
 });

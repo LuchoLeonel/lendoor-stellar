@@ -234,6 +234,13 @@ impl Vault {
         if assets <= 0 {
             panic_with_error!(&e, Error::ZeroAmount);
         }
+        // (review PR #3) un beneficiary == el propio vault bloquearia los
+        // fondos PARA SIEMPRE: las shares no se transfieren y el vault no
+        // puede redimirse a si mismo. Es el default plausible de un bridge
+        // mal cableado (recipient → beneficiary), asi que se rechaza aca.
+        if beneficiary == e.current_contract_address() {
+            panic_with_error!(&e, Error::ZeroShares);
+        }
         let c = cfg(&e);
         let shares = Self::to_shares(&e, &c, assets);
         if shares <= 0 {
@@ -243,6 +250,14 @@ impl Vault {
         set_shares_of(&e, &beneficiary, shares_of(&e, &beneficiary) + shares);
         set_total_shares(&e, total_shares(&e) + shares);
         bump_instance(&e);
+        // (review PR #3) DOBLE evento a proposito: 'deposit' con la misma
+        // forma que el deposito de LP — para que todo indexer/monitor
+        // suscripto al topic 'deposit' vea tambien los inflows del bridge —
+        // mas 'dep_from' con el detalle payer/beneficiary para el camino CCTP.
+        e.events().publish(
+            (symbol_short!("deposit"), beneficiary.clone()),
+            (assets, shares),
+        );
         e.events().publish(
             (symbol_short!("dep_from"), payer, beneficiary),
             (assets, shares),

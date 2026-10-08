@@ -35,9 +35,10 @@ export type CctpDomain = (typeof CCTP_DOMAINS)[keyof typeof CCTP_DOMAINS];
  *                                 ▼  │
  *                               failed
  *
- * `delivered` and `failed` are terminal. A retry of a failed transfer is a NEW
- * row with the same nonce — and the nonce-used check on chain makes the replay
- * harmless (mint is refused for a consumed nonce).
+ * `delivered` es terminal. `failed` es casi-terminal: reconcile() lo revive a
+ * 'delivered' cuando la cadena muestra el nonce consumido (la verdad on-chain
+ * manda). El nonce es UNICO por fila — jamas una "fila nueva con el mismo
+ * nonce" (review PR #3: ese modelo contradecia la clave de idempotencia).
  */
 export type CctpTransferState =
   | 'pending' // burn seen on the source chain; waiting for Iris
@@ -52,9 +53,15 @@ export const LEGAL_TRANSITIONS: Readonly<
 > = {
   pending: ['attested', 'failed'],
   attested: ['submitting', 'failed'],
-  submitting: ['delivered', 'attested', 'failed'],
+  // submitting→submitting: RE-submision con un mintTxHash nuevo (review PR #3:
+  // el no-op de mismo-estado pisaba el patch y el poller miraba el tx viejo
+  // para siempre).
+  submitting: ['delivered', 'submitting', 'attested', 'failed'],
   delivered: [],
-  failed: [],
+  // failed→delivered: SOLO via la verdad de la cadena en reconcile() — un
+  // nonce consumido revive una fila marcada failed por error humano/crash
+  // (review PR #3: antes quedaba 'failed' con la plata ya entregada).
+  failed: ['delivered'],
 };
 
 export class IllegalCctpTransition extends Error {
@@ -102,11 +109,21 @@ export function transition(
   to: CctpTransferState,
   patch: Partial<Pick<CctpTransfer, 'attestation' | 'mintTxHash' | 'lastError'>> = {},
 ): CctpTransfer {
-  if (t.state === to) return t; // idempotent re-apply: a replayed event is a no-op
+  if (t.state === to && Object.keys(patch).length === 0) {
+    return t; // replay inocuo: mismo estado sin datos nuevos = no-op
+  }
+  if (t.state === to && !LEGAL_TRANSITIONS[t.state].includes(to)) {
+    return t; // mismo estado con patch pero sin arista re-entrante legal
+  }
   if (!LEGAL_TRANSITIONS[t.state].includes(to)) {
     throw new IllegalCctpTransition(t.state, to, t.nonce);
   }
-  return { ...t, ...patch, state: to };
+  // lastError se limpia al AVANZAR salvo que el patch traiga uno nuevo
+  // (review PR #3: una entrega exitosa arrastraba 'tx timeout' viejo y los
+  // dashboards la reportaban errada).
+  const cleared =
+    to !== 'failed' && !('lastError' in patch) ? { lastError: undefined } : {};
+  return { ...t, ...cleared, ...patch, state: to };
 }
 
 /** What Iris answered for one burn. 404 maps to `pending`, never to an error. */
@@ -125,18 +142,48 @@ export interface IrisClient {
   getAttestation(sourceDomain: CctpDomain, burnTxHash: string): Promise<IrisAttestationStatus>;
 }
 
-/** Map a raw Iris HTTP status to the semantic result — the 404 rule lives HERE. */
+/**
+ * Map a raw Iris response to the semantic result. The rules that burn money
+ * if you get them wrong (review PR #3) live HERE and nowhere else:
+ * - 200 does NOT mean complete: Iris answers 200 with status
+ *   'pending_confirmations' and attestation null OR the literal sentinel
+ *   string "PENDING" while the message is found-but-not-ready. Only
+ *   status 'complete' with a real attestation is complete.
+ * - 404 = pending (not ready), never an error.
+ * - 401/403 (expired/misconfigured key) and other infra 4xx are OUR problem,
+ *   not the transfer's: they back off, they NEVER mark a transfer whose USDC
+ *   is already burned as terminally failed.
+ * - 429 honors Retry-After when the caller passes it.
+ * Terminal 'error' is reserved for responses that prove the REQUEST is
+ * invalid (explicit error body on a 400).
+ */
 export function irisStatusFromHttp(
   httpStatus: number,
-  body?: { attestation?: string; error?: string },
+  body?: { attestation?: string | null; status?: string; error?: string },
+  retryAfterSeconds?: number,
 ): IrisAttestationStatus {
-  if (httpStatus === 200 && body?.attestation) {
-    return { kind: 'complete', attestation: body.attestation };
+  if (httpStatus === 200) {
+    const att = body?.attestation;
+    const ready =
+      (body?.status === undefined || body.status === 'complete') &&
+      typeof att === 'string' &&
+      att.length > 0 &&
+      att.toUpperCase() !== 'PENDING';
+    if (ready) return { kind: 'complete', attestation: att as string };
+    return { kind: 'pending' }; // found but not ready (pending_confirmations)
   }
   if (httpStatus === 404) return { kind: 'pending' }; // NOT an error: not ready yet
-  if (httpStatus === 429) return { kind: 'backoff', retryAfterMs: 5_000 };
+  if (httpStatus === 429) {
+    return { kind: 'backoff', retryAfterMs: (retryAfterSeconds ?? 5) * 1_000 };
+  }
+  if (httpStatus === 401 || httpStatus === 403) {
+    return { kind: 'backoff', retryAfterMs: 60_000 }; // credencial nuestra, no culpa del transfer
+  }
   if (httpStatus >= 500) return { kind: 'pending' }; // transient; poll again
-  return { kind: 'error', message: body?.error ?? `iris http ${httpStatus}` };
+  if (httpStatus === 400 && body?.error) {
+    return { kind: 'error', message: body.error };
+  }
+  return { kind: 'backoff', retryAfterMs: 30_000 }; // 4xx desconocido: nunca terminal desde polling
 }
 
 /**
@@ -151,12 +198,19 @@ export function reconcile(
   iris: IrisAttestationStatus,
   nonceUsedOnChain: boolean,
 ): CctpTransfer {
-  // Ground truth first: a consumed nonce means the mint happened, whatever our DB says.
-  if (nonceUsedOnChain && t.state !== 'delivered' && t.state !== 'failed') {
-    // legal from submitting; from pending/attested it means an external mint —
-    // still delivered, but walk the legal edges so the table stays honest
+  // Ground truth first: a consumed nonce means the mint happened, whatever
+  // our DB says — INCLUIDA una fila marcada 'failed' por crash o error humano
+  // (review PR #3: antes quedaba failed con la plata entregada). La
+  // attestation que Iris haya devuelto en este mismo poll se conserva.
+  if (nonceUsedOnChain && t.state !== 'delivered') {
+    const att =
+      iris.kind === 'complete' ? { attestation: iris.attestation } : {};
+    if (t.state === 'failed') return transition(t, 'delivered', att);
     let cur = t;
-    if (cur.state === 'pending') cur = transition(cur, 'attested');
+    if (cur.state === 'pending') cur = transition(cur, 'attested', att);
+    if (cur.state === 'attested' && iris.kind === 'complete' && !cur.attestation) {
+      cur = { ...cur, attestation: iris.attestation };
+    }
     if (cur.state === 'attested') cur = transition(cur, 'submitting');
     return transition(cur, 'delivered');
   }
@@ -166,7 +220,9 @@ export function reconcile(
         return transition(t, 'attested', { attestation: iris.attestation });
       }
       if (iris.kind === 'error') return transition(t, 'failed', { lastError: iris.message });
-      return t; // pending / backoff: wait
+      // pending / backoff: espera, pero CONTANDO (review PR #3: attempts
+      // existia para la politica de retries y nadie lo incrementaba).
+      return { ...t, attempts: t.attempts + 1 };
     case 'attested':
     case 'submitting':
     case 'delivered':
