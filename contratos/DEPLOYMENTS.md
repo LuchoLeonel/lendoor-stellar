@@ -61,6 +61,50 @@ the residual temporary DoS where deposits below a donated price would revert.
 
 ---
 
+## Instaward (testnet, USDC nativo)
+
+Par deployado para el **Instaward SOW** (crédito revolvente + pago parcial),
+con el **USDC real de testnet** como settlement asset — no el SAC de XLM del
+par del SCF award. Conviven: el par de arriba sigue siendo el canónico del
+SCF #45; este es el del Instaward.
+
+| Contract | Contract ID |
+|---|---|
+| `lendoor-vault` | `CDY27BWE7HYC26JRVU7NE7IC6GMKEUWMOTCB3B3MEPOZHXSWWLBQSBKA` |
+| `lendoor-loan-manager` | `CA2H4UFGUADAL3GFU6DM7TBJ4DY6WIZXZ67A42K4RKVUWEY7YZXRGV4R` |
+| USDC (SAC nativo de testnet) | `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
+
+Explorer:
+- vault: https://stellar.expert/explorer/testnet/contract/CDY27BWE7HYC26JRVU7NE7IC6GMKEUWMOTCB3B3MEPOZHXSWWLBQSBKA
+- loan-manager: https://stellar.expert/explorer/testnet/contract/CA2H4UFGUADAL3GFU6DM7TBJ4DY6WIZXZ67A42K4RKVUWEY7YZXRGV4R
+
+### Config (leída en vivo del instance storage, 2026-10-08)
+- `owner` (operador) de ambos contratos: `GA6DMHI54NH3IEA7CLO43SVQMAFEG7BASELZL3NOLVOJ4OML2MKJYAGR`
+  — identidad **local y descartable** del CLI (`instaward-op`), nunca una clave de prod.
+- vault `fee_recipient`: `GABED6S3K5L2U5F2FTSLWYYCUGKUMQGPW3JX7WLU4KB5B4K3TC3PJ3T4` (`instaward-feesink`).
+- cross-wiring verificado: vault `Config.loan_manager` → `CA2H4UFG…` y
+  loan-manager `Config.vault` → `CDY27BWE…`.
+- USDC verificado on-chain: `symbol() = "USDC"`, **`decimals() = 7`**.
+- Estado al leerlo: `TotalShares = 0`, `TotalBorrows = 0` — **pre-seed**. La regla
+  del seed deposit (sección ⚠️ de arriba) aplica acá con más razón: el primer
+  movimiento tras el faucet de Circle debe ser un `deposit` del protocolo,
+  JAMÁS un transfer directo.
+- Config de riesgo del borrower de la demo: límite **50 USDC**, oferta **7d / 5%**
+  (aplicada por el operador; verificable con `get_user_risk(<borrower>)` /
+  `credit_limit(<borrower>)` cuando se fije la wallet de la ceremonia).
+
+### Procedimiento
+Deploy reproducible: `contratos/deploy-testnet-usdc.sh` (build → LM con vault
+placeholder → vault con USDC nativo → `set_vault`; identidades por friendbot).
+
+### Par intermedio DESCARTADO — do NOT use
+Un primer par del Instaward (`CBI5H4PA6NCOAOYGBGMELI76R7JULRFSIDMFWDUYVH7IGFKOUIR2VSR6` / `CAKDF53VKXZZCYMLIEIL75GBAM3FMHMNE3JCRRBZUCDU2MAFHJI67MSH`) quedó **descartado**:
+se deployó con la semántica **pre-revolvente** (sin interés pro-rata ni
+`repay_partial` / `apply_payment`). Nada debe apuntarle; el par válido es el
+de la tabla de arriba.
+
+---
+
 ## Deprecated pairs — do NOT use
 
 Two older testnet pairs exist on-chain. Neither is referenced by code anymore;
