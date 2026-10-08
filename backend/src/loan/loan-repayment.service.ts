@@ -12,7 +12,7 @@ import Decimal from 'decimal.js';
 import { User } from 'src/domain/entities/user.entity';
 import { Loan, LoanStatus } from 'src/domain/entities/loan.entity';
 import { InformRepaymentDto } from './dto/inform-repayment.dto';
-import { TOKEN_UNIT, toUnits } from 'src/common/amount-units';
+import { TOKEN_UNIT, toUnits, DEFAULT_CREDIT_LIMIT_USDC } from 'src/common/amount-units';
 import { BlockchainGatewayPort } from 'src/domain/ports/outbound/blockchain-gateway.port';
 import { CreditPolicyService } from 'src/domain/services/credit-policy.service';
 import { normalizeWallet } from 'src/common/normalize-wallet';
@@ -21,7 +21,7 @@ import { getGroupLabelForScore } from '@shared/tierHelpers';
 import type { ReputationGainPayload } from '@shared/types/api';
 
 const DEFAULT_SCORE = 1;
-const DEFAULT_CREDIT_LIMIT_USDC = toUnits(1);
+// (review PR #2) la constante vive UNA sola vez en amount-units
 // Grace period: align with LoanManagerV3.defaultGracePeriod (= 1 days).
 const REPAID_ON_TIME_GRACE_MS = 24 * 60 * 60 * 1000;
 

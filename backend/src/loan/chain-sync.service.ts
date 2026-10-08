@@ -7,7 +7,7 @@ import { Loan, LoanStatus } from 'src/domain/entities/loan.entity';
 import { User } from 'src/domain/entities/user.entity';
 import { ChainScanCursor } from 'src/domain/entities/chain-scan-cursor.entity';
 import { Metric } from 'src/domain/entities/metric.entity';
-import { TOKEN_DECIMALS, toUnits } from 'src/common/amount-units';
+import { TOKEN_DECIMALS, toUnits, DEFAULT_CREDIT_LIMIT_USDC } from 'src/common/amount-units';
 import { env } from 'src/config/env';
 import {
   BLOCKCHAIN_GATEWAY,
@@ -29,7 +29,7 @@ const MAX_BLOCK_RANGE = 10_000;
 // loans(addr).start timestamp. The backend writes startAt = Date.now() in
 // inform-open, which is typically within a few seconds of the chain block ts.
 const LOAN_START_MATCH_TOLERANCE_SEC = 60;
-const DEFAULT_CREDIT_LIMIT_USDC = toUnits(1);
+// (review PR #2) la constante vive UNA sola vez en amount-units
 // Grace period: align with LoanManagerV3.defaultGracePeriod (= 1 days).
 // A repayment is "on-time" if it lands within 24h of the due date.
 // Outside this window → repaid_late. Beyond gracePeriod + defaultLatePeriod

@@ -30,7 +30,15 @@ export function normalizeWalletOrNull(addr?: string | null): string | null {
   if (addr == null) return null;
   const trimmed = addr.trim();
   if (!trimmed) return null;
-  return normalizeWallet(trimmed);
+  // Contrato "OrNull" de verdad (review PR #2): una address malformada (una
+  // M… muxed, un string de smart wallet de Lemon, basura) devuelve null en
+  // vez de reventar con BadRequestException — el caller del polling de
+  // status esperaba {linkedCount: 0}, no un 400 en loop.
+  try {
+    return normalizeWallet(trimmed);
+  } catch {
+    return null;
+  }
 }
 
 export function assertValidWalletAddress(addr: string): void {

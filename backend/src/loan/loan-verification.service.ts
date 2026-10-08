@@ -9,7 +9,7 @@ import {
 import { Repository } from 'typeorm';
 import { User } from 'src/domain/entities/user.entity';
 import { VerifyUserDto } from './dto/verify-user.dto';
-import { toUnits } from 'src/common/amount-units';
+import { toUnits, DEFAULT_CREDIT_LIMIT_USDC } from 'src/common/amount-units';
 import { BlockchainGatewayPort } from 'src/domain/ports/outbound/blockchain-gateway.port';
 import { CreditPolicyService } from 'src/domain/services/credit-policy.service';
 import { UserService } from 'src/user/user.service';
@@ -18,7 +18,7 @@ import { normalizeWallet } from 'src/common/normalize-wallet';
 
 // On-chain defaults (1 score, 1 USDC)
 const DEFAULT_SCORE = 1;
-const DEFAULT_CREDIT_LIMIT_USDC = toUnits(1);
+// (review PR #2) la constante vive UNA sola vez en amount-units
 
 type UserPlatform = 'lemon' | 'farcaster' | 'webapp';
 

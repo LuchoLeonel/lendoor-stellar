@@ -156,8 +156,13 @@ export class SorobanBlockchainGateway
       this.logger.warn(
         `No se pudo verificar decimals() de ${SOROBAN_USDC_SAC}: ${String(
           (e as { message?: string })?.message ?? e,
-        ).slice(0, 160)} — sigo asumiendo TOKEN_DECIMALS=${TOKEN_DECIMALS}`,
+        ).slice(0, 160)} — sigo asumiendo TOKEN_DECIMALS=${TOKEN_DECIMALS} y lo re-chequeo en background`,
       );
+      // (review PR #2) el guard fallaba ABIERTO justo en los deploys mal
+      // configurados que existia para atrapar: ahora un error transitorio
+      // agenda re-chequeos con backoff hasta validar — y un mismatch
+      // descubierto en vivo corta el proceso igual que en el boot.
+      this.scheduleDecimalsRecheck();
       return;
     }
     if (onChain !== TOKEN_DECIMALS) {
@@ -170,6 +175,27 @@ export class SorobanBlockchainGateway
     this.logger.log(
       `decimals() del SAC verificado on-chain: ${onChain} == TOKEN_DECIMALS`,
     );
+  }
+
+  private scheduleDecimalsRecheck(attempt = 1): void {
+    const delayMs = Math.min(60_000 * attempt, 600_000);
+    const timer = setTimeout(async () => {
+      try {
+        const onChain = await simulateUsdcSacDecimals();
+        if (onChain !== TOKEN_DECIMALS) {
+          this.logger.error(
+            `SAC ${SOROBAN_USDC_SAC} decimals()=${onChain} != TOKEN_DECIMALS=${TOKEN_DECIMALS} — abortando para no corromper montos 10x`,
+          );
+          process.exit(1);
+        }
+        this.logger.log(
+          `decimals() del SAC verificado on-chain (re-chequeo #${attempt}): ${onChain} == TOKEN_DECIMALS`,
+        );
+      } catch {
+        this.scheduleDecimalsRecheck(attempt + 1);
+      }
+    }, delayMs);
+    timer.unref?.();
   }
 
   async readCreditLimitOnChain(borrower: string): Promise<bigint> {

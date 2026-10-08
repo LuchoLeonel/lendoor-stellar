@@ -76,12 +76,43 @@ export class AddOpenTxHashUniqueIndex20261005120000
        WHERE id IN (SELECT id FROM dups WHERE rn > 1)
     `);
 
-    // 3. El índice — espejo exacto de uq_loans_closeTxHash
-    await queryRunner.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS "uq_loans_openTxHash"
-      ON loans ("openTxHash")
-      WHERE "openTxHash" IS NOT NULL
-    `);
+    // 3. El índice — espejo exacto de uq_loans_closeTxHash.
+    // Retry acotado (review PR #2): en un solape blue-green, una instancia
+    // VIEJA (insertMissingLoan read-then-write sin orIgnore) puede commitear
+    // un duplicado fresco entre el dedup de arriba y este CREATE — ya pasó en
+    // este proyecto tener procesos zombis con crons duplicados. Si el CREATE
+    // choca con 23505, se re-corre el dedup y se reintenta (2 veces) antes de
+    // dejar que el boot falle.
+    for (let intento = 1; ; intento++) {
+      try {
+        await queryRunner.query(`
+          CREATE UNIQUE INDEX IF NOT EXISTS "uq_loans_openTxHash"
+          ON loans ("openTxHash")
+          WHERE "openTxHash" IS NOT NULL
+        `);
+        break;
+      } catch (e) {
+        const code = (e as { code?: string; driverError?: { code?: string } });
+        const pgCode = code.code ?? code.driverError?.code;
+        if (pgCode !== '23505' || intento >= 3) throw e;
+        await queryRunner.query(`
+          WITH dups AS (
+            SELECT id,
+                   ROW_NUMBER() OVER (PARTITION BY "openTxHash" ORDER BY id ASC) AS rn
+            FROM loans
+            WHERE "openTxHash" IS NOT NULL
+              AND "openTxHash" IN (
+                SELECT "openTxHash" FROM loans
+                WHERE "openTxHash" IS NOT NULL
+                GROUP BY "openTxHash" HAVING COUNT(*) > 1
+              )
+          )
+          UPDATE loans
+             SET "openTxHash" = NULL
+           WHERE id IN (SELECT id FROM dups WHERE rn > 1)
+        `);
+      }
+    }
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
