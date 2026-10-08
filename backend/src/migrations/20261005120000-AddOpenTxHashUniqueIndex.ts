@@ -83,17 +83,25 @@ export class AddOpenTxHashUniqueIndex20261005120000
     // este proyecto tener procesos zombis con crons duplicados. Si el CREATE
     // choca con 23505, se re-corre el dedup y se reintenta (2 veces) antes de
     // dejar que el boot falle.
+    // (review PR #4) SAVEPOINT obligatorio: la migracion corre DENTRO de una
+    // transaccion ('each'), y un CREATE fallido aborta la tx entera — el
+    // retry sin savepoint moria con 25P02 ('transaction is aborted') y el
+    // guard era codigo muerto. Con el savepoint, el 23505 se revierte al
+    // punto limpio y el dedup+retry funcionan de verdad.
     for (let intento = 1; ; intento++) {
+      await queryRunner.query(`SAVEPOINT uq_open_retry`);
       try {
         await queryRunner.query(`
           CREATE UNIQUE INDEX IF NOT EXISTS "uq_loans_openTxHash"
           ON loans ("openTxHash")
           WHERE "openTxHash" IS NOT NULL
         `);
+        await queryRunner.query(`RELEASE SAVEPOINT uq_open_retry`);
         break;
       } catch (e) {
         const code = (e as { code?: string; driverError?: { code?: string } });
         const pgCode = code.code ?? code.driverError?.code;
+        await queryRunner.query(`ROLLBACK TO SAVEPOINT uq_open_retry`);
         if (pgCode !== '23505' || intento >= 3) throw e;
         await queryRunner.query(`
           WITH dups AS (

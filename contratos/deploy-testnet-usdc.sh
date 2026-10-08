@@ -49,9 +49,15 @@ stellar contract invoke --id "$LM_ID" --source-account "$OP" --network "$NETWORK
   -- set_vault --vault "$VAULT_ID" >/dev/null
 echo "wiring OK"
 
-echo "— verificacion —"
-echo -n "vault.usdc del par nuevo: "
-stellar contract invoke --id "$VAULT_ID" --source-account "$OP" --network "$NETWORK" -- usdc 2>/dev/null | tail -1 || true
+echo "— verificacion (review PR #4: antes llamaba un getter inexistente y el fallo se tragaba) —"
+GOT_USDC=$(stellar contract invoke --id "$VAULT_ID" --source-account "$OP" --network "$NETWORK" -- usdc 2>&1 | tail -1 | tr -d '"')
+if [ "$GOT_USDC" = "$USDC" ]; then
+  echo "vault.usdc VERIFICADO on-chain: $GOT_USDC"
+else
+  echo "🔴 VERIFICACION FALLO: vault.usdc='$GOT_USDC' esperado='$USDC'"
+  echo "   (un wasm anterior al getter usdc() tambien cae aca: verificar A MANO)"
+  exit 1
+fi
 
 cat <<RESUMEN
 

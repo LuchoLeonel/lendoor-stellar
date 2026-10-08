@@ -163,10 +163,22 @@ export async function stellarRepay(params: {
     }),
   });
 
-  const assembled = await client.repay(
+  // (review PR #4) repay sin monto recalcula el saldo AL EJECUTAR y el saldo
+  // revolvente crece por segundo: en la red real la auth firmada en la
+  // simulacion deja de calzar (auth invalid_action) — exactamente lo que tiro
+  // abajo el par CA2H4UFG/CDY27BWE. El camino correcto es repay_partial con
+  // el preview + un colchon: tira EXACTO lo firmado y devuelve el vuelto.
+  const lmPreview = loanManagerClient(params.payer);
+  const owed = await lmPreview.preview_owed(
+    { borrower: params.borrower ?? params.payer },
+    { timeoutInSeconds: 20 },
+  );
+  const cushion = 100_000n; // 0.01 USDC de margen; el excedente vuelve solo
+  const assembled = await client.repay_partial(
     {
       payer: params.payer,
       borrower: params.borrower ?? params.payer,
+      amount: owed.result + cushion,
     },
     { timeoutInSeconds: 60 },
   );

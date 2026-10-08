@@ -82,8 +82,8 @@ Explorer:
 - `owner` (operador) de ambos contratos: `GA6DMHI54NH3IEA7CLO43SVQMAFEG7BASELZL3NOLVOJ4OML2MKJYAGR`
   — identidad **local y descartable** del CLI (`instaward-op`), nunca una clave de prod.
 - vault `fee_recipient`: `GABED6S3K5L2U5F2FTSLWYYCUGKUMQGPW3JX7WLU4KB5B4K3TC3PJ3T4` (`instaward-feesink`).
-- cross-wiring verificado: vault `Config.loan_manager` → `CA2H4UFG…` y
-  loan-manager `Config.vault` → `CDY27BWE…`.
+- cross-wiring verificado: vault `Config.loan_manager` → `CB4QQU2JWC6264NQCUPE6WSVYQHJTJNJ5ZBVU7ZAOE7TYNJPYE26YVTD`
+  loan-manager `Config.vault` → `CCXUEBC3VOOB57NVDFMQVAJRN52FUQN37EAPLVMAU7MLSPUBMZNBVT2Q`
 - USDC verificado on-chain: `symbol() = "USDC"`, **`decimals() = 7`**.
 - Estado al leerlo: `TotalShares = 0`, `TotalBorrows = 0` — **pre-seed**. La regla
   del seed deposit (sección ⚠️ de arriba) aplica acá con más razón: el primer

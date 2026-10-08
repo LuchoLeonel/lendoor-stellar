@@ -113,7 +113,10 @@ export function transition(
     return t; // replay inocuo: mismo estado sin datos nuevos = no-op
   }
   if (t.state === to && !LEGAL_TRANSITIONS[t.state].includes(to)) {
-    return t; // mismo estado con patch pero sin arista re-entrante legal
+    // (review PR #4) mismo estado + patch = actualizacion de DATOS, no de
+    // estado: se aplica (antes se descartaba en silencio y un diagnostico
+    // nuevo sobre una fila failed se perdia sin error).
+    return { ...t, ...patch };
   }
   if (!LEGAL_TRANSITIONS[t.state].includes(to)) {
     throw new IllegalCctpTransition(t.state, to, t.nonce);
@@ -212,7 +215,13 @@ export function reconcile(
       cur = { ...cur, attestation: iris.attestation };
     }
     if (cur.state === 'attested') cur = transition(cur, 'submitting');
-    return transition(cur, 'delivered');
+    // (review PR #4) una fila que YA estaba en submitting tambien conserva la
+    // attestation de este poll — antes solo pending/failed la guardaban.
+    const finalAtt =
+      !cur.attestation && iris.kind === 'complete'
+        ? { attestation: iris.attestation }
+        : {};
+    return transition(cur, 'delivered', finalAtt);
   }
   switch (t.state) {
     case 'pending':

@@ -42,11 +42,15 @@ describe('cctp transfer state machine', () => {
     );
   });
 
-  it('reaplicar el mismo estado es un no-op (evento repetido = idempotente)', () => {
+  it('replay sin datos nuevos es no-op; con patch es ACTUALIZACION de datos (review PR #4)', () => {
     const t = base({ state: 'delivered', mintTxHash: 'tx-1' });
-    const again = transition(t, 'delivered', { mintTxHash: 'tx-OTRA' });
-    expect(again).toBe(t); // ni siquiera pisa el patch: replay inocuo
-    expect(again.mintTxHash).toBe('tx-1');
+    // sin patch: no-op identico (replay inocuo)
+    expect(transition(t, 'delivered')).toBe(t);
+    // con patch: los datos se actualizan sin cambiar el estado — antes se
+    // descartaban en silencio y un diagnostico nuevo se perdia
+    const updated = transition(t, 'delivered', { mintTxHash: 'tx-OTRA' });
+    expect(updated.state).toBe('delivered');
+    expect(updated.mintTxHash).toBe('tx-OTRA');
   });
 
   it('un submit fallido reintentable vuelve de submitting a attested', () => {

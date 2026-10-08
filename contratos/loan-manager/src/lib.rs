@@ -377,14 +377,18 @@ impl LoanManager {
         // dia ya cobrado: el total al vencimiento queda EXACTO en
         // principal * (1 + fee_bps), igual que antes.
         let full_fee = principal * fee_bps as i128 / BPS_DENOM;
-        let one_day_floor = {
-            let f = full_fee / tenor_days as i128;
-            if f > 0 { f } else { full_fee }
-        };
+        let f = full_fee / tenor_days as i128;
+        let one_day_floor = if f > 0 { f } else { full_fee };
         let due_ts = now + tenor_days as u64 * SECONDS_PER_DAY;
-        let anchor = {
+        // (review PR #4) si el fee es tan chico que el piso diario floorea a 0,
+        // el fallback cobra el fee COMPLETO al abrir — y entonces el ancla va
+        // directo al due, o ese mismo fee se devengaria OTRA vez por el camino
+        // pro-rata (principal + 2*fee en montos dust).
+        let anchor = if f > 0 {
             let a = now + SECONDS_PER_DAY;
             if a < due_ts { a } else { due_ts }
+        } else {
+            due_ts
         };
         let amount_due = principal + one_day_floor;
         l = Loan {
@@ -506,7 +510,13 @@ impl LoanManager {
         let p = read_premium(&e, &borrower);
         let now = e.ledger().timestamp();
         l = Self::accrued_in_memory(&e, l, &p);
-        l.last_accrued = now;
+        // (review PR #4) el ancla SOLO avanza: accrue_late es permissionless y
+        // un now anterior al ancla de apertura (start + 1 dia ya cobrado) la
+        // REBOBINABA — cualquiera podia griefear a un borrower fresco
+        // cobrandole el piso dos veces al vencimiento.
+        if now > l.last_accrued {
+            l.last_accrued = now;
+        }
         write_loan(&e, &borrower, &l);
     }
 
@@ -591,7 +601,9 @@ impl LoanManager {
         let p = read_premium(&e, &borrower);
         let now = e.ledger().timestamp();
         l = Self::accrued_in_memory(&e, l, &p);
-        l.last_accrued = now;
+        if now > l.last_accrued {
+            l.last_accrued = now; // solo avanza (review PR #4, mismo rebobinado)
+        }
 
         if paid >= l.amount_due {
             // pago total: cierra con la MISMA semantica de close_loan

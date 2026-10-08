@@ -2317,3 +2317,78 @@ fn deposit_from_rejects_vault_itself_as_beneficiary() {
     );
     assert_eq!(s.usdc.balance(&relayer), 10_000, "sin pull: los fondos no se mueven");
 }
+
+// ═══════ Regresiones del review PR #4 ═══════
+
+#[test]
+fn full_payoff_via_partial_on_writtenoff_does_not_double_decrement() {
+    // El payoff TOTAL via repay_partial cierra prestamos defaulted (el LM solo
+    // bloquea parciales): sin el clamp del write-off, el principal ya
+    // descontado por manual_write_off se descontaba DOS veces y total_borrows
+    // quedaba fantasma negativo.
+    let s = setup();
+    let lp = Address::generate(&s.e);
+    let borrower = Address::generate(&s.e);
+    s.usdc_admin.mint(&lp, &100_000);
+    s.vault.deposit(&lp, &100_000);
+    grant(&s, &borrower, 25_000);
+    s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
+    s.e.ledger().with_mut(|li| li.timestamp += 24 * DAY);
+    s.lm.mark_default(&borrower);
+    s.vault.manual_write_off(&borrower, &10_000); // borrows -= 10k (total)
+
+    s.usdc_admin.mint(&borrower, &20_000);
+    let rem = s.vault.repay_partial(&borrower, &borrower, &20_000); // payoff total
+    assert_eq!(rem, 0);
+    assert!(!s.lm.get_loan(&borrower).active);
+    // Sana EXACTO como el camino de repay: 100_000 + interes neto, sin
+    // fantasma. (sin premium: owed = 10_500, interes 500, fee 25)
+    assert_eq!(s.vault.total_assets(), 100_475);
+}
+
+#[test]
+fn permissionless_accrue_cannot_rewind_anchor_and_double_charge_floor() {
+    // accrue_late(now < ancla de apertura) rebobinaba last_accrued y el piso
+    // de 1 dia se devengaba de nuevo: griefing gratis contra cualquier
+    // borrower fresco. El ancla ahora SOLO avanza.
+    let s = setup();
+    let lp = Address::generate(&s.e);
+    let borrower = Address::generate(&s.e);
+    s.usdc_admin.mint(&lp, &100_000);
+    s.vault.deposit(&lp, &100_000);
+    grant(&s, &borrower, 25_000);
+    s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
+
+    s.e.ledger().with_mut(|li| li.timestamp += 3600); // 1h, antes del ancla
+    s.lm.accrue_late(&borrower); // el ataque
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY - 3600);
+    assert_eq!(
+        s.lm.preview_owed(&borrower),
+        10_500,
+        "el total al vencimiento sigue EXACTO: el piso no se cobra dos veces"
+    );
+}
+
+#[test]
+fn dust_fee_floor_does_not_double_charge_at_due() {
+    // full_fee < tenor_days: el fallback cobra el fee completo al abrir y el
+    // ancla va directo al due — antes se devengaba OTRA vez (principal+2*fee).
+    let s = setup();
+    let lp = Address::generate(&s.e);
+    let borrower = Address::generate(&s.e);
+    s.usdc_admin.mint(&lp, &100_000);
+    s.vault.deposit(&lp, &100_000);
+    let now = s.e.ledger().timestamp();
+    s.lm.set_user_risk(&borrower, &600, &true, &0, &25_000);
+    s.lm.set_loan_offer(&borrower, &7, &100, &(now + DAY), &25_000); // 1% / 7d
+    s.vault.borrow_with_term(&borrower, &100, &7, &100); // fee total = 1
+    assert_eq!(s.lm.get_loan(&borrower).amount_due, 101);
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY);
+    assert_eq!(s.lm.preview_owed(&borrower), 101, "exacto P*(1+fee), no P+2*fee");
+}
+
+#[test]
+fn vault_usdc_getter_returns_settlement_asset() {
+    let s = setup();
+    assert_eq!(s.vault.usdc(), s.usdc.address);
+}

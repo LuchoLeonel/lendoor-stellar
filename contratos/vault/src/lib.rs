@@ -76,6 +76,7 @@ pub enum Error {
     NoActiveLoan = 7,
     NotDefaulted = 8,
     ZeroShares = 9,
+    InvalidBeneficiary = 10,
 }
 
 #[contracttype]
@@ -170,6 +171,11 @@ impl Vault {
     pub fn total_supply(e: Env) -> i128 {
         total_shares(&e)
     }
+    /// Settlement asset (review PR #4: el script de deploy verificaba contra
+    /// un getter inexistente y el fallo se tragaba en silencio — ahora existe).
+    pub fn usdc(e: Env) -> Address {
+        cfg(&e).usdc
+    }
 
     // OZ virtual-shares (offset 0) conversions: floor, multiply-before-divide.
     fn to_shares(e: &Env, c: &Config, assets: i128) -> i128 {
@@ -239,7 +245,9 @@ impl Vault {
         // puede redimirse a si mismo. Es el default plausible de un bridge
         // mal cableado (recipient → beneficiary), asi que se rechaza aca.
         if beneficiary == e.current_contract_address() {
-            panic_with_error!(&e, Error::ZeroShares);
+            // error PROPIO (review PR #4): ZeroShares aca mandaba al operador
+            // a debuggear la guarda anti-donacion en vez del bridge mal cableado.
+            panic_with_error!(&e, Error::InvalidBeneficiary);
         }
         let c = cfg(&e);
         let shares = Self::to_shares(&e, &c, assets);
@@ -418,14 +426,22 @@ impl Vault {
         if fee > 0 {
             usdc_client(&e, &c).transfer(&e.current_contract_address(), &c.fee_recipient, &fee);
         }
-        // El principal pagado sale de total_borrows; los parciales no tocan
-        // prestamos con write-off (el LM bloquea parciales en default), asi
-        // que aca no hay clamp que hacer.
-        if principal_paid > 0 {
-            set_total_borrows(&e, total_borrows(&e) - principal_paid);
+        // (review PR #4) el clamp del write-off es UNIVERSAL: un payoff TOTAL
+        // por este camino cierra prestamos defaulted (el LM solo bloquea los
+        // parciales), y sin el clamp el principal ya descontado por
+        // manual_write_off se descontaba DOS veces — total_borrows fantasma
+        // negativo y el PPS de todos los LPs al piso.
+        let wo = written_off(&e, &borrower);
+        let principal_in_borrows = if principal_paid > wo { principal_paid - wo } else { 0 };
+        if principal_in_borrows > 0 {
+            set_total_borrows(&e, total_borrows(&e) - principal_in_borrows);
         }
         if remaining == 0 {
             set_written_off(&e, &borrower, 0);
+            // (review PR #4) el cierre por este camino tambien emite 'repay':
+            // es EL camino de liquidacion en vivo, y los indexers suscriptos a
+            // ese topic no pueden perderse justamente los cierres reales.
+            e.events().publish((symbol_short!("repay"), borrower.clone()), (pay, fee));
         }
         bump_instance(&e);
         e.events().publish((symbol_short!("partrepay"), borrower), (pay, fee, remaining));
