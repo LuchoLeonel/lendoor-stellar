@@ -50,6 +50,8 @@ pub trait LoanManager {
     fn close_loan(e: Env, borrower: Address, paid: i128);
     fn is_defaulted(e: Env, borrower: Address) -> bool;
     fn get_loan(e: Env, borrower: Address) -> Loan;
+    fn preview_owed(e: Env, borrower: Address) -> i128;
+    fn apply_payment(e: Env, borrower: Address, paid: i128) -> (i128, i128, i128);
 }
 
 const DAY: u32 = 17280;
@@ -333,16 +335,21 @@ impl Vault {
         let lm = LoanManagerClient::new(&e, &c.loan_manager);
 
         let loan = lm.get_loan(&borrower);
-        if !loan.active || loan.amount_due <= 0 {
+        if !loan.active {
             panic_with_error!(&e, Error::NoActiveLoan);
         }
-        let pay = loan.amount_due;
+        // Saldo DEVENGADO al momento: pagar temprano cuesta menos (pro-rata),
+        // pagar tarde incluye la mora. Es la vista que el frontend ya usa.
+        let pay = lm.preview_owed(&borrower);
+        if pay <= 0 {
+            panic_with_error!(&e, Error::NoActiveLoan);
+        }
         let principal = loan.principal;
-        let interest = if pay > principal { pay - principal } else { 0 };
-        let fee = interest * PROTOCOL_FEE_BPS / BPS_DENOM;
 
-        // Pull full amount from payer; skim protocol fee.
+        // Pull full amount from payer; apply via the LM (interest-first).
         usdc_client(&e, &c).transfer(&payer, &e.current_contract_address(), &pay);
+        let (_principal_paid, interest_paid, _rem) = lm.apply_payment(&borrower, &pay);
+        let fee = interest_paid * PROTOCOL_FEE_BPS / BPS_DENOM;
         if fee > 0 {
             usdc_client(&e, &c).transfer(&e.current_contract_address(), &c.fee_recipient, &fee);
         }
@@ -353,10 +360,48 @@ impl Vault {
         set_total_borrows(&e, total_borrows(&e) - principal_in_borrows);
         set_written_off(&e, &borrower, 0);
 
-        lm.close_loan(&borrower, &pay);
         bump_instance(&e);
         e.events().publish((symbol_short!("repay"), borrower), (pay, fee));
         pay // amount repaid (mirrors EVM repay's uint256 return)
+    }
+
+    /// Pago PARCIAL (revolvente): `amount` se imputa primero al interes/mora
+    /// devengado y despues al principal; el prestamo sigue activo hasta saldar.
+    /// Si `amount` cubre el saldo devengado completo, cierra (igual que repay).
+    /// Prestamos en default quedan excluidos (el LM lo rechaza): su curacion
+    /// post-write-off exige el pago total por el camino de `repay`.
+    pub fn repay_partial(e: Env, payer: Address, borrower: Address, amount: i128) -> i128 {
+        payer.require_auth();
+        if amount <= 0 {
+            panic_with_error!(&e, Error::ZeroAmount);
+        }
+        let c = cfg(&e);
+        let lm = LoanManagerClient::new(&e, &c.loan_manager);
+        let loan = lm.get_loan(&borrower);
+        if !loan.active {
+            panic_with_error!(&e, Error::NoActiveLoan);
+        }
+        let owed = lm.preview_owed(&borrower);
+        let pay = if amount < owed { amount } else { owed };
+
+        usdc_client(&e, &c).transfer(&payer, &e.current_contract_address(), &pay);
+        let (principal_paid, interest_paid, remaining) = lm.apply_payment(&borrower, &pay);
+        let fee = interest_paid * PROTOCOL_FEE_BPS / BPS_DENOM;
+        if fee > 0 {
+            usdc_client(&e, &c).transfer(&e.current_contract_address(), &c.fee_recipient, &fee);
+        }
+        // El principal pagado sale de total_borrows; los parciales no tocan
+        // prestamos con write-off (el LM bloquea parciales en default), asi
+        // que aca no hay clamp que hacer.
+        if principal_paid > 0 {
+            set_total_borrows(&e, total_borrows(&e) - principal_paid);
+        }
+        if remaining == 0 {
+            set_written_off(&e, &borrower, 0);
+        }
+        bump_instance(&e);
+        e.events().publish((symbol_short!("partrepay"), borrower), (pay, fee, remaining));
+        remaining
     }
 
     /// Recognize a defaulted loan's loss in vault accounting. Owner-gated.

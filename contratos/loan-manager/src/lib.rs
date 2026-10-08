@@ -370,18 +370,34 @@ impl LoanManager {
         // One-shot: consume the offer atomically.
         e.storage().persistent().remove(&offer_key);
 
-        let amount_due = principal * (BPS_DENOM + fee_bps as i128) / BPS_DENOM;
+        // Revolvente: el interes se devenga con el tiempo (accrued_in_memory),
+        // asi que amount_due pasa a ser el SALDO VIVO. Arranca en principal +
+        // el PISO de un dia de interes (pedir y devolver en el mismo ledger no
+        // es gratis), y el ancla de devengo (last_accrued) salta ese primer
+        // dia ya cobrado: el total al vencimiento queda EXACTO en
+        // principal * (1 + fee_bps), igual que antes.
+        let full_fee = principal * fee_bps as i128 / BPS_DENOM;
+        let one_day_floor = {
+            let f = full_fee / tenor_days as i128;
+            if f > 0 { f } else { full_fee }
+        };
+        let due_ts = now + tenor_days as u64 * SECONDS_PER_DAY;
+        let anchor = {
+            let a = now + SECONDS_PER_DAY;
+            if a < due_ts { a } else { due_ts }
+        };
+        let amount_due = principal + one_day_floor;
         l = Loan {
             principal,
             amount_due,
             start: now,
-            due: now + tenor_days as u64 * SECONDS_PER_DAY,
+            due: due_ts,
             fee_bps,
             grace_period: cfg.default_grace_period,
             tenor_days,
             active: true,
             defaulted: false,
-            last_accrued: now,
+            last_accrued: anchor,
         };
         write_loan(&e, &borrower, &l);
         e.events().publish((symbol_short!("loanopen"), borrower), (principal, amount_due, l.due));
@@ -391,23 +407,18 @@ impl LoanManager {
     /// must be >= amount_due (with accrued late fees).
     pub fn close_loan(e: Env, borrower: Address, paid: i128) {
         read_config(&e).vault.require_auth();
-        let mut l = read_loan(&e, &borrower);
+        let l = read_loan(&e, &borrower);
         if !l.active {
             panic_with_error!(&e, Error::NoActiveLoan);
         }
-        if paid < l.amount_due {
+        // Devengar antes de comparar: pagar temprano exige MENOS (pro-rata),
+        // pagar tarde exige el saldo con mora.
+        let p = read_premium(&e, &borrower);
+        let acc = Self::accrued_in_memory(&e, l, &p);
+        if paid < acc.amount_due {
             panic_with_error!(&e, Error::Underpaid);
         }
-
-        let now = e.ledger().timestamp();
-        let min_from_start = l.start + min_hold_secs(&e, l.tenor_days);
-        let wait_until = if now >= min_from_start { now } else { min_from_start };
-        write_next_borrow(&e, &borrower, wait_until);
-
-        // Zero the loan (matches V3 closeLoan; historical default fact lives in events).
-        l = Loan { principal: 0, amount_due: 0, start: 0, due: 0, fee_bps: 0, grace_period: 0, tenor_days: 0, active: false, defaulted: false, last_accrued: 0 };
-        write_loan(&e, &borrower, &l);
-        e.events().publish((symbol_short!("loanclos"), borrower), paid);
+        Self::finish_close(&e, &borrower, &acc, paid);
     }
 
     /// Mark a loan defaulted (admin flag). Does NOT touch vault accounting — the
@@ -471,7 +482,7 @@ impl LoanManager {
     pub fn preview_owed(e: Env, borrower: Address) -> i128 {
         let l = read_loan(&e, &borrower);
         let p = read_premium(&e, &borrower);
-        Self::owed_with_late(&e, &l, &p)
+        Self::accrued_in_memory(&e, l, &p).amount_due
     }
 
     /// `(principal, amount_due_with_late)` — mirrors the EVM
@@ -479,11 +490,14 @@ impl LoanManager {
     pub fn preview_loan_with_late(e: Env, borrower: Address) -> (i128, i128) {
         let l = read_loan(&e, &borrower);
         let p = read_premium(&e, &borrower);
-        (l.principal, Self::owed_with_late(&e, &l, &p))
+        let acc = Self::accrued_in_memory(&e, l, &p);
+        (acc.principal, acc.amount_due)
     }
 
-    /// Materialize accrued late fees into the stored amount_due. Idempotent.
-    /// Permissionless on purpose (no attack surface, fixes the V3 keeper leak).
+    /// Materialize accrued interest (pre-due, pro-rata) and late fees
+    /// (post-due+grace) into the stored amount_due. Idempotent. Permissionless
+    /// on purpose (no attack surface, fixes the V3 keeper leak). Keeps its
+    /// historical name so the generated clients don't churn.
     pub fn accrue_late(e: Env, borrower: Address) {
         let mut l = read_loan(&e, &borrower);
         if !l.active {
@@ -491,27 +505,127 @@ impl LoanManager {
         }
         let p = read_premium(&e, &borrower);
         let now = e.ledger().timestamp();
-        let new_due = Self::owed_with_late(&e, &l, &p);
-        l.amount_due = new_due;
+        l = Self::accrued_in_memory(&e, l, &p);
         l.last_accrued = now;
         write_loan(&e, &borrower, &l);
     }
 
-    // Linear late-fee accrual from max(last_accrued, due+grace). Pure helper.
-    fn owed_with_late(e: &Env, l: &Loan, p: &PremiumConfig) -> i128 {
-        if !l.active || p.late_rate_per_sec_wad == 0 {
-            return l.amount_due;
+    // Revolving accrual, pure. Two phases, both anchored on last_accrued so
+    // partial payments compose (after a partial, interest accrues on the
+    // REDUCED principal only):
+    //   1) pre-due: interest pro-rata on the live principal — repaying early
+    //      costs less, repaying at due costs exactly principal*(1+fee_bps);
+    //   2) post-due+grace: the pre-existing linear late fee on the whole
+    //      outstanding.
+    fn accrued_in_memory(e: &Env, mut l: Loan, p: &PremiumConfig) -> Loan {
+        if !l.active {
+            return l;
         }
         let now = e.ledger().timestamp();
         let from = if l.last_accrued == 0 { l.start } else { l.last_accrued };
-        let late_start = l.due + l.grace_period;
-        let accrual_from = if from > late_start { from } else { late_start };
-        if now <= accrual_from {
-            return l.amount_due;
+        if now <= from {
+            return l;
         }
-        let t_late = (now - accrual_from) as i128;
-        let extra = p.late_rate_per_sec_wad * t_late * l.amount_due / WAD;
-        l.amount_due + extra
+        // 1) interes pro-rata hasta el vencimiento — TELESCOPICO: cada tramo
+        // es la diferencia de la acumulada absoluta floor(P*fee*elapsed/T),
+        // asi los redondeos por tramo se cancelan y el total al vencimiento
+        // queda EXACTO en P*fee/BPS (el piso de apertura es cum(1 dia) con la
+        // misma formula, asi que tambien telescopea).
+        let tenor_secs = l.tenor_days as i128 * SECONDS_PER_DAY as i128;
+        let int_to = if now < l.due { now } else { l.due };
+        if int_to > from && tenor_secs > 0 {
+            let cum = |ts: u64| -> Option<i128> {
+                let capped = if ts < l.due { ts } else { l.due };
+                let el = (capped - l.start) as i128;
+                l.principal
+                    .checked_mul(l.fee_bps as i128)?
+                    .checked_mul(el)?
+                    .checked_div(BPS_DENOM * tenor_secs)
+            };
+            if let (Some(hi), Some(lo)) = (cum(int_to), cum(from)) {
+                let delta = hi - lo;
+                if delta > 0 {
+                    l.amount_due += delta;
+                }
+            }
+        }
+        // 2) mora lineal despues de due+grace (semantica preexistente).
+        // CHECKED a proposito: una tasa absurda mal configurada NO puede
+        // trabar el repago por overflow — si la cuenta no entra en i128, la
+        // mora de ese tramo se omite (el protocolo cobra de menos; el
+        // prestatario nunca queda bloqueado). Es la valvula que el diseno
+        // viejo tenia leyendo el amount_due almacenado.
+        if p.late_rate_per_sec_wad > 0 {
+            let late_start = l.due + l.grace_period;
+            let accrual_from = if from > late_start { from } else { late_start };
+            if now > accrual_from {
+                let t_late = (now - accrual_from) as i128;
+                if let Some(extra) = p
+                    .late_rate_per_sec_wad
+                    .checked_mul(t_late)
+                    .and_then(|x| x.checked_mul(l.amount_due))
+                    .map(|x| x / WAD)
+                {
+                    l.amount_due += extra;
+                }
+            }
+        }
+        l
+    }
+
+    /// Vault-only. Aplica un pago (parcial o total) al prestamo vivo, con
+    /// imputacion interes-primero. Devuelve
+    /// (principal_pagado, interes_pagado, saldo_restante); si el saldo llega a
+    /// 0 cierra el prestamo (mismos efectos que close_loan). Prestamos en
+    /// default: SOLO pago total — la curacion post-write-off del vault asume
+    /// el monto completo.
+    pub fn apply_payment(e: Env, borrower: Address, paid: i128) -> (i128, i128, i128) {
+        read_config(&e).vault.require_auth();
+        if paid <= 0 {
+            panic_with_error!(&e, Error::InvalidParam);
+        }
+        let mut l = read_loan(&e, &borrower);
+        if !l.active {
+            panic_with_error!(&e, Error::NoActiveLoan);
+        }
+        let p = read_premium(&e, &borrower);
+        let now = e.ledger().timestamp();
+        l = Self::accrued_in_memory(&e, l, &p);
+        l.last_accrued = now;
+
+        if paid >= l.amount_due {
+            // pago total: cierra con la MISMA semantica de close_loan
+            let principal_paid = l.principal;
+            let interest_paid = paid - principal_paid;
+            Self::finish_close(&e, &borrower, &l, paid);
+            return (principal_paid, interest_paid, 0);
+        }
+        if l.defaulted {
+            panic_with_error!(&e, Error::Underpaid);
+        }
+        let interest_out = l.amount_due - l.principal;
+        let interest_paid = if paid < interest_out { paid } else { interest_out };
+        let principal_paid = paid - interest_paid;
+        l.amount_due -= paid;
+        l.principal -= principal_paid;
+        write_loan(&e, &borrower, &l);
+        e.events().publish(
+            (symbol_short!("partpay"), borrower),
+            (principal_paid, interest_paid, l.amount_due),
+        );
+        (principal_paid, interest_paid, l.amount_due)
+    }
+
+    // Efectos comunes del cierre (cooldown + zero + evento), compartidos por
+    // close_loan y apply_payment.
+    fn finish_close(e: &Env, borrower: &Address, l: &Loan, paid: i128) {
+        let now = e.ledger().timestamp();
+        let min_from_start = l.start + min_hold_secs(e, l.tenor_days);
+        let wait_until = if now >= min_from_start { now } else { min_from_start };
+        write_next_borrow(e, borrower, wait_until);
+        let zeroed = Loan { principal: 0, amount_due: 0, start: 0, due: 0, fee_bps: 0, grace_period: 0, tenor_days: 0, active: false, defaulted: false, last_accrued: 0 };
+        write_loan(e, borrower, &zeroed);
+        e.events().publish((symbol_short!("loanclos"), borrower.clone()), paid);
     }
 }
 

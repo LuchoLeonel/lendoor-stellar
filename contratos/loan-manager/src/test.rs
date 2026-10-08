@@ -112,7 +112,9 @@ fn full_borrow_and_repay_cycle() {
     let l = c.get_loan(&user);
     assert!(l.active);
     assert_eq!(l.principal, 10 * USDC);
-    assert_eq!(l.amount_due, 10 * USDC * 10_500 / 10_000); // +5%
+    // Revolvente: al abrir, el saldo vivo es principal + el PISO de 1 dia de
+    // interes; el fee completo recien se debe al vencimiento.
+    assert_eq!(l.amount_due, 10 * USDC + (10 * USDC * 500 / 10_000) / 7);
     assert_eq!(l.tenor_days, 7);
     assert_eq!(l.fee_bps, 500);
     assert_eq!(l.due, l.start + 7 * DAY);
@@ -126,8 +128,8 @@ fn full_borrow_and_repay_cycle() {
         Err(Ok(Error::LoanActive.into()))
     );
 
-    // Repay full closes the loan.
-    c.close_loan(&user, &l.amount_due);
+    // Repay full closes the loan (el saldo DEVENGADO del momento, no el de apertura).
+    c.close_loan(&user, &c.preview_owed(&user));
     let cl = c.get_loan(&user);
     assert!(!cl.active);
     assert_eq!(cl.principal, 0);
@@ -299,7 +301,7 @@ fn late_fees_accrue_after_grace() {
     c.set_premium_config(&user, &0, &late_rate);
     c.open_loan(&user, &(10 * USDC), &7, &500);
 
-    let base = c.get_loan(&user).amount_due;
+    let base = 10 * USDC * 10_500 / 10_000; // total devengado al vencimiento
     // Within grace (8d): no late fee yet.
     advance(&e, 8 * DAY);
     assert_eq!(c.preview_owed(&user), base);
@@ -500,11 +502,15 @@ fn amount_due_is_floor_rounded() {
     let now = e.ledger().timestamp();
     c.set_user_risk(&user, &600, &true, &0, &(25 * USDC));
     c.set_loan_offer(&user, &7, &500, &(now + DAY), &(25 * USDC));
-    // 199 * 10500 / 10000 = 208.95 -> floor 208 (never over-charges the borrower).
+    // Revolvente: fee total = 199*500/10000 = 9 (floor); piso de apertura =
+    // 9/7 = 1 (floor) -> amount_due abre en 200. Nunca sobre-cobra.
     c.open_loan(&user, &199, &7, &500);
     let l = c.get_loan(&user);
-    assert_eq!(l.amount_due, 208);
+    assert_eq!(l.amount_due, 200);
     assert!(l.amount_due >= l.principal);
+    // Y al vencimiento el total devengado queda en 199 + 9 = 208 (como antes).
+    advance(&e, 7 * DAY);
+    assert_eq!(c.preview_owed(&user), 208);
 }
 
 // ─────────────────────────── grace / cooldown config ───────────────────────
@@ -547,11 +553,10 @@ fn repay_after_min_hold_adds_no_extra_cooldown() {
     c.set_user_risk(&user, &600, &true, &0, &(25 * USDC));
     c.set_loan_offer(&user, &7, &500, &(now + 100 * DAY), &(25 * USDC));
     c.open_loan(&user, &(10 * USDC), &7, &500);
-    let due = c.get_loan(&user).amount_due;
     // Repay well after the 4d min-hold: next_borrow collapses to "now", no penalty.
     advance(&e, 20 * DAY);
     let now2 = e.ledger().timestamp();
-    c.close_loan(&user, &due);
+    c.close_loan(&user, &c.preview_owed(&user));
     assert_eq!(c.next_borrow_time(&user), now2);
 }
 
@@ -575,7 +580,7 @@ fn late_fees_compound_across_accruals() {
     c.set_loan_offer(&user, &7, &500, &(now + DAY), &(25 * USDC));
     c.set_premium_config(&user, &0, &11_574_000_000);
     c.open_loan(&user, &(10 * USDC), &7, &500);
-    let base = c.get_loan(&user).amount_due;
+    let base = 10 * USDC * 10_500 / 10_000; // total devengado al vencimiento
 
     // First accrual window (5d past late-start).
     advance(&e, 8 * DAY + 5 * DAY);
@@ -804,7 +809,7 @@ fn no_late_accrual_without_premium_config() {
     c.set_user_risk(&user, &600, &true, &0, &(25 * USDC));
     c.set_loan_offer(&user, &7, &500, &(now + DAY), &(25 * USDC));
     c.open_loan(&user, &(10 * USDC), &7, &500);
-    let base = c.get_loan(&user).amount_due;
+    let base = 10 * USDC * 10_500 / 10_000; // total devengado al vencimiento
     advance(&e, 100 * DAY); // way past due+grace, but no late rate
     assert_eq!(c.preview_owed(&user), base);
     c.accrue_late(&user);
@@ -813,9 +818,9 @@ fn no_late_accrual_without_premium_config() {
 
 #[test]
 fn fresh_loan_last_accrued_equals_start() {
-    // open_loan sets last_accrued = now = start, so the `from = last_accrued`
-    // branch (rather than the dead `from = l.start` path) is what owed_with_late
-    // uses. Pin the invariant the branch relies on.
+    // Revolvente: el piso de 1 dia se cobra al abrir, asi que el ancla de
+    // devengo (last_accrued) arranca en start + 1 dia — ese dia ya esta pago
+    // y el total al vencimiento queda exacto en principal*(1+fee).
     let (e, _owner, _vault, c) = setup();
     let user = Address::generate(&e);
     let now = e.ledger().timestamp();
@@ -823,7 +828,7 @@ fn fresh_loan_last_accrued_equals_start() {
     c.set_loan_offer(&user, &7, &500, &(now + DAY), &(25 * USDC));
     c.open_loan(&user, &(10 * USDC), &7, &500);
     let l = c.get_loan(&user);
-    assert_eq!(l.last_accrued, l.start);
+    assert_eq!(l.last_accrued, l.start + DAY);
 }
 
 #[test]
@@ -1063,7 +1068,7 @@ fn no_late_fee_at_exact_late_start() {
     c.set_loan_offer(&user, &7, &500, &(now + DAY), &(25 * USDC));
     c.set_premium_config(&user, &0, &11_574_000_000);
     c.open_loan(&user, &(10 * USDC), &7, &500);
-    let base = c.get_loan(&user).amount_due;
+    let base = 10 * USDC * 10_500 / 10_000; // total devengado al vencimiento
     // late_start = due(7d) + grace(1d) = start + 8d. Advance exactly there.
     advance(&e, 8 * DAY);
     assert_eq!(c.preview_owed(&user), base); // boundary: still no fee
@@ -1103,9 +1108,8 @@ fn close_loan_next_borrow_boundary_at_exact_min_hold() {
     c.set_loan_offer(&user, &7, &500, &(now + 100 * DAY), &(25 * USDC));
     let start = e.ledger().timestamp();
     c.open_loan(&user, &(10 * USDC), &7, &500);
-    let due = c.get_loan(&user).amount_due;
     advance(&e, 4 * DAY); // now == start + 4d (min-hold for 7d tenor)
-    c.close_loan(&user, &due);
+    c.close_loan(&user, &c.preview_owed(&user));
     assert_eq!(c.next_borrow_time(&user), start + 4 * DAY); // == now
 }
 
@@ -1120,9 +1124,8 @@ fn close_loan_before_min_hold_sets_future_next_borrow() {
     c.set_loan_offer(&user, &7, &500, &(now + 100 * DAY), &(25 * USDC));
     let start = e.ledger().timestamp();
     c.open_loan(&user, &(10 * USDC), &7, &500);
-    let due = c.get_loan(&user).amount_due;
     advance(&e, 4 * DAY - 1); // one second before min-hold
-    c.close_loan(&user, &due);
+    c.close_loan(&user, &c.preview_owed(&user));
     assert_eq!(c.next_borrow_time(&user), start + 4 * DAY);
 }
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1266,7 +1269,7 @@ fn late_fee_exact_value_matches_formula() {
     c.set_loan_offer(&user, &7, &500, &(now + DAY), &(25 * USDC));
     c.set_premium_config(&user, &0, &rate);
     c.open_loan(&user, &(10 * USDC), &7, &500);
-    let amount_due = c.get_loan(&user).amount_due; // 10_500_000
+    let amount_due = 10 * USDC * 10_500 / 10_000; // total devengado al vencimiento
 
     // late_start = due(7d) + grace(1d) = start + 8d; accrue T seconds past it.
     let t: u64 = 123_456;
@@ -1324,8 +1327,10 @@ fn amount_due_no_overflow_at_million_dollar_principal() {
     let now = e.ledger().timestamp();
     c.set_user_risk(&user, &600, &true, &0, &big);
     c.set_loan_offer(&user, &7, &500, &(now + DAY), &big);
-    c.open_loan(&user, &big, &7, &500); // principal*(10500)/10000 must not overflow
-    assert_eq!(c.get_loan(&user).amount_due, big * 10_500 / 10_000);
+    c.open_loan(&user, &big, &7, &500); // la matematica del fee no debe overflowear
+    assert_eq!(c.get_loan(&user).amount_due, big + (big * 500 / 10_000) / 7);
+    advance(&e, 7 * DAY);
+    assert_eq!(c.preview_owed(&user), big * 10_500 / 10_000);
 }
 
 // ── offer is last-write-wins (re-offer overrides the prior terms) ─────────────
