@@ -70,13 +70,13 @@ SCF #45; este es el del Instaward.
 
 | Contract | Contract ID |
 |---|---|
-| `lendoor-vault` | `CDY27BWE7HYC26JRVU7NE7IC6GMKEUWMOTCB3B3MEPOZHXSWWLBQSBKA` |
-| `lendoor-loan-manager` | `CA2H4UFGUADAL3GFU6DM7TBJ4DY6WIZXZ67A42K4RKVUWEY7YZXRGV4R` |
+| `lendoor-vault` | `CCXUEBC3VOOB57NVDFMQVAJRN52FUQN37EAPLVMAU7MLSPUBMZNBVT2Q` |
+| `lendoor-loan-manager` | `CB4QQU2JWC6264NQCUPE6WSVYQHJTJNJ5ZBVU7ZAOE7TYNJPYE26YVTD` |
 | USDC (SAC nativo de testnet) | `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
 
 Explorer:
-- vault: https://stellar.expert/explorer/testnet/contract/CDY27BWE7HYC26JRVU7NE7IC6GMKEUWMOTCB3B3MEPOZHXSWWLBQSBKA
-- loan-manager: https://stellar.expert/explorer/testnet/contract/CA2H4UFGUADAL3GFU6DM7TBJ4DY6WIZXZ67A42K4RKVUWEY7YZXRGV4R
+- vault: https://stellar.expert/explorer/testnet/contract/CCXUEBC3VOOB57NVDFMQVAJRN52FUQN37EAPLVMAU7MLSPUBMZNBVT2Q
+- loan-manager: https://stellar.expert/explorer/testnet/contract/CB4QQU2JWC6264NQCUPE6WSVYQHJTJNJ5ZBVU7ZAOE7TYNJPYE26YVTD
 
 ### Config (leída en vivo del instance storage, 2026-10-08)
 - `owner` (operador) de ambos contratos: `GA6DMHI54NH3IEA7CLO43SVQMAFEG7BASELZL3NOLVOJ4OML2MKJYAGR`
@@ -166,3 +166,9 @@ it further.
 ## Stellar Mainnet
 
 _Not deployed yet._
+
+> Descartado también (2026-10-08, segundo intermedio): LM `CA2H4UFGUADAL3GFU6DM7TBJ4DY6WIZXZ67A42K4RKVUWEY7YZXRGV4R` /
+> Vault `CDY27BWE7HYC26JRVU7NE7IC6GMKEUWMOTCB3B3MEPOZHXSWWLBQSBKA` — semántica revolvente
+> pero sin el pull-exacto-con-vuelto de `repay_partial` (la testnet real demostró que el
+> recálculo temporal rompe la auth firmada). El PAR VIGENTE es el de la tabla de arriba.
+> Checklist ampliado: el FEE SINK también necesita trustline de USDC antes del primer repago.

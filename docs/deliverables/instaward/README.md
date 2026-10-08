@@ -55,20 +55,20 @@ protocolo es el primer paso de la ceremonia, regla anti-donación en
 
 ## Deliverable 3 — Ciclo de vida on-chain (hashes de la ceremonia)
 
-PENDIENTE del faucet de USDC de testnet (Circle). La ceremonia corre contra el
+CEREMONIA EJECUTADA el 2026-10-08 (faucet acreditado). Corrió contra el
 par de arriba y esta tabla se completa con un hash + link a stellar.expert por
 fila:
 
 | Paso | Tx hash | Explorer |
 |---|---|---|
-| Seed deposit del protocolo | `PENDIENTE` | — |
-| `set_user_risk` + `set_loan_offer` (50 USDC, 7d/5%) | `PENDIENTE` | — |
-| Borrow (`borrow_with_term`) | `PENDIENTE` | — |
-| Repago parcial (`repay_partial` — evento `partpay`, imputación interés-primero) | `PENDIENTE` | — |
-| Repago con descuento por pago anticipado (pro-rata) | `PENDIENTE` | — |
-| Repay final (cierra el préstamo) | `PENDIENTE` | — |
-| Score update post-repago | `PENDIENTE` | — |
-| Repago tardío (mora materializada con `accrue_late`) | `PENDIENTE` | — |
+| Seed deposit del protocolo (1 USDC, anti-donación) + depósito de liquidez (10 USDC) | [`8a5395b4…`](https://stellar.expert/explorer/testnet/tx/8a5395b4d0fe04808d9e921fa986b864e32e9d0fdc99441d3f7e61968abdb1e5) · [`26dd6b79…`](https://stellar.expert/explorer/testnet/tx/26dd6b79bf870e5687f4f3b627dac8ae312fbc4c693c4e2bfb8897adc2b8dfcc) | ✅ 2026-10-08 |
+| `set_user_risk` + `set_loan_offer` (50 USDC, 7d/5%) | [`0efcdf02…`](https://stellar.expert/explorer/testnet/tx/0efcdf023b00e9de71dab98137fb54ede69c977194196f964328da947fcabcaf) · [`661488ff…`](https://stellar.expert/explorer/testnet/tx/661488ff1785c29c6c1e778c62bf56482a2c7d5dbfd20ed6829ce369b8fbbe1e) | ✅ 2026-10-08 |
+| Borrow 5 USDC (`borrow_with_term`; `loanopen` muestra el piso de 1 día: due 50.357142) | [`26a4db4e…`](https://stellar.expert/explorer/testnet/tx/26a4db4eb4b4f8e0d9c9477e92f07af85dc92e3e09a322474b7c31d4cc871e06) | ✅ 2026-10-08 |
+| Repago parcial 1 USDC — `partpay` = (principal 0.9642858, interés 0.0357142, resto 4.0357142): imputación interés-primero, fee 5% al sink | [`519af5bf…`](https://stellar.expert/explorer/testnet/tx/519af5bfb6dfdaaffe153363e24d3c2a3ad8c49dcea29d003d6d4ae69de6b281) | ✅ 2026-10-08 |
+| Repago con descuento por pago anticipado: el cierre total costó **4.0357376** en el día 1 de 7 (el fee completo habría sido 0.25; se pagó el pro-rata con piso) | [`6c33bd98…`](https://stellar.expert/explorer/testnet/tx/6c33bd983cb18a11d48eceee0d117c73a07158e42903408e3ca3742f67316a60) | ✅ 2026-10-08 |
+| Repay final — pull exacto de lo firmado (41 USDC) **+ vuelto de 0.0642624 en la misma tx** (auth-determinista), `loanclos`, préstamo inactivo | [`6c33bd98…`](https://stellar.expert/explorer/testnet/tx/6c33bd983cb18a11d48eceee0d117c73a07158e42903408e3ca3742f67316a60) | ✅ 2026-10-08 |
+| Score update post-repago: 700→720, límite 50→60 USDC (`riskset`) | [`28e6de5f…`](https://stellar.expert/explorer/testnet/tx/28e6de5fcb21169ee4b154665d30d5cb34a0ea72acf0bb01d1847b4645e1515f) | ✅ 2026-10-08 |
+| Repago tardío: préstamo de tenor 1 día ABIERTO el 2026-10-08 ([`df3bf78c…`](https://stellar.expert/explorer/testnet/tx/df3bf78c07572ec522a0ce58f71b3358da03c1182161d630cc9cd3f80bcfd391), borrower `GAXU6PIN…`, mora 36.5%/yr configurada) — vence 2026-10-09 17:32 UTC-3; el repago con mora se ejecuta y documenta el 2026-10-10 | `EN CURSO` |
 
 ## Checklist 6.2 del SOW — estado de la evidencia (honesto, al 2026-10-08)
 
@@ -83,3 +83,18 @@ fila:
 | Seed deposit del protocolo | **Missing** | bloqueado por el faucet de USDC |
 | Hashes del ciclo de vida (borrow → parcial → descuento → final → score → tardío) | **Missing** | tabla D3, post-faucet |
 | Video demo (1-2 min) | **Missing** | guión listo en `video-guion.md`; graba Fabián post-ceremonia |
+
+
+## Notas operativas que salieron de la ceremonia real (valen oro para mainnet)
+
+1. **El fee sink necesita su trustline de USDC antes del primer repago** — sin
+   ella, el skim del 5% revienta el repay entero. Agregada al procedimiento.
+2. **Saldo revolvente vs autorización de Soroban:** el saldo crece por segundo,
+   así que un contrato que recalcula cuánto tirar rompe la auth firmada en la
+   simulación (`auth invalid_action`). Fix implementado: `repay_partial` tira
+   el monto EXACTO firmado y **devuelve el vuelto** en la misma transacción —
+   el camino correcto para saldar es `preview + colchón`.
+3. **Footprint y fees condicionales:** si el fee simula 0 y ejecuta >0 (cierre
+   en el mismo segundo que un parcial), el transfer condicional al sink queda
+   fuera del footprint. Mitigación hoy: reintentar (fee>0 en ambas puntas).
+   Fix de fondo anotado para el próximo deploy: transfers incondicionales.

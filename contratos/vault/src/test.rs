@@ -2271,7 +2271,8 @@ fn partial_overpay_caps_at_owed_and_closes() {
     let rem = s.vault.repay_partial(&borrower, &borrower, &20_000);
     assert_eq!(rem, 0, "se capea al saldo devengado y cierra");
     assert!(!s.lm.get_loan(&borrower).active);
-    // El borrower pagó EXACTAMENTE 10_500, no los 20_000 ofrecidos.
+    // Pull exacto de los 20_000 firmados + VUELTO de 9_500 en la misma tx
+    // (auth-determinista): el neto pagado es exactamente 10_500.
     assert_eq!(s.usdc.balance(&borrower), 10_000 + 20_000 - 10_500);
     assert_eq!(s.vault.total_assets(), 100_475);
 }

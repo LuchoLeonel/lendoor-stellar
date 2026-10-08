@@ -367,7 +367,10 @@ impl Vault {
 
     /// Pago PARCIAL (revolvente): `amount` se imputa primero al interes/mora
     /// devengado y despues al principal; el prestamo sigue activo hasta saldar.
-    /// Si `amount` cubre el saldo devengado completo, cierra (igual que repay).
+    /// Si `amount` cubre el saldo devengado completo, cierra — y ESTE es el
+    /// camino correcto para saldar en vivo (preview + colchon): `repay` sin
+    /// monto recalcula el saldo al ejecutar y en la red real eso rompe la
+    /// autorizacion firmada (el saldo crece por segundo).
     /// Prestamos en default quedan excluidos (el LM lo rechaza): su curacion
     /// post-write-off exige el pago total por el camino de `repay`.
     pub fn repay_partial(e: Env, payer: Address, borrower: Address, amount: i128) -> i128 {
@@ -381,10 +384,20 @@ impl Vault {
         if !loan.active {
             panic_with_error!(&e, Error::NoActiveLoan);
         }
+        // AUTH-DETERMINISTA (lección de la testnet real): el sobre firmado
+        // autoriza el transfer con un monto EXACTO, y el saldo revolvente
+        // crece por segundo — si el contrato recalculara cuánto tirar, lo
+        // firmado en la simulación ya no calza al ejecutar (auth
+        // invalid_action). Por eso acá se tira EXACTO lo que el pagador firmó
+        // y el excedente sobre el saldo vivo se DEVUELVE en la misma
+        // transacción. Para saldar: mandar el preview + un colchón.
+        usdc_client(&e, &c).transfer(&payer, &e.current_contract_address(), &amount);
         let owed = lm.preview_owed(&borrower);
         let pay = if amount < owed { amount } else { owed };
-
-        usdc_client(&e, &c).transfer(&payer, &e.current_contract_address(), &pay);
+        let refund = amount - pay;
+        if refund > 0 {
+            usdc_client(&e, &c).transfer(&e.current_contract_address(), &payer, &refund);
+        }
         let (principal_paid, interest_paid, remaining) = lm.apply_payment(&borrower, &pay);
         let fee = interest_paid * PROTOCOL_FEE_BPS / BPS_DENOM;
         if fee > 0 {
