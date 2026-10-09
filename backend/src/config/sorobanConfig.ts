@@ -17,10 +17,10 @@ export const SOROBAN_RPC_URL =
   process.env.SOROBAN_RPC_URL ?? 'https://soroban-testnet.stellar.org';
 export const SOROBAN_LOAN_MANAGER =
   process.env.SOROBAN_LOAN_MANAGER ??
-  'CDBB3B6PZAV5OH7NACXQTL3YLZLJ3NNUMHCMFV54WIR6MDCO6GKGFSCJ';
+  'CDIHUCP6DWKW7B6IUECP3SCK5WCI3W5ITNQDZEK2TNI55WLXDM6Y4WJJ';
 export const SOROBAN_VAULT =
   process.env.SOROBAN_VAULT ??
-  'CDVWUWSBHFVQGPCZGLBRTHDDIJBKWLXTVC2QIPXG6UJWNDFGZUP7S7KO';
+  'CDEJOQBQEZ7LUXSWXM4RF6EPBZLMJHMTGKC5GNWK5TNJR36TBHQLCULP';
 export const SOROBAN_USDC_SAC =
   process.env.SOROBAN_USDC_SAC ??
   'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC';
@@ -290,6 +290,33 @@ export async function simulateLoanManagerCall<T = unknown>(
   const result = sim.result;
   if (!result) return null as T;
   return fromScVal<T>(result.retval);
+}
+
+/**
+ * Lee decimals() del SAC configurado como USDC (simulación, no firma nada).
+ * Lo usa el gateway al boot para validar TOKEN_DECIMALS contra la cadena.
+ */
+export async function simulateUsdcSacDecimals(): Promise<number> {
+  assertSorobanContractId(SOROBAN_USDC_SAC, 'SOROBAN_USDC_SAC');
+  const sdk = stellar();
+  const server = sorobanServer();
+  const account = await server.getAccount(operatorKeypair().publicKey());
+  const contract = new sdk.Contract(SOROBAN_USDC_SAC);
+  const tx = new sdk.TransactionBuilder(account, {
+    fee: sdk.BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(contract.call('decimals'))
+    .setTimeout(30)
+    .build();
+  const sim = await server.simulateTransaction(tx);
+  if (isSimulationError(sim)) {
+    throw new Error(`decimals() simulation failed: ${sim.error}`);
+  }
+  if (!sim.result) {
+    throw new Error('decimals() simulation returned no result');
+  }
+  return fromScVal<number>(sim.result.retval);
 }
 
 export async function sendLoanManagerCall(

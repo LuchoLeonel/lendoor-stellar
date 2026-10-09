@@ -8,7 +8,18 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 
-export const DECIMALS = 6
+// Decimales del token de settlement ACTIVO, decididos una sola vez por build.
+// EVM (Celo): USDC ERC-20 = 6. Stellar: los classic assets — el SAC de XLM en
+// testnet Y el USDC de Stellar en mainnet — usan 7 (verificado on-chain contra
+// decimals() del SAC el 2026-10-05). Misma condición que isStellarMode() en
+// stellar-wallet.ts, replicada acá para no arrastrar freighter-api a cada chunk.
+export const EVM_USDC_DECIMALS = 6
+export const STELLAR_TOKEN_DECIMALS = 7
+export const DECIMALS =
+  (import.meta.env.VITE_CHAIN_MODE as string | undefined)?.toLowerCase() ===
+  'stellar'
+    ? STELLAR_TOKEN_DECIMALS
+    : EVM_USDC_DECIMALS
 
 /** Add thousands separators to an unsigned integer string. */
 export function withThousands(s: string) {
@@ -135,9 +146,9 @@ export function parseUsdcAmount(raw: string): bigint | null {
   const v = (raw || '').replace(',', '.').trim()
   if (!v || !/^\d*\.?\d*$/.test(v)) return null
   const [i, f = ''] = v.split('.')
-  const frac = (f + '000000').slice(0, 6)
+  const frac = (f + '0'.repeat(DECIMALS)).slice(0, DECIMALS)
   try {
-    return BigInt(i || '0') * 1_000_000n + BigInt(frac || '0')
+    return BigInt(i || '0') * 10n ** BigInt(DECIMALS) + BigInt(frac || '0')
   } catch {
     return null
   }
@@ -297,7 +308,10 @@ export const evmNetworks = [
     },
     networkId: 42220,
     rpcUrls: [
-      "https://celo-mainnet.g.alchemy.com/v2/Llu-xslYjx24aeg7GnT2v",
+      // El RPC con API key viene por env (VITE_RPC_URL); acá solo fallbacks públicos.
+      ...((import.meta.env.VITE_RPC_URL as string | undefined)?.trim()
+        ? [(import.meta.env.VITE_RPC_URL as string).trim()]
+        : []),
       'https://forno.celo.org',
       'https://rpc.ankr.com/celo',
       'https://1rpc.io/celo',

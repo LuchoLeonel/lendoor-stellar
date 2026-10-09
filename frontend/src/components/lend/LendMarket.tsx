@@ -11,6 +11,7 @@ import { useVaultShares } from '@/hooks/lend/useVaultShares'
 import { useWallet } from '@/providers/WalletProvider'
 import { useVaultApy15d } from '@/hooks/useVaultApy15d'
 import { useStellarLend } from '@/hooks/lend/useStellarLend'
+import { DECIMALS } from '@/lib/utils'
 import { VaultActivityList } from '@/components/lend/VaultActivityList'
 import { UsdcIcon } from '@/components/icons/UsdcIcon'
 import { SpotlightCard } from '@/components/reactbits/SpotlightCard'
@@ -66,9 +67,10 @@ export function LendMarket() {
   const sharePrice = isStellar ? stellar.sharePrice : sharePriceEvm
   const loadingVault = isStellar ? stellar.loading : loadingVaultEvm
 
-  const SHARE_DECIMALS = 6
+  // Las shares del vault viven en la misma escala que el token subyacente
+  // (6 en EVM, 7 en Stellar) — ver DECIMALS en lib/utils.ts.
   const userShares =
-    userSharesRaw != null ? Number(userSharesRaw) / 10 ** SHARE_DECIMALS : 0
+    userSharesRaw != null ? Number(userSharesRaw) / 10 ** DECIMALS : 0
 
   const userSharesUsd =
     userSharesRaw != null && sharePrice != null ? userShares * sharePrice : 0

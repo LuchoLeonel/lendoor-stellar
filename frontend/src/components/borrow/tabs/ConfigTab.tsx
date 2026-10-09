@@ -2,7 +2,7 @@ import * as React from "react";
 import { Mail, Phone, FileText, Shield, ChevronRight, ArrowDownLeft, ArrowUpRight, Wallet } from "lucide-react";
 import { useTranslation } from "@/i18n/useTranslation";
 import { useWallet } from "@/providers/WalletProvider";
-import { formatUSDCAmountExact } from "@/lib/utils";
+import { DECIMALS, formatUSDCAmountExact } from "@/lib/utils";
 import { stellarReadVaultBalance, stellarReadWalletUsdc } from "@/lib/stellar-contracts";
 import { RepayDepositView } from "@/components/borrow/RepayDepositView";
 import { WithdrawSlideView } from "@/components/borrow/WithdrawSlideView";
@@ -27,7 +27,8 @@ const divider = <div className="h-px" style={{ background: 'rgba(0,0,0,0.06)' }}
 
 type View = 'main' | 'legal' | 'deposit' | 'withdraw';
 
-const USDC_DECIMALS = 6;
+// Decimales del token activo (6 en EVM, 7 en Stellar) — ver lib/utils.ts.
+const USDC_DECIMALS = DECIMALS;
 
 export function ConfigTab({ email, phoneVerified, phoneMasked, onBackChange }: ConfigTabProps) {
   const { t } = useTranslation();

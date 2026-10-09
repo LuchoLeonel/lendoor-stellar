@@ -18,7 +18,7 @@ import { normalizeWallet } from 'src/common/normalize-wallet';
 
 // On-chain defaults (1 score, 1 USDC)
 const DEFAULT_SCORE = 1;
-const DEFAULT_CREDIT_LIMIT_USDC = toUnits(1, 6);
+const DEFAULT_CREDIT_LIMIT_USDC = toUnits(1);
 
 type UserPlatform = 'lemon' | 'farcaster' | 'webapp';
 
@@ -155,7 +155,7 @@ export class LoanVerificationService {
       const ladderLimitUsdc = this.creditPolicy.getStepForScore(
         scoreNum ?? 1,
       ).limitUsdc;
-      const adjustedLimitUnits = toUnits(ladderLimitUsdc, 6);
+      const adjustedLimitUnits = toUnits(ladderLimitUsdc);
 
       try {
         await this.blockchain.giveCreditScoreAndLimit(

@@ -62,18 +62,24 @@ ENV VITE_EVAULT="0x31BF6609DC9AefcaFB5D6e5FA4773E0b1bF61a01"
 ENV VITE_EVAULT_CONTROLLER="0x96041e7aad5462D7AF74d784AF0438e0505266d8"
 ENV VITE_LOAN_MANAGER_ADDRESS="0x3E1536CC066C626Ee96D79bb00d1c9dC7d4D86b6"
 ENV VITE_USDC="0xcebA9300f2b948710d2653dD7B07f33A8B32118C"
-ENV VITE_RPC_URL="https://celo-mainnet.g.alchemy.com/v2/AMFpK_PeWovdvGwgZl_2S"
+# RPC con API key viene por build-arg (la clave NO se hornea en el repo publico);
+# default: RPC publico de Celo.
+ARG VITE_RPC_URL="https://forno.celo.org"
+ENV VITE_RPC_URL=${VITE_RPC_URL}
 ENV VITE_EXPECTED_CHAIN_ID="42220"
 ENV VITE_GRAPH_API_KEY=${VITE_GRAPH_API_KEY}
 
 ENV VITE_SELF_SCOPE="self-playground"
 ENV VITE_SELF_VERIFY_PATH="/self/verify"
 
-# Spec 012 / 017 — founder admin dashboard allowlist, baked at build time.
-# This value is not secret (the backend AdminGuard is the authoritative check);
-# the frontend list only controls whether the /admin UI renders or shows
-# "Not authorized". Any update requires a frontend rebuild.
-ENV VITE_ADMIN_WALLETS="0x4CC122dFB13bA7888363C964dc0e53cb7153e185,0xe1a6db7ff4a99ff36defbc6403200c8af7f291d7,0xe2ad2Dc0F28105113e3fc95EDA2f61a671005185"
+# Spec 012 / 017 — founder admin dashboard allowlist.
+# Not secret (the backend AdminGuard is the authoritative check); the frontend
+# list only controls whether the /admin UI renders or shows "Not authorized".
+# Passed as a build-arg so the founders' addresses aren't published in the repo.
+# OJO: si el deploy olvida este arg, /admin muestra "Not authorized" — el gate
+# del backend no se ve afectado.
+ARG VITE_ADMIN_WALLETS=""
+ENV VITE_ADMIN_WALLETS=${VITE_ADMIN_WALLETS}
 
 RUN yarn build
 

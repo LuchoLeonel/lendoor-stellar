@@ -5,6 +5,7 @@ import * as React from 'react';
 import { ArrowRight, Loader2, ArrowLeft } from 'lucide-react';
 
 import { useCreditLine } from '@/hooks/borrow/blockchain/useCreditLine';
+import { DECIMALS } from '@/lib/utils';
 import { usePullPanel, formatAmountHuman } from '@/hooks/borrow/backend/usePullPanel';
 import type { LoanTermOption } from '@/hooks/borrow/backend/usePullPanel';
 import { RepayPanel } from '@/components/borrow/RepayPanel';
@@ -302,9 +303,8 @@ export function PrestarTab({ setShowQR, onBackToInicio, isActive = true }: Prest
 
   // Compute available units (integer USDC) for the slider
   const availableRaw = safeLimitRaw - safeBorrowedRaw;
-  // USDC has 6 decimals on-chain — compute floor of whole units
-  const USDC_DECIMALS = 6n;
-  const USDC_FACTOR = 10n ** USDC_DECIMALS;
+  // Decimales del token activo (6 en EVM, 7 en Stellar) — ver lib/utils.ts.
+  const USDC_FACTOR = 10n ** BigInt(DECIMALS);
   const maxAmountUnits = availableRaw > 0n ? Number(availableRaw / USDC_FACTOR) : 0;
 
   // availableAmount as a human string (for usePullPanel compatibility)

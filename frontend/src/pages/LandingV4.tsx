@@ -223,7 +223,9 @@ const CADENAS: Record<string, Cadena> = {
       nota: ["Contratos propios en Rust", "Our own contracts, in Rust"],
     },
     contratoUrl:
-      "https://stellar.expert/explorer/testnet/contract/CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+      // El vault canónico (par B, el del award) — antes apuntaba al SAC de XLM,
+      // que es el token nativo, no nuestro contrato.
+      "https://stellar.expert/explorer/testnet/contract/CDEJOQBQEZ7LUXSWXM4RF6EPBZLMJHMTGKC5GNWK5TNJR36TBHQLCULP",
     testnet: true,
   },
 };

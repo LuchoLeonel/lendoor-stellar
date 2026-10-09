@@ -19,6 +19,7 @@ import { LinkedExternalWallet } from 'src/domain/entities/linked-external-wallet
 import { WalletLinkSession } from 'src/domain/entities/wallet-link-session.entity';
 import { WalletLinkNonce } from 'src/domain/entities/wallet-link-nonce.entity';
 import { hashOtp } from 'src/common/otp-hash';
+import { normalizeWalletOrNull } from 'src/common/normalize-wallet';
 
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 min
 const OTP_THROTTLE_MS = 60 * 1000; // 1/min
@@ -280,8 +281,14 @@ export class WalletLinkService {
   async statusForWallet(
     walletAddress: string,
   ): Promise<{ linkedCount: number; wallets: { address: string; verifiedAt: string }[]; latestVerifiedAt: string | null }> {
+    // hard-fail #3 de specs/005: las G… de Stellar son StrKeys case-sensitive
+    // — lowercasearlas rompía el lookup. normalizeWallet baja a lowercase SOLO
+    // las EVM (0x…) y preserva las Stellar tal cual.
+    const normalized = normalizeWalletOrNull(walletAddress);
+    if (!normalized)
+      return { linkedCount: 0, wallets: [], latestVerifiedAt: null };
     const user = await this.userRepo.findOne({
-      where: { walletAddress: walletAddress.toLowerCase() },
+      where: { walletAddress: normalized },
     });
     if (!user) return { linkedCount: 0, wallets: [], latestVerifiedAt: null };
     const rows = await this.linkedRepo.find({ where: { userId: user.id }, order: { verifiedAt: 'DESC' } });

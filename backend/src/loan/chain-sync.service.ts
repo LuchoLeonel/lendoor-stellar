@@ -7,7 +7,7 @@ import { Loan, LoanStatus } from 'src/domain/entities/loan.entity';
 import { User } from 'src/domain/entities/user.entity';
 import { ChainScanCursor } from 'src/domain/entities/chain-scan-cursor.entity';
 import { Metric } from 'src/domain/entities/metric.entity';
-import { toUnits } from 'src/common/amount-units';
+import { TOKEN_DECIMALS, toUnits } from 'src/common/amount-units';
 import { env } from 'src/config/env';
 import {
   BLOCKCHAIN_GATEWAY,
@@ -22,7 +22,6 @@ import { KNOWN_TESTING_LOANS_COUNT } from './known-testing-loans';
 // Spec 065 Layer 2 — cursor key shared across runs.
 const LOAN_OPENED_CURSOR_ID = 'loan_opened';
 
-const USDC_DECIMALS = 6;
 const BATCH_SIZE = 5;
 const BATCH_DELAY_MS = 200;
 const MAX_BLOCK_RANGE = 10_000;
@@ -30,7 +29,7 @@ const MAX_BLOCK_RANGE = 10_000;
 // loans(addr).start timestamp. The backend writes startAt = Date.now() in
 // inform-open, which is typically within a few seconds of the chain block ts.
 const LOAN_START_MATCH_TOLERANCE_SEC = 60;
-const DEFAULT_CREDIT_LIMIT_USDC = toUnits(1, 6);
+const DEFAULT_CREDIT_LIMIT_USDC = toUnits(1);
 // Grace period: align with LoanManagerV3.defaultGracePeriod (= 1 days).
 // A repayment is "on-time" if it lands within 24h of the due date.
 // Outside this window → repaid_late. Beyond gracePeriod + defaultLatePeriod
@@ -344,8 +343,9 @@ export class ChainSyncService {
       }
 
       // Persist cursor advance even when some individual inserts errored;
-      // the conditional INSERT (openTxHash unique) makes the next run a
-      // safe no-op for the rows that did succeed.
+      // the ON CONFLICT DO NOTHING insert (unique parcial uq_loans_openTxHash,
+      // migración 20261005120000) makes the next run a safe no-op for the
+      // rows that did succeed.
       await this.cursorRepo.save({
         id: LOAN_OPENED_CURSOR_ID,
         block: String(toBlock),
@@ -369,7 +369,9 @@ export class ChainSyncService {
    * INSERT a single missing loan derived from a `LoanOpened` event.
    *
    * Idempotent: returns 'skipped' if a row with this `openTxHash` already
-   * exists, or if no DB user can be found for the wallet (KYC pending).
+   * exists (pre-check rápido + ON CONFLICT DO NOTHING contra el índice
+   * parcial uq_loans_openTxHash, que cierra la carrera read-then-write),
+   * or if no DB user can be found for the wallet (KYC pending).
    *
    * Status is derived as `open` — the LoanClosed reconciler runs next in
    * the same cron cycle (see chain-sync.processor.ts) and will reconcile
@@ -401,8 +403,8 @@ export class ChainSyncService {
     // Contract sets `L.start = block.timestamp` internally but does not
     // emit it. We recover startUnix from the block timestamp of the event
     // (same value the contract used).
-    const principal = Number(event.principal) / 10 ** USDC_DECIMALS;
-    const amountDue = Number(event.amountDue) / 10 ** USDC_DECIMALS;
+    const principal = Number(event.principal) / 10 ** TOKEN_DECIMALS;
+    const amountDue = Number(event.amountDue) / 10 ** TOKEN_DECIMALS;
     const dueUnix = event.due;
     const feeBps = event.feeBps;
     const startUnix = event.timestamp;
@@ -427,13 +429,29 @@ export class ChainSyncService {
       syncedByChain: true,
     });
 
-    await this.loanRepo.save(loan);
+    // Upsert: si otro proceso (inform-open, otro tick del cron) insertó el
+    // mismo openTxHash entre el pre-check y acá, la DB lo ignora en vez de
+    // duplicar la fila. identifiers vacío ⇒ no se insertó nada.
+    const insertResult = await this.loanRepo
+      .createQueryBuilder()
+      .insert()
+      .into(Loan)
+      .values(loan)
+      .orIgnore()
+      .execute();
+    const insertedId = insertResult.identifiers[0]?.id as number | undefined;
+    if (insertedId == null) {
+      this.logger.log(
+        `[LoanOpenedScan] openTxHash=${event.txHash} ya existía (carrera) — skip`,
+      );
+      return 'skipped';
+    }
 
     // WARN-level so each insert is visible in logs: each one represents a
     // failure of the primary `/inform-open` path that needs investigation
     // at scale (steady-state should be ~0 inserts per run).
     this.logger.warn(
-      `[LoanOpenedScan] INSERTED missing loan wallet=${wallet} loanId=${loan.id} ` +
+      `[LoanOpenedScan] INSERTED missing loan wallet=${wallet} loanId=${insertedId} ` +
         `principal=${principal} tx=${event.txHash} — inform-open never fired`,
     );
 
@@ -662,7 +680,7 @@ export class ChainSyncService {
         return null;
       }
 
-      freshLoan.amountPaid = Number(eventData.amountPaid) / 10 ** USDC_DECIMALS;
+      freshLoan.amountPaid = Number(eventData.amountPaid) / 10 ** TOKEN_DECIMALS;
       freshLoan.closeTxHash = eventData.txHash;
       freshLoan.closedAt = new Date(eventData.timestamp * 1000);
 
@@ -743,7 +761,7 @@ export class ChainSyncService {
 
         const ladderStep = this.creditPolicy.getStepForOnTimeLoans(onTimeLoans);
         newScore = ladderStep.score;
-        const targetLimitUnitsNum = Number(toUnits(ladderStep.limitUsdc, 6));
+        const targetLimitUnitsNum = Number(toUnits(ladderStep.limitUsdc));
         newLimitUnitsNum = Math.max(newLimitUnitsNum, targetLimitUnitsNum);
 
         const currentXp = user.xp ?? 1;
@@ -1050,7 +1068,7 @@ export class ChainSyncService {
             });
             const canaryStep =
               this.creditPolicy.getStepForOnTimeLoans(canaryOnTime);
-            const canaryLimitUnits = Number(toUnits(canaryStep.limitUsdc, 6));
+            const canaryLimitUnits = Number(toUnits(canaryStep.limitUsdc));
 
             const onChain = await this.blockchain.readUserRisk(
               canary.walletAddress,
@@ -1134,7 +1152,7 @@ export class ChainSyncService {
         where: { userId: user.id, repaidOnTime: true },
       });
       const step = this.creditPolicy.getStepForOnTimeLoans(onTimeLoans);
-      const correctLimitUnits = Number(toUnits(step.limitUsdc, 6));
+      const correctLimitUnits = Number(toUnits(step.limitUsdc));
 
       const dbScore = user.score ?? 1;
       const dbLimit = user.creditLimit ? Number(user.creditLimit) : 0;

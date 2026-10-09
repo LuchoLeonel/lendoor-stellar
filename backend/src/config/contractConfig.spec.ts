@@ -4,13 +4,28 @@
  * The module imports ethers + config heavyweight at load time. We only
  * need the pure helpers (`isRetryableChainError`, `withChainWriteRetry`).
  * Tests stub the injected `waitFn` so backoff delays don't slow jest.
+ *
+ * contractConfig es el módulo EVM legacy: tira a nivel de módulo si faltan
+ * las ETH_* (fail-fast correcto en prod EVM). En modo soroban nadie las
+ * tiene, así que seteamos dummies ANTES de cargarlo — por eso require() en
+ * vez de import (los import se hoistean y correrían antes del seteo). Los
+ * dummies no hacen red: ethers construye provider/wallet lazy. Así la suite
+ * queda verde sin aflojar el fail-fast de producción ni pedir ETH_* reales
+ * en .env (checklist 003 §4 ítem 1.6a).
  */
-import {
+process.env.ETH_RPC_URL ??= 'http://127.0.0.1:8545';
+process.env.ETH_LOAN_MANAGER ??= '0x0000000000000000000000000000000000000001';
+process.env.ETH_PRIVATE_KEY ??=
+  '0x0000000000000000000000000000000000000000000000000000000000000001';
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const {
   isRetryableChainError,
   withChainWriteRetry,
   RETRYABLE_ERROR_FRAGMENTS,
   MAX_SEND_ATTEMPTS,
-} from './contractConfig';
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+} = require('./contractConfig') as typeof import('./contractConfig');
 
 describe('isRetryableChainError', () => {
   it('returns true for each documented retryable fragment', () => {

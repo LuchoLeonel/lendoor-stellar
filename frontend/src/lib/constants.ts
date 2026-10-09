@@ -46,7 +46,9 @@ export const DEFAULT_CELO_RPCS = [
   ...(ENV_BASE_RPCS || []),
   (import.meta.env.VITE_RPC_URL as string) || "",
   (import.meta.env.VITE_PUBLIC_RPC_URL as string) || "",
-  "https://celo-mainnet.infura.io/v3/4378899573754c11af13454a514f385d",
+  // 2026-10-05 — se saco el fallback de Infura: tenia la API key hardcodeada
+  // en un repo PUBLICO y la credencial estaba muerta (401), asi que no servia
+  // de fallback igual. El publico de abajo (forno) cubre el caso sin key.
   "https://forno.celo.org",
 ].filter(Boolean);
 

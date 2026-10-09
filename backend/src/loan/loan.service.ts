@@ -9,6 +9,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull, In } from 'typeorm';
 import Decimal from 'decimal.js';
+import { TOKEN_UNIT } from 'src/common/amount-units';
 
 import { User } from 'src/domain/entities/user.entity';
 import { Loan, LoanStatus } from 'src/domain/entities/loan.entity';
@@ -357,7 +358,7 @@ export class LoanService {
     try {
       const onChainLimitUnits =
         await this.blockchain.readCreditLimitOnChain(borrower);
-      const onChainLimitUsdc = Number(onChainLimitUnits) / 1_000_000;
+      const onChainLimitUsdc = Number(onChainLimitUnits) / TOKEN_UNIT;
       if (onChainLimitUsdc > 0 && onChainLimitUsdc < ladderLimitUsdc) {
         this.logger.warn(
           `[LoanService] borrow: on-chain limit (${onChainLimitUsdc}) < ladder limit (${ladderLimitUsdc}) for wallet=${borrower}. Using on-chain.`,
