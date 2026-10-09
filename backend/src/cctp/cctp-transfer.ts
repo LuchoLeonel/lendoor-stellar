@@ -91,6 +91,8 @@ export interface CctpTransfer {
   state: CctpTransferState;
   /** hex attestation payload once Iris returns it */
   attestation?: string;
+  /** raw CCTP message hex de Iris — primer arg de mint_and_forward (D1.1) */
+  message?: string;
   /** mint tx hash on Stellar once submitted */
   mintTxHash?: string;
   /** last error message, for the failed state and for observability */
@@ -107,7 +109,7 @@ export interface CctpTransfer {
 export function transition(
   t: CctpTransfer,
   to: CctpTransferState,
-  patch: Partial<Pick<CctpTransfer, 'attestation' | 'mintTxHash' | 'lastError'>> = {},
+  patch: Partial<Pick<CctpTransfer, 'attestation' | 'message' | 'mintTxHash' | 'lastError'>> = {},
 ): CctpTransfer {
   if (t.state === to && Object.keys(patch).length === 0) {
     return t; // replay inocuo: mismo estado sin datos nuevos = no-op
@@ -132,7 +134,7 @@ export function transition(
 /** What Iris answered for one burn. 404 maps to `pending`, never to an error. */
 export type IrisAttestationStatus =
   | { kind: 'pending' } // includes HTTP 404 for a known burn: not ready yet
-  | { kind: 'complete'; attestation: string }
+  | { kind: 'complete'; attestation: string; message?: string }
   | { kind: 'backoff'; retryAfterMs: number } // HTTP 429
   | { kind: 'error'; message: string }; // malformed request / unknown domain
 
@@ -162,7 +164,7 @@ export interface IrisClient {
  */
 export function irisStatusFromHttp(
   httpStatus: number,
-  body?: { attestation?: string | null; status?: string; error?: string },
+  body?: { attestation?: string | null; status?: string; error?: string; message?: string },
   retryAfterSeconds?: number,
 ): IrisAttestationStatus {
   if (httpStatus === 200) {
@@ -172,7 +174,9 @@ export function irisStatusFromHttp(
       typeof att === 'string' &&
       att.length > 0 &&
       att.toUpperCase() !== 'PENDING';
-    if (ready) return { kind: 'complete', attestation: att as string };
+    if (ready) {
+      return { kind: 'complete', attestation: att as string, message: body?.message };
+    }
     return { kind: 'pending' }; // found but not ready (pending_confirmations)
   }
   if (httpStatus === 404) return { kind: 'pending' }; // NOT an error: not ready yet
@@ -207,26 +211,31 @@ export function reconcile(
   // attestation que Iris haya devuelto en este mismo poll se conserva.
   if (nonceUsedOnChain && t.state !== 'delivered') {
     const att =
-      iris.kind === 'complete' ? { attestation: iris.attestation } : {};
+      iris.kind === 'complete'
+        ? { attestation: iris.attestation, message: iris.message }
+        : {};
     if (t.state === 'failed') return transition(t, 'delivered', att);
     let cur = t;
     if (cur.state === 'pending') cur = transition(cur, 'attested', att);
     if (cur.state === 'attested' && iris.kind === 'complete' && !cur.attestation) {
-      cur = { ...cur, attestation: iris.attestation };
+      cur = { ...cur, attestation: iris.attestation, message: iris.message };
     }
     if (cur.state === 'attested') cur = transition(cur, 'submitting');
     // (review PR #4) una fila que YA estaba en submitting tambien conserva la
     // attestation de este poll — antes solo pending/failed la guardaban.
     const finalAtt =
       !cur.attestation && iris.kind === 'complete'
-        ? { attestation: iris.attestation }
+        ? { attestation: iris.attestation, message: iris.message }
         : {};
     return transition(cur, 'delivered', finalAtt);
   }
   switch (t.state) {
     case 'pending':
       if (iris.kind === 'complete') {
-        return transition(t, 'attested', { attestation: iris.attestation });
+        return transition(t, 'attested', {
+          attestation: iris.attestation,
+          message: iris.message,
+        });
       }
       if (iris.kind === 'error') return transition(t, 'failed', { lastError: iris.message });
       // pending / backoff: espera, pero CONTANDO (review PR #3: attempts

@@ -79,7 +79,12 @@ export class HttpIrisClient implements IrisClient {
     return irisStatusFromHttp(
       res.status,
       flat
-        ? { attestation: flat.attestation, status: flat.status, error: body?.error }
+        ? {
+            attestation: flat.attestation,
+            status: flat.status,
+            message: flat.message,
+            error: body?.error,
+          }
         : { error: body?.error },
       retryAfterSeconds,
     );
