@@ -19,7 +19,8 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "validate:late-fees": "ts-node --transpile-only -r tsconfig-paths/register -r dotenv/config src/scripts/validate-late-fees.ts",
-    "audit:debtor-data": "ts-node --transpile-only -r tsconfig-paths/register -r dotenv/config src/scripts/audit-debtor-data.ts"
+    "audit:debtor-data": "ts-node --transpile-only -r tsconfig-paths/register -r dotenv/config src/scripts/audit-debtor-data.ts",
+    "cctp:demo": "ts-node --transpile-only -r tsconfig-paths/register -r dotenv/config src/scripts/cctp-demo.ts"
   },
   "dependencies": {
     "@anthropic-ai/bedrock-sdk": "^0.31.0",
