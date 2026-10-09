@@ -80,6 +80,9 @@ export class CctpExecutor {
       throw new Error(`deliver() wants an attested row with attestation, got '${t.state}'`);
     }
     if (!t.message) {
+      // throw (no failed): si Iris devolvio complete sin message (anomalia),
+      // el worker reintenta el poll y el proximo complete lo trae — marcarlo
+      // failed convertiria una rareza transitoria de Iris en terminal.
       throw new Error(`transfer ${t.nonce}: no CCTP message stored; cannot build the mint`);
     }
 
@@ -108,8 +111,19 @@ export class CctpExecutor {
 
     // Idempotencia dura antes de gastar: ¿alguien ya consumió el nonce?
     if (await this.deps.nonces.isNonceUsed(plan.nonce)) {
+      // El mint ya ocurrió (nosotros antes de un crash, u otro relayer). En
+      // modo VAULT eso NO cierra la deuda: el USDC quedó en el relayer y el
+      // depósito al vault sigue pendiente salvo que la fila ya lo registre
+      // (review PR #5: el atajo marcaba delivered y las shares del usuario
+      // no existían). La ventana crash-entre-submit-y-persistencia del
+      // propio deposit_from queda documentada: es la misma clase de ventana
+      // que el mint tenía antes de is_nonce_used, pero sin oráculo on-chain.
+      let cur = t;
+      if (!direct && !t.depositTxHash) {
+        cur = transition(cur, cur.state, { depositTxHash: await this.depositToVault(t, plan) });
+      }
       const iris = { kind: 'complete', attestation: t.attestation } as const;
-      return reconcile(t, iris, true);
+      return reconcile(cur, iris, true);
     }
 
     let cur = transition(t, 'submitting');
@@ -122,12 +136,19 @@ export class CctpExecutor {
 
     if (!direct) {
       // modo VAULT: el USDC quedó en el relayer; va al vault a nombre del user
-      await this.deps.soroban.submit(
-        this.deps.vaultContractId,
-        'deposit_from',
-        depositFromScVals(this.deps.relayerAddress, t.beneficiary, plan.amount7),
-      );
+      cur = transition(cur, 'submitting', {
+        depositTxHash: await this.depositToVault(t, plan),
+      });
     }
     return transition(cur, 'delivered');
+  }
+
+  private async depositToVault(t: CctpTransfer, plan: DeliveryPlan): Promise<string> {
+    const { txHash } = await this.deps.soroban.submit(
+      this.deps.vaultContractId,
+      'deposit_from',
+      depositFromScVals(this.deps.relayerAddress, t.beneficiary, plan.amount7),
+    );
+    return txHash;
   }
 }

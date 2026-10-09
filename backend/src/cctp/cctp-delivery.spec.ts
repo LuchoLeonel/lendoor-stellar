@@ -13,7 +13,7 @@ import {
   planDelivery,
   usdc6ToStellar7,
 } from './stellar-mint';
-import { buildTestMessage } from './cctp-message.spec';
+import { buildTestMessage } from './cctp-test-helpers';
 
 const G_ADDR = 'GDCZFUNJ7MXWBIQ6UUTJRGZIJF5EMRVJCSK73MA2U7K57GWMA4N3P6SL';
 const FORWARDER_32 = contractAddressToBytes32(STELLAR_TESTNET.cctpForwarder);

@@ -4,7 +4,7 @@ import { STELLAR_TESTNET } from './cctp-chains';
 import { buildForwarderHookData } from './cctp-message';
 import { CctpExecutor, nonceScVal, SorobanSubmitter, NonceOracle } from './cctp-executor';
 import { CCTP_DOMAINS, CctpTransfer, IrisClient } from './cctp-transfer';
-import { buildTestMessage } from './cctp-message.spec';
+import { buildTestMessage } from './cctp-test-helpers';
 
 const BENEFICIARY = 'GDCZFUNJ7MXWBIQ6UUTJRGZIJF5EMRVJCSK73MA2U7K57GWMA4N3P6SL';
 // G distinta y válida para el relayer (issuer USDC testnet de Circle)
@@ -89,6 +89,7 @@ describe('CctpExecutor.deliver — modo VAULT (recipient = relayer)', () => {
     expect(soroban.calls[1].method).toBe('deposit_from');
     // el i128 del tercer arg es el monto RESCALADO a 7 decimales
     expect(soroban.calls[1].args[2].switch().name).toBe('scvI128');
+    expect(out.depositTxHash).toBe('tx-2');
   });
 });
 
@@ -127,6 +128,32 @@ describe('CctpExecutor.deliver — rechazos ANTES de gastar fee', () => {
   it('nonce YA consumido on-chain → delivered sin gastar (otro lo minteó)', async () => {
     const { soroban, exec } = makeExecutor({ nonces: new FakeNonces(true) });
     const out = await exec.deliver(makeRow());
+    expect(out.state).toBe('delivered');
+    expect(soroban.calls).toHaveLength(0);
+  });
+
+  it('VAULT + nonce consumido + deposito NO registrado → deposit_from igual (crash post-mint)', async () => {
+    // el crash clásico: mint enviado, proceso muerto antes del deposit_from.
+    // Al reiniciar, is_nonce_used = true; la plata está en el relayer y el
+    // depósito sigue siendo nuestra deuda.
+    const { soroban, exec } = makeExecutor({ nonces: new FakeNonces(true) });
+    const out = await exec.deliver(
+      makeRow({ message: buildTestMessage({ hookData: buildForwarderHookData(RELAYER) }) }),
+    );
+    expect(out.state).toBe('delivered');
+    expect(soroban.calls).toHaveLength(1); // SOLO deposit_from, jamás re-mint
+    expect(soroban.calls[0].method).toBe('deposit_from');
+    expect(out.depositTxHash).toBe('tx-1');
+  });
+
+  it('VAULT + nonce consumido + deposito YA registrado → cero submits (replay)', async () => {
+    const { soroban, exec } = makeExecutor({ nonces: new FakeNonces(true) });
+    const out = await exec.deliver(
+      makeRow({
+        message: buildTestMessage({ hookData: buildForwarderHookData(RELAYER) }),
+        depositTxHash: 'tx-viejo',
+      }),
+    );
     expect(out.state).toBe('delivered');
     expect(soroban.calls).toHaveLength(0);
   });

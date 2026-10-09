@@ -95,6 +95,10 @@ export interface CctpTransfer {
   message?: string;
   /** mint tx hash on Stellar once submitted */
   mintTxHash?: string;
+  /** deposit_from tx hash (solo modo vault) — registro de que el deposito
+   * al vault OCURRIO; sin esto, un crash post-mint dejaria la plata en el
+   * relayer con la fila delivered (review PR #5). */
+  depositTxHash?: string;
   /** last error message, for the failed state and for observability */
   lastError?: string;
   attempts: number;
@@ -109,7 +113,9 @@ export interface CctpTransfer {
 export function transition(
   t: CctpTransfer,
   to: CctpTransferState,
-  patch: Partial<Pick<CctpTransfer, 'attestation' | 'message' | 'mintTxHash' | 'lastError'>> = {},
+  patch: Partial<
+    Pick<CctpTransfer, 'attestation' | 'message' | 'mintTxHash' | 'depositTxHash' | 'lastError'>
+  > = {},
 ): CctpTransfer {
   if (t.state === to && Object.keys(patch).length === 0) {
     return t; // replay inocuo: mismo estado sin datos nuevos = no-op

@@ -221,7 +221,16 @@ async function cmdTrustline(): Promise<void> {
     .build();
   tx.sign(kp);
   const sent = await server.sendTransaction(tx);
-  log(`changeTrust USDC enviado — ${sent.hash} (${sent.status})`);
+  for (let i = 0; i < 15; i += 1) {
+    const r = await server.getTransaction(sent.hash);
+    if (r.status === 'SUCCESS') {
+      log(`changeTrust USDC OK — ${sent.hash}`);
+      return;
+    }
+    if (r.status === 'FAILED') throw new Error(`changeTrust FAILED — ${sent.hash}`);
+    await sleep(2_000);
+  }
+  throw new Error(`changeTrust sin confirmar — ${sent.hash}`);
 }
 
 async function main(): Promise<void> {
