@@ -22,6 +22,7 @@ import {
   type StellarWalletStatus,
 } from '@/lib/stellar-wallet'
 import { normalizeWalletAddress } from '@/lib/wallet-address'
+import { usePrivyStellar } from '@/providers/PrivyStellarProvider'
 import { dedupeToast as toast } from '@/lib/dedupeToast'
 
 export type { WalletMode }
@@ -78,6 +79,7 @@ export function WalletProvider({ children }: PropsWithChildren) {
   const { isMiniApp: isFarcasterMiniApp } = useFarcaster()
   const openConnectModal = useConnectModal()?.openConnectModal
   const stellarMode = isStellarMode()
+  const { privyAddress, privyEnabled, loginWithPrivy } = usePrivyStellar()
 
   // Primero vemos Farcaster, y solo si NO es Farcaster dejamos pasar a Lemon
   const rawLemonMiniApp = safeIsLemonMiniApp()
@@ -171,7 +173,8 @@ export function WalletProvider({ children }: PropsWithChildren) {
 
   // - Lemon mini-app: loggedIn siempre true
   // - Web / Farcaster: loggedIn solo cuando wagmi está "connected"
-  const stellarAddress = stellarStatus?.address ?? null
+  // Freighter manda si esta; si no, la wallet embebida de Privy (D1.2)
+  const stellarAddress = stellarStatus?.address ?? privyAddress ?? null
   const isLoggedIn =
     isLemonMiniApp || (stellarMode ? !!stellarAddress : status === 'connected')
 
@@ -223,6 +226,14 @@ export function WalletProvider({ children }: PropsWithChildren) {
       stellarLoading: stellarMode ? stellarLoading : false,
       setShowAuthFlow: stellarMode
         ? () => {
+            // Con la extension instalada, Freighter como siempre; sin ella,
+            // el onboarding sin extension via Privy (email/social) — la
+            // historia del award. Si Privy no esta configurado, Freighter
+            // muestra su error habitual.
+            if (!stellarStatus?.installed && privyEnabled) {
+              loginWithPrivy()
+              return
+            }
             void connectFreighter()
           }
         : openConnectModal ?? (() => {
@@ -244,6 +255,9 @@ export function WalletProvider({ children }: PropsWithChildren) {
       connectFreighter,
       openConnectModal,
       stellarLoading,
+      stellarStatus?.installed,
+      privyEnabled,
+      loginWithPrivy,
     ],
   )
 

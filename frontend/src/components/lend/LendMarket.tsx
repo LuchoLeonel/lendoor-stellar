@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, type ChangeEvent, type FocusEvent } from 'react'
+import { isStellarMode } from "@/lib/stellar-wallet";
 import { useTranslation } from 'react-i18next'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useApproveAndDepositUSDC } from '@/hooks/lend/useApproveAndDepositUSDC'
@@ -322,6 +323,11 @@ export function LendMarket() {
 
             {/* Vault activity */}
             <AnimatedContent delay={0} distance={16}>
+            {/* (review PR #2) la lista de actividad lee el SUBGRAPH EVM y
+                formatea con /1e6: en modo Stellar mostraba eventos de Celo a
+                6 decimales al lado de cifras Soroban a 7. Se oculta hasta que
+                exista la fuente de actividad Soroban (el indexer del award). */}
+            {!isStellarMode() && (
             <div className="relative rounded-xl border border-border bg-card shadow-sm p-5 md:p-6 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium text-foreground">
@@ -333,6 +339,7 @@ export function LendMarket() {
                 <VaultActivityList />
               </div>
             </div>
+            )}
             </AnimatedContent>
           </div>
         </div>

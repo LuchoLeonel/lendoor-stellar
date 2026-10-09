@@ -61,6 +61,50 @@ the residual temporary DoS where deposits below a donated price would revert.
 
 ---
 
+## Instaward (testnet, USDC nativo)
+
+Par deployado para el **Instaward SOW** (crédito revolvente + pago parcial),
+con el **USDC real de testnet** como settlement asset — no el SAC de XLM del
+par del SCF award. Conviven: el par de arriba sigue siendo el canónico del
+SCF #45; este es el del Instaward.
+
+| Contract | Contract ID |
+|---|---|
+| `lendoor-vault` | `CCXUEBC3VOOB57NVDFMQVAJRN52FUQN37EAPLVMAU7MLSPUBMZNBVT2Q` |
+| `lendoor-loan-manager` | `CB4QQU2JWC6264NQCUPE6WSVYQHJTJNJ5ZBVU7ZAOE7TYNJPYE26YVTD` |
+| USDC (SAC nativo de testnet) | `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
+
+Explorer:
+- vault: https://stellar.expert/explorer/testnet/contract/CCXUEBC3VOOB57NVDFMQVAJRN52FUQN37EAPLVMAU7MLSPUBMZNBVT2Q
+- loan-manager: https://stellar.expert/explorer/testnet/contract/CB4QQU2JWC6264NQCUPE6WSVYQHJTJNJ5ZBVU7ZAOE7TYNJPYE26YVTD
+
+### Config (leída en vivo del instance storage, 2026-10-08)
+- `owner` (operador) de ambos contratos: `GA6DMHI54NH3IEA7CLO43SVQMAFEG7BASELZL3NOLVOJ4OML2MKJYAGR`
+  — identidad **local y descartable** del CLI (`instaward-op`), nunca una clave de prod.
+- vault `fee_recipient`: `GABED6S3K5L2U5F2FTSLWYYCUGKUMQGPW3JX7WLU4KB5B4K3TC3PJ3T4` (`instaward-feesink`).
+- cross-wiring verificado: vault `Config.loan_manager` → `CB4QQU2JWC6264NQCUPE6WSVYQHJTJNJ5ZBVU7ZAOE7TYNJPYE26YVTD`
+  loan-manager `Config.vault` → `CCXUEBC3VOOB57NVDFMQVAJRN52FUQN37EAPLVMAU7MLSPUBMZNBVT2Q`
+- USDC verificado on-chain: `symbol() = "USDC"`, **`decimals() = 7`**.
+- Estado al leerlo: `TotalShares = 0`, `TotalBorrows = 0` — **pre-seed**. La regla
+  del seed deposit (sección ⚠️ de arriba) aplica acá con más razón: el primer
+  movimiento tras el faucet de Circle debe ser un `deposit` del protocolo,
+  JAMÁS un transfer directo.
+- Config de riesgo del borrower de la demo: límite **50 USDC**, oferta **7d / 5%**
+  (aplicada por el operador; verificable con `get_user_risk(<borrower>)` /
+  `credit_limit(<borrower>)` cuando se fije la wallet de la ceremonia).
+
+### Procedimiento
+Deploy reproducible: `contratos/deploy-testnet-usdc.sh` (build → LM con vault
+placeholder → vault con USDC nativo → `set_vault`; identidades por friendbot).
+
+### Par intermedio DESCARTADO — do NOT use
+Un primer par del Instaward (`CBI5H4PA6NCOAOYGBGMELI76R7JULRFSIDMFWDUYVH7IGFKOUIR2VSR6` / `CAKDF53VKXZZCYMLIEIL75GBAM3FMHMNE3JCRRBZUCDU2MAFHJI67MSH`) quedó **descartado**:
+se deployó con la semántica **pre-revolvente** (sin interés pro-rata ni
+`repay_partial` / `apply_payment`). Nada debe apuntarle; el par válido es el
+de la tabla de arriba.
+
+---
+
 ## Deprecated pairs — do NOT use
 
 Two older testnet pairs exist on-chain. Neither is referenced by code anymore;
@@ -122,3 +166,14 @@ it further.
 ## Stellar Mainnet
 
 _Not deployed yet._
+
+> Descartado también (2026-10-08, segundo intermedio): LM `CA2H4UFGUADAL3GFU6DM7TBJ4DY6WIZXZ67A42K4RKVUWEY7YZXRGV4R` /
+> Vault `CDY27BWE7HYC26JRVU7NE7IC6GMKEUWMOTCB3B3MEPOZHXSWWLBQSBKA` — semántica revolvente
+> pero sin el pull-exacto-con-vuelto de `repay_partial` (la testnet real demostró que el
+> recálculo temporal rompe la auth firmada). El PAR VIGENTE es el de la tabla de arriba.
+> Checklist ampliado: el FEE SINK también necesita trustline de USDC antes del primer repago.
+
+> Nota (review PR #3, 2026-10-08): el par Instaward vigente es ANTERIOR al guard
+> de `deposit_from` contra beneficiary==vault y al doble evento deposit/dep_from.
+> Su evidencia ya esta capturada; NO se re-deploya por esto. Todo par nuevo sale
+> con ambos fixes.

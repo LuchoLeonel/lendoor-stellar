@@ -110,7 +110,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
-                  "i128": "10500000"
+                  "i128": "10071428"
                 }
               ]
             }
@@ -345,7 +345,7 @@
                       "symbol": "amount_due"
                     },
                     "val": {
-                      "i128": "10500000"
+                      "i128": "10071428"
                     }
                   },
                   {
@@ -385,7 +385,7 @@
                       "symbol": "last_accrued"
                     },
                     "val": {
-                      "u64": "345600"
+                      "u64": "432000"
                     }
                   },
                   {

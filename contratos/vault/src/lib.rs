@@ -50,6 +50,8 @@ pub trait LoanManager {
     fn close_loan(e: Env, borrower: Address, paid: i128);
     fn is_defaulted(e: Env, borrower: Address) -> bool;
     fn get_loan(e: Env, borrower: Address) -> Loan;
+    fn preview_owed(e: Env, borrower: Address) -> i128;
+    fn apply_payment(e: Env, borrower: Address, paid: i128) -> (i128, i128, i128);
 }
 
 const DAY: u32 = 17280;
@@ -74,6 +76,7 @@ pub enum Error {
     NoActiveLoan = 7,
     NotDefaulted = 8,
     ZeroShares = 9,
+    InvalidBeneficiary = 10,
 }
 
 #[contracttype]
@@ -168,6 +171,11 @@ impl Vault {
     pub fn total_supply(e: Env) -> i128 {
         total_shares(&e)
     }
+    /// Settlement asset (review PR #4: el script de deploy verificaba contra
+    /// un getter inexistente y el fallo se tragaba en silencio — ahora existe).
+    pub fn usdc(e: Env) -> Address {
+        cfg(&e).usdc
+    }
 
     // OZ virtual-shares (offset 0) conversions: floor, multiply-before-divide.
     fn to_shares(e: &Env, c: &Config, assets: i128) -> i128 {
@@ -213,6 +221,55 @@ impl Vault {
         set_total_shares(&e, total_shares(&e) + shares);
         bump_instance(&e);
         e.events().publish((symbol_short!("deposit"), from), (assets, shares));
+        shares
+    }
+
+    /// CCTP / on-ramp entry: `payer` funds the deposit, `beneficiary` receives
+    /// the shares. The award architecture (docs/ARCHITECTURE.md §2.1) promises
+    /// CCTP minting "directly into the Vault" with LP share accounting —
+    /// `deposit()` cannot express that: it requires the share recipient's own
+    /// auth and shares are not transferable, so a bridge could only donate
+    /// (inflating PPS) or split the flow in two transactions. Here the ONLY
+    /// auth is the payer's (their funds move); receiving shares needs no
+    /// consent, same as receiving a token transfer. Mirrors `deposit` exactly —
+    /// same conversion, same ZeroShares/donation guard — so it adds no new
+    /// PPS-inflation surface: shares are always minted at the current price
+    /// against assets actually pulled in.
+    pub fn deposit_from(e: Env, payer: Address, beneficiary: Address, assets: i128) -> i128 {
+        payer.require_auth();
+        if assets <= 0 {
+            panic_with_error!(&e, Error::ZeroAmount);
+        }
+        // (review PR #3) un beneficiary == el propio vault bloquearia los
+        // fondos PARA SIEMPRE: las shares no se transfieren y el vault no
+        // puede redimirse a si mismo. Es el default plausible de un bridge
+        // mal cableado (recipient → beneficiary), asi que se rechaza aca.
+        if beneficiary == e.current_contract_address() {
+            // error PROPIO (review PR #4): ZeroShares aca mandaba al operador
+            // a debuggear la guarda anti-donacion en vez del bridge mal cableado.
+            panic_with_error!(&e, Error::InvalidBeneficiary);
+        }
+        let c = cfg(&e);
+        let shares = Self::to_shares(&e, &c, assets);
+        if shares <= 0 {
+            panic_with_error!(&e, Error::ZeroShares);
+        }
+        usdc_client(&e, &c).transfer(&payer, &e.current_contract_address(), &assets);
+        set_shares_of(&e, &beneficiary, shares_of(&e, &beneficiary) + shares);
+        set_total_shares(&e, total_shares(&e) + shares);
+        bump_instance(&e);
+        // (review PR #3) DOBLE evento a proposito: 'deposit' con la misma
+        // forma que el deposito de LP — para que todo indexer/monitor
+        // suscripto al topic 'deposit' vea tambien los inflows del bridge —
+        // mas 'dep_from' con el detalle payer/beneficiary para el camino CCTP.
+        e.events().publish(
+            (symbol_short!("deposit"), beneficiary.clone()),
+            (assets, shares),
+        );
+        e.events().publish(
+            (symbol_short!("dep_from"), payer, beneficiary),
+            (assets, shares),
+        );
         shares
     }
 
@@ -301,16 +358,21 @@ impl Vault {
         let lm = LoanManagerClient::new(&e, &c.loan_manager);
 
         let loan = lm.get_loan(&borrower);
-        if !loan.active || loan.amount_due <= 0 {
+        if !loan.active {
             panic_with_error!(&e, Error::NoActiveLoan);
         }
-        let pay = loan.amount_due;
+        // Saldo DEVENGADO al momento: pagar temprano cuesta menos (pro-rata),
+        // pagar tarde incluye la mora. Es la vista que el frontend ya usa.
+        let pay = lm.preview_owed(&borrower);
+        if pay <= 0 {
+            panic_with_error!(&e, Error::NoActiveLoan);
+        }
         let principal = loan.principal;
-        let interest = if pay > principal { pay - principal } else { 0 };
-        let fee = interest * PROTOCOL_FEE_BPS / BPS_DENOM;
 
-        // Pull full amount from payer; skim protocol fee.
+        // Pull full amount from payer; apply via the LM (interest-first).
         usdc_client(&e, &c).transfer(&payer, &e.current_contract_address(), &pay);
+        let (_principal_paid, interest_paid, _rem) = lm.apply_payment(&borrower, &pay);
+        let fee = interest_paid * PROTOCOL_FEE_BPS / BPS_DENOM;
         if fee > 0 {
             usdc_client(&e, &c).transfer(&e.current_contract_address(), &c.fee_recipient, &fee);
         }
@@ -321,10 +383,69 @@ impl Vault {
         set_total_borrows(&e, total_borrows(&e) - principal_in_borrows);
         set_written_off(&e, &borrower, 0);
 
-        lm.close_loan(&borrower, &pay);
         bump_instance(&e);
         e.events().publish((symbol_short!("repay"), borrower), (pay, fee));
         pay // amount repaid (mirrors EVM repay's uint256 return)
+    }
+
+    /// Pago PARCIAL (revolvente): `amount` se imputa primero al interes/mora
+    /// devengado y despues al principal; el prestamo sigue activo hasta saldar.
+    /// Si `amount` cubre el saldo devengado completo, cierra — y ESTE es el
+    /// camino correcto para saldar en vivo (preview + colchon): `repay` sin
+    /// monto recalcula el saldo al ejecutar y en la red real eso rompe la
+    /// autorizacion firmada (el saldo crece por segundo).
+    /// Prestamos en default quedan excluidos (el LM lo rechaza): su curacion
+    /// post-write-off exige el pago total por el camino de `repay`.
+    pub fn repay_partial(e: Env, payer: Address, borrower: Address, amount: i128) -> i128 {
+        payer.require_auth();
+        if amount <= 0 {
+            panic_with_error!(&e, Error::ZeroAmount);
+        }
+        let c = cfg(&e);
+        let lm = LoanManagerClient::new(&e, &c.loan_manager);
+        let loan = lm.get_loan(&borrower);
+        if !loan.active {
+            panic_with_error!(&e, Error::NoActiveLoan);
+        }
+        // AUTH-DETERMINISTA (lección de la testnet real): el sobre firmado
+        // autoriza el transfer con un monto EXACTO, y el saldo revolvente
+        // crece por segundo — si el contrato recalculara cuánto tirar, lo
+        // firmado en la simulación ya no calza al ejecutar (auth
+        // invalid_action). Por eso acá se tira EXACTO lo que el pagador firmó
+        // y el excedente sobre el saldo vivo se DEVUELVE en la misma
+        // transacción. Para saldar: mandar el preview + un colchón.
+        usdc_client(&e, &c).transfer(&payer, &e.current_contract_address(), &amount);
+        let owed = lm.preview_owed(&borrower);
+        let pay = if amount < owed { amount } else { owed };
+        let refund = amount - pay;
+        if refund > 0 {
+            usdc_client(&e, &c).transfer(&e.current_contract_address(), &payer, &refund);
+        }
+        let (principal_paid, interest_paid, remaining) = lm.apply_payment(&borrower, &pay);
+        let fee = interest_paid * PROTOCOL_FEE_BPS / BPS_DENOM;
+        if fee > 0 {
+            usdc_client(&e, &c).transfer(&e.current_contract_address(), &c.fee_recipient, &fee);
+        }
+        // (review PR #4) el clamp del write-off es UNIVERSAL: un payoff TOTAL
+        // por este camino cierra prestamos defaulted (el LM solo bloquea los
+        // parciales), y sin el clamp el principal ya descontado por
+        // manual_write_off se descontaba DOS veces — total_borrows fantasma
+        // negativo y el PPS de todos los LPs al piso.
+        let wo = written_off(&e, &borrower);
+        let principal_in_borrows = if principal_paid > wo { principal_paid - wo } else { 0 };
+        if principal_in_borrows > 0 {
+            set_total_borrows(&e, total_borrows(&e) - principal_in_borrows);
+        }
+        if remaining == 0 {
+            set_written_off(&e, &borrower, 0);
+            // (review PR #4) el cierre por este camino tambien emite 'repay':
+            // es EL camino de liquidacion en vivo, y los indexers suscriptos a
+            // ese topic no pueden perderse justamente los cierres reales.
+            e.events().publish((symbol_short!("repay"), borrower.clone()), (pay, fee));
+        }
+        bump_instance(&e);
+        e.events().publish((symbol_short!("partrepay"), borrower), (pay, fee, remaining));
+        remaining
     }
 
     /// Recognize a defaulted loan's loss in vault accounting. Owner-gated.

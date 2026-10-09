@@ -9,7 +9,7 @@ import {
   type PremiumConfig,
   type UserRisk,
 } from "../../../packages/loan-manager-client/src/index";
-import { signFreighterTransaction } from "@/lib/stellar-wallet";
+import { signActiveStellarTransaction } from "@/lib/stellar-signer-registry";
 import {
   Address,
   BASE_FEE,
@@ -119,7 +119,7 @@ export async function stellarBorrowWithTerm(params: {
     publicKey: params.borrower,
     allowHttp: config.allowHttp,
     signTransaction: async (xdr, opts) => ({
-      signedTxXdr: await signFreighterTransaction(xdr, {
+      signedTxXdr: await signActiveStellarTransaction(xdr, {
         address: opts?.address ?? params.borrower,
         networkPassphrase: opts?.networkPassphrase ?? config.networkPassphrase,
       }),
@@ -156,17 +156,29 @@ export async function stellarRepay(params: {
     publicKey: params.payer,
     allowHttp: config.allowHttp,
     signTransaction: async (xdr, opts) => ({
-      signedTxXdr: await signFreighterTransaction(xdr, {
+      signedTxXdr: await signActiveStellarTransaction(xdr, {
         address: opts?.address ?? params.payer,
         networkPassphrase: opts?.networkPassphrase ?? config.networkPassphrase,
       }),
     }),
   });
 
-  const assembled = await client.repay(
+  // (review PR #4) repay sin monto recalcula el saldo AL EJECUTAR y el saldo
+  // revolvente crece por segundo: en la red real la auth firmada en la
+  // simulacion deja de calzar (auth invalid_action) — exactamente lo que tiro
+  // abajo el par CA2H4UFG/CDY27BWE. El camino correcto es repay_partial con
+  // el preview + un colchon: tira EXACTO lo firmado y devuelve el vuelto.
+  const lmPreview = loanManagerClient(params.payer);
+  const owed = await lmPreview.preview_owed(
+    { borrower: params.borrower ?? params.payer },
+    { timeoutInSeconds: 20 },
+  );
+  const cushion = 100_000n; // 0.01 USDC de margen; el excedente vuelve solo
+  const assembled = await client.repay_partial(
     {
       payer: params.payer,
       borrower: params.borrower ?? params.payer,
+      amount: owed.result + cushion,
     },
     { timeoutInSeconds: 60 },
   );
@@ -189,7 +201,7 @@ function signingVaultClient(publicKey: string): VaultClient {
     publicKey,
     allowHttp: config.allowHttp,
     signTransaction: async (xdr, opts) => ({
-      signedTxXdr: await signFreighterTransaction(xdr, {
+      signedTxXdr: await signActiveStellarTransaction(xdr, {
         address: opts?.address ?? publicKey,
         networkPassphrase: opts?.networkPassphrase ?? config.networkPassphrase,
       }),

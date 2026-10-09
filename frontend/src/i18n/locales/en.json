@@ -525,7 +525,8 @@
       "badge": "EARLY ACCESS",
       "title": "Connect your wallet",
       "body": "Connect your wallet to become one of our first users and request your USDC credit line.",
-      "cta": "Connect wallet"
+      "cta": "Connect wallet",
+      "emailCta": "Continue with email"
     },
     "onWaitlist": {
       "title": "Your profile is on the waitlist",
@@ -657,7 +658,14 @@
         "title": "Uncollateralized credit",
         "subtitle": "We turn your digital reputation into credit power. Your score grows with every repayment.",
         "cta": "Apply for credit",
-        "rotating": ["that grows with you.", "reputation-based.", "in minutes.", "24/7.", "from your phone.", "for LATAM."]
+        "rotating": [
+          "that grows with you.",
+          "reputation-based.",
+          "in minutes.",
+          "24/7.",
+          "from your phone.",
+          "for LATAM."
+        ]
       },
       "stats": {
         "protocol": "Blockchain",

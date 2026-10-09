@@ -30,13 +30,15 @@ if (typeof window !== "undefined") {
   window.Buffer = window.Buffer || Buffer;
 }
 
-
 export const networks = {
   testnet: {
     networkPassphrase: "Test SDF Network ; September 2015",
     contractId: "CDEJOQBQEZ7LUXSWXM4RF6EPBZLMJHMTGKC5GNWK5TNJR36TBHQLCULP",
   }
 } as const
+
+
+
 
 
 /**
@@ -63,7 +65,8 @@ export const Errors = {
   5: {message:"InsufficientShares"},
   6: {message:"OverCreditLimit"},
   7: {message:"NoActiveLoan"},
-  8: {message:"NotDefaulted"}
+  8: {message:"NotDefaulted"},
+  9: {message:"ZeroShares"}
 }
 
 
@@ -116,6 +119,22 @@ export interface Client {
   balance_of: ({account}: {account: string}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
 
   /**
+   * Construct and simulate a deposit_from transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * CCTP / on-ramp entry: `payer` funds the deposit, `beneficiary` receives
+   * the shares. The award architecture (docs/ARCHITECTURE.md §2.1) promises
+   * CCTP minting "directly into the Vault" with LP share accounting —
+   * `deposit()` cannot express that: it requires the share recipient's own
+   * auth and shares are not transferable, so a bridge could only donate
+   * (inflating PPS) or split the flow in two transactions. Here the ONLY
+   * auth is the payer's (their funds move); receiving shares needs no
+   * consent, same as receiving a token transfer. Mirrors `deposit` exactly —
+   * same conversion, same ZeroShares/donation guard — so it adds no new
+   * PPS-inflation surface: shares are always minted at the current price
+   * against assets actually pulled in.
+   */
+  deposit_from: ({payer, beneficiary, assets}: {payer: string, beneficiary: string, assets: i128}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
+
+  /**
    * Construct and simulate a total_assets transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
   total_assets: (options?: MethodOptions) => Promise<AssembledTransaction<i128>>
@@ -125,6 +144,16 @@ export interface Client {
    * Total shares outstanding (mirrors the EVM EVault `totalSupply`).
    */
   total_supply: (options?: MethodOptions) => Promise<AssembledTransaction<i128>>
+
+  /**
+   * Construct and simulate a repay_partial transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Pago PARCIAL (revolvente): `amount` se imputa primero al interes/mora
+   * devengado y despues al principal; el prestamo sigue activo hasta saldar.
+   * Si `amount` cubre el saldo devengado completo, cierra (igual que repay).
+   * Prestamos en default quedan excluidos (el LM lo rechaza): su curacion
+   * post-write-off exige el pago total por el camino de `repay`.
+   */
+  repay_partial: ({payer, borrower, amount}: {payer: string, borrower: string, amount: i128}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
 
   /**
    * Construct and simulate a borrow_with_term transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -166,7 +195,7 @@ export class Client extends ContractClient {
     super(
       new ContractSpec([ "AAAAAQAAAE1NaXJyb3Igb2YgbG9hbi1tYW5hZ2VyJ3MgYExvYW5gIChzYW1lIFNDVmFsIGxheW91dCBmb3IgY3Jvc3MtY29udHJhY3QgcmVhZHMpLgAAAAAAAAAAAAAETG9hbgAAAAoAAAAAAAAABmFjdGl2ZQAAAAAAAQAAAAAAAAAKYW1vdW50X2R1ZQAAAAAACwAAAAAAAAAJZGVmYXVsdGVkAAAAAAAAAQAAAAAAAAADZHVlAAAAAAYAAAAAAAAAB2ZlZV9icHMAAAAABAAAAAAAAAAMZ3JhY2VfcGVyaW9kAAAABgAAAAAAAAAMbGFzdF9hY2NydWVkAAAABgAAAAAAAAAJcHJpbmNpcGFsAAAAAAAACwAAAAAAAAAFc3RhcnQAAAAAAAAGAAAAAAAAAAp0ZW5vcl9kYXlzAAAAAAAE",
         "AAAAAAAAAIhGdWxsIHJlcGF5bWVudCBvbmx5IChtaXJyb3JzIEVWSyBNdXN0UmVwYXlGdWxsQW1vdW50RHVlKS4gYHBheWVyYCBmdW5kcwp0aGUgbG9hbiBvZiBgYm9ycm93ZXJgLiA1JSBwcm90b2NvbCBmZWUgb24gdGhlIGludGVyZXN0IHBvcnRpb24uAAAABXJlcGF5AAAAAAAAAgAAAAAAAAAFcGF5ZXIAAAAAAAATAAAAAAAAAAhib3Jyb3dlcgAAABMAAAABAAAACw==",
-        "AAAABAAAAAAAAAAAAAAABUVycm9yAAAAAAAACAAAAAAAAAASQWxyZWFkeUluaXRpYWxpemVkAAAAAAABAAAAAAAAAA5Ob3RJbml0aWFsaXplZAAAAAAAAgAAAAAAAAAKWmVyb0Ftb3VudAAAAAAAAwAAAAAAAAAQSW5zdWZmaWNpZW50Q2FzaAAAAAQAAAAAAAAAEkluc3VmZmljaWVudFNoYXJlcwAAAAAABQAAAAAAAAAPT3ZlckNyZWRpdExpbWl0AAAAAAYAAAAAAAAADE5vQWN0aXZlTG9hbgAAAAcAAAAAAAAADE5vdERlZmF1bHRlZAAAAAg=",
+        "AAAABAAAAAAAAAAAAAAABUVycm9yAAAAAAAACQAAAAAAAAASQWxyZWFkeUluaXRpYWxpemVkAAAAAAABAAAAAAAAAA5Ob3RJbml0aWFsaXplZAAAAAAAAgAAAAAAAAAKWmVyb0Ftb3VudAAAAAAAAwAAAAAAAAAQSW5zdWZmaWNpZW50Q2FzaAAAAAQAAAAAAAAAEkluc3VmZmljaWVudFNoYXJlcwAAAAAABQAAAAAAAAAPT3ZlckNyZWRpdExpbWl0AAAAAAYAAAAAAAAADE5vQWN0aXZlTG9hbgAAAAcAAAAAAAAADE5vdERlZmF1bHRlZAAAAAgAAAAAAAAAClplcm9TaGFyZXMAAAAAAAk=",
         "AAAAAAAAAIpFUkMtNDYyNiBgcmVkZWVtYDogYnVybiBhbiBFWEFDVCBgc2hhcmVzYCBhbW91bnQsIHJlY2VpdmUgZmxvb3IoYXNzZXRzKS4KVXNlZnVsIGZvciAid2l0aGRyYXcgZXZlcnl0aGluZyIgKHJlZGVlbSB0aGUgZnVsbCBzaGFyZSBiYWxhbmNlKS4AAAAAAAZyZWRlZW0AAAAAAAIAAAAAAAAABGZyb20AAAATAAAAAAAAAAZzaGFyZXMAAAAAAAsAAAABAAAACw==",
         "AAAAAQAAAAAAAAAAAAAABkNvbmZpZwAAAAAABAAAAAAAAAANZmVlX3JlY2lwaWVudAAAAAAAABMAAAAAAAAADGxvYW5fbWFuYWdlcgAAABMAAAAAAAAABW93bmVyAAAAAAAAEwAAAAAAAAAEdXNkYwAAABM=",
         "AAAAAAAAAAAAAAAHZGVwb3NpdAAAAAACAAAAAAAAAARmcm9tAAAAEwAAAAAAAAAGYXNzZXRzAAAAAAALAAAAAQAAAAs=",
@@ -174,9 +203,11 @@ export class Client extends ContractClient {
         "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAABQAAAAAAAAAAAAAABkNvbmZpZwAAAAAAAAAAAAAAAAALVG90YWxTaGFyZXMAAAAAAAAAAAAAAAAMVG90YWxCb3Jyb3dzAAAAAQAAAAAAAAAGU2hhcmVzAAAAAAABAAAAEwAAAAEAAAAAAAAACldyaXR0ZW5PZmYAAAAAAAEAAAAT",
         "AAAAAAAAAN1FUkMtNDYyNiBgd2l0aGRyYXdgOiBidXJuIHNoYXJlcyB0byByZWNlaXZlIGFuIEVYQUNUIGBhc3NldHNgIGFtb3VudCBvZgpVU0RDLiBUaGlzIGlzIHRoZSBlbnRyeSBwb2ludCB0aGUgZnJvbnRlbmQgdXNlcyAoYGV2YXVsdC53aXRoZHJhdyhhbW91bnQsCnJlY2VpdmVyLCBvd25lcilgIOKAlCB0aGUgdXNlciB0eXBlcyBhIFVTREMgYW1vdW50KS4gUmV0dXJucyBzaGFyZXMgYnVybmVkLgAAAAAAAAh3aXRoZHJhdwAAAAIAAAAAAAAABGZyb20AAAATAAAAAAAAAAZhc3NldHMAAAAAAAsAAAABAAAACw==",
         "AAAAAAAAAEBTaGFyZSBiYWxhbmNlIG9mIGBhY2NvdW50YCAobWlycm9ycyB0aGUgRVZNIEVWYXVsdCBgYmFsYW5jZU9mYCkuAAAACmJhbGFuY2Vfb2YAAAAAAAEAAAAAAAAAB2FjY291bnQAAAAAEwAAAAEAAAAL",
+        "AAAAAAAAAt9DQ1RQIC8gb24tcmFtcCBlbnRyeTogYHBheWVyYCBmdW5kcyB0aGUgZGVwb3NpdCwgYGJlbmVmaWNpYXJ5YCByZWNlaXZlcwp0aGUgc2hhcmVzLiBUaGUgYXdhcmQgYXJjaGl0ZWN0dXJlIChkb2NzL0FSQ0hJVEVDVFVSRS5tZCDCpzIuMSkgcHJvbWlzZXMKQ0NUUCBtaW50aW5nICJkaXJlY3RseSBpbnRvIHRoZSBWYXVsdCIgd2l0aCBMUCBzaGFyZSBhY2NvdW50aW5nIOKAlApgZGVwb3NpdCgpYCBjYW5ub3QgZXhwcmVzcyB0aGF0OiBpdCByZXF1aXJlcyB0aGUgc2hhcmUgcmVjaXBpZW50J3Mgb3duCmF1dGggYW5kIHNoYXJlcyBhcmUgbm90IHRyYW5zZmVyYWJsZSwgc28gYSBicmlkZ2UgY291bGQgb25seSBkb25hdGUKKGluZmxhdGluZyBQUFMpIG9yIHNwbGl0IHRoZSBmbG93IGluIHR3byB0cmFuc2FjdGlvbnMuIEhlcmUgdGhlIE9OTFkKYXV0aCBpcyB0aGUgcGF5ZXIncyAodGhlaXIgZnVuZHMgbW92ZSk7IHJlY2VpdmluZyBzaGFyZXMgbmVlZHMgbm8KY29uc2VudCwgc2FtZSBhcyByZWNlaXZpbmcgYSB0b2tlbiB0cmFuc2Zlci4gTWlycm9ycyBgZGVwb3NpdGAgZXhhY3RseSDigJQKc2FtZSBjb252ZXJzaW9uLCBzYW1lIFplcm9TaGFyZXMvZG9uYXRpb24gZ3VhcmQg4oCUIHNvIGl0IGFkZHMgbm8gbmV3ClBQUy1pbmZsYXRpb24gc3VyZmFjZTogc2hhcmVzIGFyZSBhbHdheXMgbWludGVkIGF0IHRoZSBjdXJyZW50IHByaWNlCmFnYWluc3QgYXNzZXRzIGFjdHVhbGx5IHB1bGxlZCBpbi4AAAAADGRlcG9zaXRfZnJvbQAAAAMAAAAAAAAABXBheWVyAAAAAAAAEwAAAAAAAAALYmVuZWZpY2lhcnkAAAAAEwAAAAAAAAAGYXNzZXRzAAAAAAALAAAAAQAAAAs=",
         "AAAAAAAAAAAAAAAMdG90YWxfYXNzZXRzAAAAAAAAAAEAAAAL",
         "AAAAAAAAAEBUb3RhbCBzaGFyZXMgb3V0c3RhbmRpbmcgKG1pcnJvcnMgdGhlIEVWTSBFVmF1bHQgYHRvdGFsU3VwcGx5YCkuAAAADHRvdGFsX3N1cHBseQAAAAAAAAABAAAACw==",
         "AAAAAAAAAAAAAAANX19jb25zdHJ1Y3RvcgAAAAAAAAQAAAAAAAAABW93bmVyAAAAAAAAEwAAAAAAAAAEdXNkYwAAABMAAAAAAAAADGxvYW5fbWFuYWdlcgAAABMAAAAAAAAADWZlZV9yZWNpcGllbnQAAAAAAAATAAAAAA==",
+        "AAAAAAAAAVpQYWdvIFBBUkNJQUwgKHJldm9sdmVudGUpOiBgYW1vdW50YCBzZSBpbXB1dGEgcHJpbWVybyBhbCBpbnRlcmVzL21vcmEKZGV2ZW5nYWRvIHkgZGVzcHVlcyBhbCBwcmluY2lwYWw7IGVsIHByZXN0YW1vIHNpZ3VlIGFjdGl2byBoYXN0YSBzYWxkYXIuClNpIGBhbW91bnRgIGN1YnJlIGVsIHNhbGRvIGRldmVuZ2FkbyBjb21wbGV0bywgY2llcnJhIChpZ3VhbCBxdWUgcmVwYXkpLgpQcmVzdGFtb3MgZW4gZGVmYXVsdCBxdWVkYW4gZXhjbHVpZG9zIChlbCBMTSBsbyByZWNoYXphKTogc3UgY3VyYWNpb24KcG9zdC13cml0ZS1vZmYgZXhpZ2UgZWwgcGFnbyB0b3RhbCBwb3IgZWwgY2FtaW5vIGRlIGByZXBheWAuAAAAAAANcmVwYXlfcGFydGlhbAAAAAAAAAMAAAAAAAAABXBheWVyAAAAAAAAEwAAAAAAAAAIYm9ycm93ZXIAAAATAAAAAAAAAAZhbW91bnQAAAAAAAsAAAABAAAACw==",
         "AAAAAAAAAEhPbmx5IGVudHJ5IHBvaW50IHRvIHRha2UgYSBsb2FuLiBJbmxpbmUgY3JlZGl0IGNoZWNrICsgYXRvbWljIG9wZW5fbG9hbi4AAAAQYm9ycm93X3dpdGhfdGVybQAAAAQAAAAAAAAACGJvcnJvd2VyAAAAEwAAAAAAAAAGYW1vdW50AAAAAAALAAAAAAAAAAp0ZW5vcl9kYXlzAAAAAAAEAAAAAAAAAAdmZWVfYnBzAAAAAAQAAAABAAAACw==",
         "AAAAAAAAAIVSZWNvZ25pemUgYSBkZWZhdWx0ZWQgbG9hbidzIGxvc3MgaW4gdmF1bHQgYWNjb3VudGluZy4gT3duZXItZ2F0ZWQuClJlcXVpcmVzIHRoZSBsb2FuLW1hbmFnZXIgdG8gaGF2ZSBmbGFnZ2VkIHRoZSBib3Jyb3dlciBkZWZhdWx0ZWQuAAAAAAAAEG1hbnVhbF93cml0ZV9vZmYAAAACAAAAAAAAAAhib3Jyb3dlcgAAABMAAAAAAAAABmFtb3VudAAAAAAACwAAAAA=",
         "AAAAAAAAAAAAAAARc2V0X2ZlZV9yZWNpcGllbnQAAAAAAAABAAAAAAAAAAlyZWNpcGllbnQAAAAAAAATAAAAAA==" ]),
@@ -190,8 +221,10 @@ export class Client extends ContractClient {
         upgrade: this.txFromJSON<null>,
         withdraw: this.txFromJSON<i128>,
         balance_of: this.txFromJSON<i128>,
+        deposit_from: this.txFromJSON<i128>,
         total_assets: this.txFromJSON<i128>,
         total_supply: this.txFromJSON<i128>,
+        repay_partial: this.txFromJSON<i128>,
         borrow_with_term: this.txFromJSON<i128>,
         manual_write_off: this.txFromJSON<null>,
         set_fee_recipient: this.txFromJSON<null>

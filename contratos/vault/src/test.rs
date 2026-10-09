@@ -191,7 +191,10 @@ fn borrow_moves_cash_to_borrows_keeping_total_assets() {
     let l = s.lm.get_loan(&borrower);
     assert!(l.active);
     assert_eq!(l.principal, 10_000);
-    assert_eq!(l.amount_due, 10_500);
+    // revolvente: al abrir, saldo = principal + piso de 1 dia (500/7 = 71)
+    assert_eq!(l.amount_due, 10_071);
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY);
+    assert_eq!(s.lm.preview_owed(&borrower), 10_500); // fee completo al vencimiento
 }
 
 #[test]
@@ -238,6 +241,7 @@ fn deposit_borrow_repay_grows_price_per_share() {
     grant(&s, &borrower, 25_000);
     s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
 
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY); // al vencimiento: fee completo
     // Repay full (10_500). Mint the 500 interest the borrower owes beyond principal.
     s.usdc_admin.mint(&borrower, &500);
     s.vault.repay(&borrower, &borrower);
@@ -343,6 +347,7 @@ fn set_fee_recipient_routes_future_fees() {
     s.vault.set_fee_recipient(&new_sink);
     grant(&s, &borrower, 25_000);
     s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY); // al vencimiento: fee completo
     s.usdc_admin.mint(&borrower, &500);
     s.vault.repay(&borrower, &borrower);
 
@@ -369,6 +374,7 @@ fn two_lps_split_interest_pro_rata() {
     // Borrow 20k, repay -> interest 1000, fee 50, net 950 to the two LPs.
     grant(&s, &borrower, 25_000);
     s.vault.borrow_with_term(&borrower, &20_000, &7, &500);
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY); // al vencimiento: fee completo
     s.usdc_admin.mint(&borrower, &1_000);
     s.vault.repay(&borrower, &borrower);
     assert_eq!(s.vault.total_assets(), 200_950);
@@ -404,7 +410,9 @@ fn end_to_end_frontend_round_trip() {
     s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
     assert_eq!(s.usdc.balance(&borrower), 10_000);
 
-    // 5. Frontend reads the live loan + owed (loans + previewLoanWithLate).
+    // 5. Frontend reads the live loan + owed (loans + previewLoanWithLate),
+    //    al vencimiento (revolvente: antes del due se deberia menos).
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY);
     let (principal, owed) = s.lm.preview_loan_with_late(&borrower);
     assert_eq!(principal, 10_000);
     assert_eq!(owed, 10_500);
@@ -450,6 +458,7 @@ fn borrow_and_repay_return_values() {
     grant(&s, &borrower, 25_000);
 
     let borrowed = s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY); // al vencimiento: fee completo
     assert_eq!(borrowed, 10_000); // mirrors EVM borrowWithTerm return
 
     s.usdc_admin.mint(&borrower, &500);
@@ -487,6 +496,7 @@ fn deposit_after_interest_mints_fewer_shares_no_leak() {
     // Realize interest: price-per-share is now > 1.
     grant(&s, &borrower, 25_000);
     s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY); // al vencimiento: fee completo
     s.usdc_admin.mint(&borrower, &500);
     s.vault.repay(&borrower, &borrower);
     assert_eq!(s.vault.total_assets(), 100_475);
@@ -515,6 +525,7 @@ fn anyone_can_repay_on_behalf_of_borrower() {
     grant(&s, &borrower, 25_000);
     s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
 
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY); // al vencimiento: fee completo
     // A different account funds the repayment.
     s.usdc_admin.mint(&helper, &10_500);
     s.vault.repay(&helper, &borrower);
@@ -625,12 +636,13 @@ fn two_borrowers_keep_independent_loans() {
     s.vault.borrow_with_term(&b2, &5_000, &7, &500);
     assert_eq!(s.vault.total_assets(), 100_000); // 85_000 cash + 15_000 borrows
 
-    // b1 repays; b2's loan is untouched.
+    // b1 repays al vencimiento; b2's loan is untouched.
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY); // al vencimiento: fee completo
     s.usdc_admin.mint(&b1, &500);
     s.vault.repay(&b1, &b1);
     assert!(!s.lm.get_loan(&b1).active);
     assert!(s.lm.get_loan(&b2).active);
-    assert_eq!(s.lm.get_loan(&b2).amount_due, 5_250);
+    assert_eq!(s.lm.preview_owed(&b2), 5_250); // devengado completo al vencimiento
 
     // b2 repays; fees from both loans accumulated correctly.
     s.usdc_admin.mint(&b2, &250);
@@ -764,7 +776,7 @@ fn borrower_can_borrow_below_the_offer_cap() {
     let l = s.lm.get_loan(&borrower);
     assert!(l.active);
     assert_eq!(l.principal, 3_000);
-    assert_eq!(l.amount_due, 3_150); // +5%
+    assert_eq!(l.amount_due, 3_021); // revolvente: 3_000 + piso 150/7
     assert_eq!(s.usdc.balance(&borrower), 3_000);
     assert_eq!(s.vault.total_assets(), 100_000); // invariant at borrow
 }
@@ -781,8 +793,9 @@ fn borrower_on_time_repay_pays_no_late_fee() {
     s.lm.set_premium_config(&borrower, &0, &11_574_000_000);
     s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
 
-    // Repay on day 3 (well inside tenor 7d + grace 1d).
-    s.e.ledger().with_mut(|li| li.timestamp += 3 * DAY);
+    // Repay at due (day 7): fee completo devengado, y la mora recien
+    // arranca en due+grace (dia 8) — sigue siendo "a tiempo".
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY);
     assert_eq!(s.lm.preview_owed(&borrower), 10_500); // no late accrued
     s.usdc_admin.mint(&borrower, &500);
     let paid = s.vault.repay(&borrower, &borrower);
@@ -849,6 +862,7 @@ fn withdraw_ceil_rounds_up_at_price_above_one() {
     // Realize interest: total_assets 100_475, total_supply 100_000 (price > 1).
     grant(&s, &borrower, 25_000);
     s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY); // al vencimiento: fee completo
     s.usdc_admin.mint(&borrower, &500);
     s.vault.repay(&borrower, &borrower);
     assert_eq!(s.vault.total_assets(), 100_475);
@@ -902,7 +916,8 @@ fn written_off_resets_after_repay_so_next_loan_heals_fully() {
     // Repay loan #2 normally. If a stale written_off (4_000) survived, total_borrows
     // would be reduced by only 8_000-4_000=4_000, leaving 4_000 phantom borrows and
     // total_assets too high. Correct heal: total_assets grows by net interest only.
-    s.usdc_admin.mint(&borrower, &400); // 8_000 -> amount_due 8_400, interest 400
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY); // al vencimiento del #2
+    s.usdc_admin.mint(&borrower, &400); // 8_000 -> devengado 8_400, interest 400
     s.vault.repay(&borrower, &borrower);
     // net interest #2 = 400 - fee(20) = 380. 100_475 + 380 = 100_855.
     assert_eq!(s.vault.total_assets(), 100_855);
@@ -925,9 +940,10 @@ fn repay_with_zero_interest_skips_fee_transfer() {
 
     s.vault.borrow_with_term(&borrower, &200, &7, &500);
     let l = s.lm.get_loan(&borrower);
-    assert_eq!(l.amount_due, 210); // 200*10500/10000
+    assert_eq!(l.amount_due, 201); // revolvente: 200 + piso 10/7 = 1
     assert_eq!(l.principal, 200);
-
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY); // al vencimiento: fee completo
+    assert_eq!(s.lm.preview_owed(&borrower), 210); // 200*10500/10000 al due
     s.usdc_admin.mint(&borrower, &10); // top up the 10 interest
     let paid = s.vault.repay(&borrower, &borrower);
     assert_eq!(paid, 210);
@@ -948,7 +964,9 @@ fn repay_first_nonzero_fee_boundary() {
     grant(&s, &borrower, 25_000);
 
     s.vault.borrow_with_term(&borrower, &400, &7, &500);
-    assert_eq!(s.lm.get_loan(&borrower).amount_due, 420);
+    assert_eq!(s.lm.get_loan(&borrower).amount_due, 402); // revolvente: piso 20/7 = 2
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY); // al vencimiento: fee completo
+    assert_eq!(s.lm.preview_owed(&borrower), 420);
     s.usdc_admin.mint(&borrower, &20);
     s.vault.repay(&borrower, &borrower);
     assert_eq!(s.usdc.balance(&s.fee_recipient), 1); // first nonzero fee
@@ -1152,6 +1170,7 @@ fn post_drain_dust_does_not_grief_new_depositor() {
 
     grant(&s, &borrower, 25_000);
     s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY); // al vencimiento: fee completo
     s.usdc_admin.mint(&borrower, &500);
     s.vault.repay(&borrower, &borrower);
 
@@ -1188,6 +1207,7 @@ fn repay_emits_event_with_pay_and_fee_payload() {
     s.vault.deposit(&lp, &100_000);
     grant(&s, &borrower, 25_000);
     s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY); // al vencimiento: fee completo
     s.usdc_admin.mint(&borrower, &500);
     let paid = s.vault.repay(&borrower, &borrower);
 
@@ -1213,6 +1233,7 @@ fn tiny_deposit_at_high_price_now_reverts_instead_of_losing_funds() {
     s.vault.deposit(&lp1, &100_000);
     grant(&s, &borrower, 25_000);
     s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY); // al vencimiento: fee completo
     s.usdc_admin.mint(&borrower, &500);
     s.vault.repay(&borrower, &borrower); // total_assets 100_475, ts 100_000 (price>1)
 
@@ -1931,9 +1952,10 @@ fn attacker_cannot_upgrade_vault_wasm() {
 // ── FOOTGUN: past-due repay WITHOUT accrue_late silently forfeits the mora ────
 #[test]
 fn past_due_repay_without_accrue_collects_only_base_no_mora() {
-    // If ops forgets accrue_late before repay, the vault reads the NON-materialized
-    // amount_due and the protocol collects only the base — late fees are lost.
-    // Pins the operational dependency (same as EVM: backend must accrueLate first).
+    // REVOLVENTE: este pin se invirtio A PROPOSITO. Antes, si ops olvidaba
+    // accrue_late, el vault cobraba solo la base y la mora se perdia (leak
+    // operativo). Ahora repay liquida por el saldo DEVENGADO del momento:
+    // la mora entra aunque nadie haya llamado accrue_late.
     let s = setup();
     let lp = Address::generate(&s.e);
     let borrower = Address::generate(&s.e);
@@ -1948,11 +1970,14 @@ fn past_due_repay_without_accrue_collects_only_base_no_mora() {
     // preview shows mora is owed...
     assert!(s.lm.preview_owed(&borrower) > 10_500, "mora is economically owed");
 
-    // ...but repay (no accrue) collects only the stored base amount_due.
-    s.usdc_admin.mint(&borrower, &500);
+    // ...y repay (sin accrue previo) cobra EXACTAMENTE ese devengado.
+    let owed = s.lm.preview_owed(&borrower);
+    assert!(owed > 10_500);
+    s.usdc_admin.mint(&borrower, &(owed - 10_000));
     let paid = s.vault.repay(&borrower, &borrower);
-    assert_eq!(paid, 10_500, "repay without accrue collects base only (mora forfeited)");
-    assert_eq!(s.usdc.balance(&s.fee_recipient), 25);
+    assert_eq!(paid, owed, "repay liquida el devengado completo, mora incluida");
+    // fee = 5% de TODO el interes (base + mora)
+    assert_eq!(s.usdc.balance(&s.fee_recipient), (owed - 10_000) * 500 / 10_000);
     assert!(!s.lm.get_loan(&borrower).active);
 }
 
@@ -1963,10 +1988,10 @@ fn past_due_repay_without_accrue_collects_only_base_no_mora() {
 // ── A pathological late_rate must NOT be able to lock a borrower's repayment ──
 #[test]
 fn repay_survives_pathological_late_rate_no_lock() {
-    // If a misconfigured (absurd) late_rate makes preview/accrue OVERFLOW, the
-    // borrower must still be able to repay and free the loan. repay reads the
-    // STORED amount_due and never calls owed_with_late, so the overflowing path
-    // is unreachable from repayment — no fund lock / DoS.
+    // Si una late_rate absurda hiciera overflowear la cuenta de mora, el
+    // prestatario igual tiene que poder repagar. La valvula nueva: el devengo
+    // usa matematica CHECKED y, si la mora no entra en i128, ese tramo se
+    // omite (se cobra la base; jamas se traba).
     let s = setup();
     let lp = Address::generate(&s.e);
     let borrower = Address::generate(&s.e);
@@ -1978,14 +2003,15 @@ fn repay_survives_pathological_late_rate_no_lock() {
     s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
     s.e.ledger().with_mut(|li| li.timestamp += 30 * DAY); // well past due+grace
 
-    // The ticker path (accrue/preview) traps on overflow...
-    assert!(s.lm.try_accrue_late(&borrower).is_err(), "accrue overflows on absurd rate");
-    assert!(s.lm.try_preview_owed(&borrower).is_err(), "preview overflows too");
+    // Ni accrue ni preview revientan: la mora overflowante se omite y queda
+    // el devengado base (interes completo al vencimiento).
+    s.lm.accrue_late(&borrower);
+    assert_eq!(s.lm.preview_owed(&borrower), 10_500, "mora omitida por overflow, base intacta");
 
-    // ...but the actual repay reads the stored base amount_due and SUCCEEDS.
+    // ...y el repay liquida esa base y libera el prestamo.
     s.usdc_admin.mint(&borrower, &500);
     let paid = s.vault.repay(&borrower, &borrower);
-    assert_eq!(paid, 10_500, "repay must use stored amount_due, never the overflowing path");
+    assert_eq!(paid, 10_500, "la tasa absurda no puede trabar el repago");
     assert!(!s.lm.get_loan(&borrower).active, "loan freed — no lock");
 }
 
@@ -2051,4 +2077,318 @@ fn donation_does_not_lock_existing_lp_funds() {
     // The existing LP can still fully redeem its shares (gets the donation too).
     let out = s.vault.redeem(&lp, &sh);
     assert!(out >= 100_000, "existing LP is not locked and even captures the donation");
+}
+
+// ─────────────── LP side: deposit_from (CCTP / on-ramp, tranche 0) ───────────
+// El award promete que CCTP mintea "directly into the Vault" con shares para el
+// LP. `deposit()` no puede: exige la auth del receptor y las shares no se
+// transfieren. `deposit_from` separa payer (autoriza, pone los fondos) de
+// beneficiary (recibe las shares), con la MISMA matemática y la MISMA guarda
+// anti-donación que `deposit`.
+
+#[test]
+fn deposit_from_credits_shares_to_beneficiary_not_payer() {
+    let s = setup();
+    let relayer = Address::generate(&s.e);
+    let lp = Address::generate(&s.e);
+    s.usdc_admin.mint(&relayer, &100_000);
+
+    let shares = s.vault.deposit_from(&relayer, &lp, &100_000);
+    assert_eq!(shares, 100_000); // primer depósito ~1:1
+    assert_eq!(s.vault.balance_of(&lp), 100_000);
+    assert_eq!(s.vault.balance_of(&relayer), 0); // el que paga NO recibe shares
+    assert_eq!(s.vault.total_supply(), 100_000);
+    assert_eq!(s.vault.total_assets(), 100_000); // invariante: cash + borrows
+    assert_eq!(s.usdc.balance(&relayer), 0); // la plata salió del payer
+}
+
+#[test]
+fn deposit_from_mints_at_current_price_existing_holder_unharmed() {
+    // Con un holder previo, un deposit_from de un tercero NO le mueve el valor.
+    let s = setup();
+    let lp0 = Address::generate(&s.e);
+    s.usdc_admin.mint(&lp0, &1_000_000);
+    s.vault.deposit(&lp0, &1_000_000);
+
+    let claim_before =
+        s.vault.total_assets() * s.vault.balance_of(&lp0) / s.vault.total_supply();
+
+    let relayer = Address::generate(&s.e);
+    let lp1 = Address::generate(&s.e);
+    s.usdc_admin.mint(&relayer, &250_000);
+    let shares = s.vault.deposit_from(&relayer, &lp1, &250_000);
+    assert_eq!(shares, 250_000); // precio 1:1 → mismas shares que assets
+
+    let claim_after =
+        s.vault.total_assets() * s.vault.balance_of(&lp0) / s.vault.total_supply();
+    assert_eq!(claim_before, claim_after); // el holder previo ni gana ni pierde
+    assert_eq!(s.vault.balance_of(&lp1), 250_000);
+}
+
+#[test]
+fn deposit_from_rejects_zero_and_negative() {
+    let s = setup();
+    let relayer = Address::generate(&s.e);
+    let lp = Address::generate(&s.e);
+    s.usdc_admin.mint(&relayer, &10);
+    assert_eq!(
+        s.vault.try_deposit_from(&relayer, &lp, &0),
+        Err(Ok(Error::ZeroAmount.into()))
+    );
+    assert_eq!(
+        s.vault.try_deposit_from(&relayer, &lp, &-5),
+        Err(Ok(Error::ZeroAmount.into()))
+    );
+}
+
+#[test]
+fn deposit_from_donation_guard_still_bites_no_fund_loss() {
+    // La donación a un vault con supply 0 infla el precio; deposit_from tiene la
+    // misma guarda que deposit: revienta ZeroShares y la plata del payer no se mueve.
+    let s = setup();
+    let attacker = Address::generate(&s.e);
+    s.usdc_admin.mint(&attacker, &1_000);
+    s.usdc.transfer(&attacker, &s.vault.address, &1_000); // donación directa
+
+    let relayer = Address::generate(&s.e);
+    let lp = Address::generate(&s.e);
+    s.usdc_admin.mint(&relayer, &1);
+    assert_eq!(
+        s.vault.try_deposit_from(&relayer, &lp, &1),
+        Err(Ok(Error::ZeroShares.into()))
+    );
+    assert_eq!(s.usdc.balance(&relayer), 1); // sin pérdida de fondos
+    assert_eq!(s.vault.total_supply(), 0);
+}
+
+#[test]
+fn deposit_from_requires_payer_auth_never_beneficiary() {
+    // mock_all_auths registra QUÉ auths exigió el contrato: tiene que estar la
+    // del payer y NO puede estar la del beneficiario (recibir shares no pide firma).
+    let s = setup();
+    let relayer = Address::generate(&s.e);
+    let lp = Address::generate(&s.e);
+    s.usdc_admin.mint(&relayer, &50_000);
+
+    s.vault.deposit_from(&relayer, &lp, &50_000);
+    let auths = s.e.auths();
+    assert!(auths.iter().any(|(who, _)| *who == relayer));
+    assert!(!auths.iter().any(|(who, _)| *who == lp));
+}
+
+// ═══════ REVOLVENTE + PAGO PARCIAL (Instaward D3 · decisión de Fabián 08-10) ═══════
+// El crédito pasa a devengar interés con el tiempo: pagar antes cuesta menos,
+// pagar al vencimiento cuesta exactamente principal*(1+fee). Y repay_partial
+// imputa interés-primero, dejando el préstamo vivo hasta saldar.
+
+#[test]
+fn early_full_repay_costs_prorata_interest() {
+    let s = setup();
+    let lp = Address::generate(&s.e);
+    let borrower = Address::generate(&s.e);
+    s.usdc_admin.mint(&lp, &100_000);
+    s.vault.deposit(&lp, &100_000);
+    grant(&s, &borrower, 25_000);
+    s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
+
+    // Día 3 de 7: se debe el interés proporcional, no el fee completo.
+    s.e.ledger().with_mut(|li| li.timestamp += 3 * DAY);
+    let owed = s.lm.preview_owed(&borrower);
+    assert_eq!(owed, 10_000 + 500 * 3 / 7); // 10_214 — pagar antes = pagar menos
+
+    s.usdc_admin.mint(&borrower, &(owed - 10_000));
+    let paid = s.vault.repay(&borrower, &borrower);
+    assert_eq!(paid, owed);
+    let interest = owed - 10_000;
+    let fee = interest * 500 / 10_000;
+    assert_eq!(s.usdc.balance(&s.fee_recipient), fee);
+    assert_eq!(s.vault.total_assets(), 100_000 + interest - fee);
+    assert!(!s.lm.get_loan(&borrower).active);
+}
+
+#[test]
+fn immediate_repay_pays_the_one_day_floor() {
+    // Pedir y devolver en el mismo ledger NO es gratis: piso de 1 día de interés.
+    let s = setup();
+    let lp = Address::generate(&s.e);
+    let borrower = Address::generate(&s.e);
+    s.usdc_admin.mint(&lp, &100_000);
+    s.vault.deposit(&lp, &100_000);
+    grant(&s, &borrower, 25_000);
+    s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
+
+    let owed = s.lm.preview_owed(&borrower);
+    assert_eq!(owed, 10_000 + 500 / 7); // 10_071
+    s.usdc_admin.mint(&borrower, &(owed - 10_000));
+    let paid = s.vault.repay(&borrower, &borrower);
+    assert_eq!(paid, owed);
+    assert!(!s.lm.get_loan(&borrower).active);
+}
+
+#[test]
+fn partial_payment_interest_first_then_principal() {
+    let s = setup();
+    let lp = Address::generate(&s.e);
+    let borrower = Address::generate(&s.e);
+    s.usdc_admin.mint(&lp, &100_000);
+    s.vault.deposit(&lp, &100_000);
+    grant(&s, &borrower, 25_000);
+    s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY); // interés completo devengado
+
+    // Paga 2_000 de los 10_500: imputa 500 al interés y 1_500 al principal.
+    s.usdc_admin.mint(&borrower, &2_000);
+    let rem = s.vault.repay_partial(&borrower, &borrower, &2_000);
+    assert_eq!(rem, 8_500);
+    let l = s.lm.get_loan(&borrower);
+    assert!(l.active, "el préstamo sigue vivo hasta saldar");
+    assert_eq!(l.principal, 8_500);
+    assert_eq!(l.amount_due, 8_500); // interés ya saldado; queda puro principal
+    assert_eq!(s.usdc.balance(&s.fee_recipient), 25); // 5% del interés pagado (500)
+    // total_borrows bajó por los 1_500 de principal; el interés neto fue a los LPs.
+    assert_eq!(s.vault.total_assets(), 100_475);
+
+    // Salda el resto en el mismo momento: cierra sin interés nuevo (post-due no
+    // devenga interés, solo mora — y acá no hay premium configurado).
+    let paid = s.vault.repay(&borrower, &borrower);
+    assert_eq!(paid, 8_500);
+    assert!(!s.lm.get_loan(&borrower).active);
+    assert_eq!(s.vault.total_assets(), 100_475); // economía total = la de siempre
+}
+
+#[test]
+fn partial_overpay_caps_at_owed_and_closes() {
+    let s = setup();
+    let lp = Address::generate(&s.e);
+    let borrower = Address::generate(&s.e);
+    s.usdc_admin.mint(&lp, &100_000);
+    s.vault.deposit(&lp, &100_000);
+    grant(&s, &borrower, 25_000);
+    s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY);
+
+    s.usdc_admin.mint(&borrower, &20_000);
+    let rem = s.vault.repay_partial(&borrower, &borrower, &20_000);
+    assert_eq!(rem, 0, "se capea al saldo devengado y cierra");
+    assert!(!s.lm.get_loan(&borrower).active);
+    // Pull exacto de los 20_000 firmados + VUELTO de 9_500 en la misma tx
+    // (auth-determinista): el neto pagado es exactamente 10_500.
+    assert_eq!(s.usdc.balance(&borrower), 10_000 + 20_000 - 10_500);
+    assert_eq!(s.vault.total_assets(), 100_475);
+}
+
+#[test]
+fn partial_on_defaulted_loan_is_rejected_full_still_heals() {
+    // En default el parcial se rechaza (la curación post-write-off exige el
+    // total); el repay completo sigue curando como siempre.
+    let s = setup();
+    let lp = Address::generate(&s.e);
+    let borrower = Address::generate(&s.e);
+    s.usdc_admin.mint(&lp, &100_000);
+    s.vault.deposit(&lp, &100_000);
+    grant(&s, &borrower, 25_000);
+    s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
+    s.e.ledger().with_mut(|li| li.timestamp += 24 * DAY);
+    s.lm.mark_default(&borrower);
+
+    s.usdc_admin.mint(&borrower, &20_000);
+    assert!(
+        s.vault.try_repay_partial(&borrower, &borrower, &100).is_err(),
+        "parcial sobre defaulted debe rechazarse"
+    );
+    // El pago TOTAL sí entra y cierra (sin premium: owed = 10_500).
+    let paid = s.vault.repay(&borrower, &borrower);
+    assert_eq!(paid, 10_500);
+    assert!(!s.lm.get_loan(&borrower).active);
+}
+
+#[test]
+fn deposit_from_rejects_vault_itself_as_beneficiary() {
+    // (review PR #3) shares acreditadas al propio vault = fondos bloqueados
+    // para siempre (no se transfieren, no hay self-redeem). El default
+    // plausible de un bridge mal cableado se corta aca.
+    let s = setup();
+    let relayer = Address::generate(&s.e);
+    s.usdc_admin.mint(&relayer, &10_000);
+    assert!(
+        s.vault
+            .try_deposit_from(&relayer, &s.vault.address, &10_000)
+            .is_err()
+    );
+    assert_eq!(s.usdc.balance(&relayer), 10_000, "sin pull: los fondos no se mueven");
+}
+
+// ═══════ Regresiones del review PR #4 ═══════
+
+#[test]
+fn full_payoff_via_partial_on_writtenoff_does_not_double_decrement() {
+    // El payoff TOTAL via repay_partial cierra prestamos defaulted (el LM solo
+    // bloquea parciales): sin el clamp del write-off, el principal ya
+    // descontado por manual_write_off se descontaba DOS veces y total_borrows
+    // quedaba fantasma negativo.
+    let s = setup();
+    let lp = Address::generate(&s.e);
+    let borrower = Address::generate(&s.e);
+    s.usdc_admin.mint(&lp, &100_000);
+    s.vault.deposit(&lp, &100_000);
+    grant(&s, &borrower, 25_000);
+    s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
+    s.e.ledger().with_mut(|li| li.timestamp += 24 * DAY);
+    s.lm.mark_default(&borrower);
+    s.vault.manual_write_off(&borrower, &10_000); // borrows -= 10k (total)
+
+    s.usdc_admin.mint(&borrower, &20_000);
+    let rem = s.vault.repay_partial(&borrower, &borrower, &20_000); // payoff total
+    assert_eq!(rem, 0);
+    assert!(!s.lm.get_loan(&borrower).active);
+    // Sana EXACTO como el camino de repay: 100_000 + interes neto, sin
+    // fantasma. (sin premium: owed = 10_500, interes 500, fee 25)
+    assert_eq!(s.vault.total_assets(), 100_475);
+}
+
+#[test]
+fn permissionless_accrue_cannot_rewind_anchor_and_double_charge_floor() {
+    // accrue_late(now < ancla de apertura) rebobinaba last_accrued y el piso
+    // de 1 dia se devengaba de nuevo: griefing gratis contra cualquier
+    // borrower fresco. El ancla ahora SOLO avanza.
+    let s = setup();
+    let lp = Address::generate(&s.e);
+    let borrower = Address::generate(&s.e);
+    s.usdc_admin.mint(&lp, &100_000);
+    s.vault.deposit(&lp, &100_000);
+    grant(&s, &borrower, 25_000);
+    s.vault.borrow_with_term(&borrower, &10_000, &7, &500);
+
+    s.e.ledger().with_mut(|li| li.timestamp += 3600); // 1h, antes del ancla
+    s.lm.accrue_late(&borrower); // el ataque
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY - 3600);
+    assert_eq!(
+        s.lm.preview_owed(&borrower),
+        10_500,
+        "el total al vencimiento sigue EXACTO: el piso no se cobra dos veces"
+    );
+}
+
+#[test]
+fn dust_fee_floor_does_not_double_charge_at_due() {
+    // full_fee < tenor_days: el fallback cobra el fee completo al abrir y el
+    // ancla va directo al due — antes se devengaba OTRA vez (principal+2*fee).
+    let s = setup();
+    let lp = Address::generate(&s.e);
+    let borrower = Address::generate(&s.e);
+    s.usdc_admin.mint(&lp, &100_000);
+    s.vault.deposit(&lp, &100_000);
+    let now = s.e.ledger().timestamp();
+    s.lm.set_user_risk(&borrower, &600, &true, &0, &25_000);
+    s.lm.set_loan_offer(&borrower, &7, &100, &(now + DAY), &25_000); // 1% / 7d
+    s.vault.borrow_with_term(&borrower, &100, &7, &100); // fee total = 1
+    assert_eq!(s.lm.get_loan(&borrower).amount_due, 101);
+    s.e.ledger().with_mut(|li| li.timestamp += 7 * DAY);
+    assert_eq!(s.lm.preview_owed(&borrower), 101, "exacto P*(1+fee), no P+2*fee");
+}
+
+#[test]
+fn vault_usdc_getter_returns_settlement_asset() {
+    let s = setup();
+    assert_eq!(s.vault.usdc(), s.usdc.address);
 }

@@ -30,13 +30,15 @@ if (typeof window !== "undefined") {
   window.Buffer = window.Buffer || Buffer;
 }
 
-
 export const networks = {
   testnet: {
     networkPassphrase: "Test SDF Network ; September 2015",
     contractId: "CDIHUCP6DWKW7B6IUECP3SCK5WCI3W5ITNQDZEK2TNI55WLXDM6Y4WJJ",
   }
 } as const
+
+
+
 
 
 /**
@@ -161,8 +163,10 @@ export interface Client {
 
   /**
    * Construct and simulate a accrue_late transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Materialize accrued late fees into the stored amount_due. Idempotent.
-   * Permissionless on purpose (no attack surface, fixes the V3 keeper leak).
+   * Materialize accrued interest (pre-due, pro-rata) and late fees
+   * (post-due+grace) into the stored amount_due. Idempotent. Permissionless
+   * on purpose (no attack surface, fixes the V3 keeper leak). Keeps its
+   * historical name so the generated clients don't churn.
    */
   accrue_late: ({borrower}: {borrower: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
@@ -195,8 +199,21 @@ export interface Client {
   /**
    * Construct and simulate a preview_owed transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * View: amount_due if a repay happened now, including unaccrued late fees.
+   * (Nota del equipo: desde el credito revolvente tambien incluye el interes
+   * pro-rata pre-vencimiento aun no materializado — ver `accrue_late`.)
    */
   preview_owed: ({borrower}: {borrower: string}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
+
+  /**
+   * Construct and simulate a apply_payment transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Vault-only. Aplica un pago (parcial o total) al prestamo vivo, con
+   * imputacion interes-primero. Devuelve
+   * (principal_pagado, interes_pagado, saldo_restante); si el saldo llega a
+   * 0 cierra el prestamo (mismos efectos que close_loan). Prestamos en
+   * default: SOLO pago total — la curacion post-write-off del vault asume
+   * el monto completo.
+   */
+  apply_payment: ({borrower, paid}: {borrower: string, paid: i128}, options?: MethodOptions) => Promise<AssembledTransaction<readonly [i128, i128, i128]>>
 
   /**
    * Construct and simulate a get_user_risk transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -233,6 +250,8 @@ export interface Client {
    * Construct and simulate a preview_loan_with_late transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * `(principal, amount_due_with_late)` — mirrors the EVM
    * `previewLoanWithLate(addr)` tuple the frontend reads for repay UX.
+   * (Nota del equipo: amount_due incluye tambien el interes pro-rata
+   * revolvente devengado, no solo mora — ver `accrue_late`.)
    */
   preview_loan_with_late: ({borrower}: {borrower: string}, options?: MethodOptions) => Promise<AssembledTransaction<readonly [i128, i128]>>
 
@@ -279,13 +298,14 @@ export class Client extends ContractClient {
         "AAAAAAAAAAAAAAAJc2V0X293bmVyAAAAAAAAAQAAAAAAAAAJbmV3X293bmVyAAAAAAAAEwAAAAA=",
         "AAAAAAAAAAAAAAAJc2V0X3ZhdWx0AAAAAAAAAQAAAAAAAAAFdmF1bHQAAAAAAAATAAAAAA==",
         "AAAAAAAAAHRDbG9zZSB0aGUgYm9ycm93ZXIncyBhY3RpdmUgbG9hbiBhZnRlciByZXBheW1lbnQuIFZhdWx0LW9ubHkuIGBwYWlkYAptdXN0IGJlID49IGFtb3VudF9kdWUgKHdpdGggYWNjcnVlZCBsYXRlIGZlZXMpLgAAAApjbG9zZV9sb2FuAAAAAAACAAAAAAAAAAhib3Jyb3dlcgAAABMAAAAAAAAABHBhaWQAAAALAAAAAA==",
-        "AAAAAAAAAI5NYXRlcmlhbGl6ZSBhY2NydWVkIGxhdGUgZmVlcyBpbnRvIHRoZSBzdG9yZWQgYW1vdW50X2R1ZS4gSWRlbXBvdGVudC4KUGVybWlzc2lvbmxlc3Mgb24gcHVycG9zZSAobm8gYXR0YWNrIHN1cmZhY2UsIGZpeGVzIHRoZSBWMyBrZWVwZXIgbGVhaykuAAAAAAALYWNjcnVlX2xhdGUAAAAAAQAAAAAAAAAIYm9ycm93ZXIAAAATAAAAAA==",
+        "AAAAAAAAAQBNYXRlcmlhbGl6ZSBhY2NydWVkIGludGVyZXN0IChwcmUtZHVlLCBwcm8tcmF0YSkgYW5kIGxhdGUgZmVlcwoocG9zdC1kdWUrZ3JhY2UpIGludG8gdGhlIHN0b3JlZCBhbW91bnRfZHVlLiBJZGVtcG90ZW50LiBQZXJtaXNzaW9ubGVzcwpvbiBwdXJwb3NlIChubyBhdHRhY2sgc3VyZmFjZSwgZml4ZXMgdGhlIFYzIGtlZXBlciBsZWFrKS4gS2VlcHMgaXRzCmhpc3RvcmljYWwgbmFtZSBzbyB0aGUgZ2VuZXJhdGVkIGNsaWVudHMgZG9uJ3QgY2h1cm4uAAAAC2FjY3J1ZV9sYXRlAAAAAAEAAAAAAAAACGJvcnJvd2VyAAAAEwAAAAA=",
         "AAAAAAAAAH9QZXItdXNlciBwcmVtaXVtIC8gbGF0ZS1mZWUgY29uZmlnIChtaXJyb3JzIHRoZSBFVk0gYHByZW1pdW1zKGFkZHIpYApyZWFkIHRoZSBmcm9udGVuZCB1c2VzIHRvIGRyaXZlIHRoZSBsaXZlIGxhdGUtZmVlIHRpY2tlcikuAAAAAAtnZXRfcHJlbWl1bQAAAAABAAAAAAAAAAdhY2NvdW50AAAAABMAAAABAAAH0AAAAA1QcmVtaXVtQ29uZmlnAAAA",
         "AAAAAAAAAJBFZmZlY3RpdmUgY3JlZGl0IGxpbWl0LCBmYWN0b3JpbmcgS1lDICsgZXhwaXJ5LiBUaGlzIGlzIHdoYXQgdGhlIHZhdWx0CnJlYWRzIHRvIGdhdGUgYm9ycm93aW5nIChyZXBsYWNlcyBSaXNrTWFuYWdlclVuY29sbGF0J3MgY29sbGF0ZXJhbCBob29rKS4AAAAMY3JlZGl0X2xpbWl0AAAAAQAAAAAAAAAHYWNjb3VudAAAAAATAAAAAQAAAAs=",
         "AAAAAAAAAAAAAAAMaXNfZGVmYXVsdGVkAAAAAQAAAAAAAAAIYm9ycm93ZXIAAAATAAAAAQAAAAE=",
         "AAAAAAAAAJFNYXJrIGEgbG9hbiBkZWZhdWx0ZWQgKGFkbWluIGZsYWcpLiBEb2VzIE5PVCB0b3VjaCB2YXVsdCBhY2NvdW50aW5nIOKAlCB0aGUKdmF1bHQncyBgbWFudWFsX3dyaXRlX29mZmAgZG9lcyB0aGF0IChhbmQgY2hlY2tzIGlzX2RlZmF1bHRlZCBmaXJzdCkuAAAAAAAADG1hcmtfZGVmYXVsdAAAAAEAAAAAAAAACGJvcnJvd2VyAAAAEwAAAAA=",
         "AAAAAAAAAEhWaWV3OiBhbW91bnRfZHVlIGlmIGEgcmVwYXkgaGFwcGVuZWQgbm93LCBpbmNsdWRpbmcgdW5hY2NydWVkIGxhdGUgZmVlcy4AAAAMcHJldmlld19vd2VkAAAAAQAAAAAAAAAIYm9ycm93ZXIAAAATAAAAAQAAAAs=",
         "AAAAAAAAAIRPbmUtdGltZSBjb25zdHJ1Y3Rvci4gYG93bmVyYCA9IG9wZXJhdG9yIChMZW5kb29yIGJhY2tlbmQgc2lnbmVyKTsKYHZhdWx0YCA9IHRoZSBvbmx5IGNvbnRyYWN0IGFsbG93ZWQgdG8gY2FsbCBvcGVuX2xvYW4vY2xvc2VfbG9hbi4AAAANX19jb25zdHJ1Y3RvcgAAAAAAAAIAAAAAAAAABW93bmVyAAAAAAAAEwAAAAAAAAAFdmF1bHQAAAAAAAATAAAAAA==",
+        "AAAAAAAAAU1WYXVsdC1vbmx5LiBBcGxpY2EgdW4gcGFnbyAocGFyY2lhbCBvIHRvdGFsKSBhbCBwcmVzdGFtbyB2aXZvLCBjb24KaW1wdXRhY2lvbiBpbnRlcmVzLXByaW1lcm8uIERldnVlbHZlCihwcmluY2lwYWxfcGFnYWRvLCBpbnRlcmVzX3BhZ2Fkbywgc2FsZG9fcmVzdGFudGUpOyBzaSBlbCBzYWxkbyBsbGVnYSBhCjAgY2llcnJhIGVsIHByZXN0YW1vIChtaXNtb3MgZWZlY3RvcyBxdWUgY2xvc2VfbG9hbikuIFByZXN0YW1vcyBlbgpkZWZhdWx0OiBTT0xPIHBhZ28gdG90YWwg4oCUIGxhIGN1cmFjaW9uIHBvc3Qtd3JpdGUtb2ZmIGRlbCB2YXVsdCBhc3VtZQplbCBtb250byBjb21wbGV0by4AAAAAAAANYXBwbHlfcGF5bWVudAAAAAAAAAIAAAAAAAAACGJvcnJvd2VyAAAAEwAAAAAAAAAEcGFpZAAAAAsAAAABAAAD7QAAAAMAAAALAAAACwAAAAs=",
         "AAAAAAAAALNSYXcgc3RvcmVkIHJpc2sgcHJvZmlsZSAobWlycm9ycyB0aGUgRVZNIGB1c2VycyhhZGRyKWAgZ2V0dGVyIHRoZQpmcm9udGVuZCdzIGB1c2VDcmVkaXRMaW5lYCBwb2xscyBmb3Igc2NvcmUgLyBLWUMgLyBsaW1pdCkuIFJldHVybnMgYQp6ZXJvZWQgcHJvZmlsZSBpZiB0aGUgdXNlciB3YXMgbmV2ZXIgc2NvcmVkLgAAAAANZ2V0X3VzZXJfcmlzawAAAAAAAAEAAAAAAAAAB2FjY291bnQAAAAAEwAAAAEAAAfQAAAACFVzZXJSaXNr",
         "AAAAAAAAAC9Xcml0ZSB0aGUgb2ZmLWNoYWluIG1vZGVsJ3MgdmVyZGljdCBmb3IgYSB1c2VyLgAAAAANc2V0X3VzZXJfcmlzawAAAAAAAAUAAAAAAAAAB2FjY291bnQAAAAAEwAAAAAAAAAFc2NvcmUAAAAAAAAEAAAAAAAAAAZreWNfb2sAAAAAAAEAAAAAAAAAC3ZhbGlkX3VudGlsAAAAAAYAAAAAAAAABWxpbWl0AAAAAAAACwAAAAA=",
         "AAAAAAAAAAAAAAAOc2V0X2xvYW5fb2ZmZXIAAAAAAAUAAAAAAAAACGJvcnJvd2VyAAAAEwAAAAAAAAAKdGVub3JfZGF5cwAAAAAABAAAAAAAAAAHZmVlX2JwcwAAAAAEAAAAAAAAAAt2YWxpZF91bnRpbAAAAAAGAAAAAAAAAAptYXhfYW1vdW50AAAAAAALAAAAAA==",
@@ -310,6 +330,7 @@ export class Client extends ContractClient {
         is_defaulted: this.txFromJSON<boolean>,
         mark_default: this.txFromJSON<null>,
         preview_owed: this.txFromJSON<i128>,
+        apply_payment: this.txFromJSON<readonly [i128, i128, i128]>,
         get_user_risk: this.txFromJSON<UserRisk>,
         set_user_risk: this.txFromJSON<null>,
         set_loan_offer: this.txFromJSON<null>,
