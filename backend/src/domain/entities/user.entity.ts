@@ -273,6 +273,23 @@ export class User {
   @Column({ type: 'timestamptz', nullable: true })
   identityCrossCheckedAt?: Date | null;
 
+  // ── D1.3 (SCF #45): gate de KYC con vendor abstraido ─────────────────
+
+  /** none → pending → approved | rejected. El gate exige 'approved'. */
+  @Column({ type: 'varchar', length: 16, default: 'none' })
+  kycStatus!: string;
+
+  /** Sesion abierta en el vendor; se limpia en rejected para reintentar. */
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  kycSessionId?: string | null;
+
+  /** Vendor que verifico ('fake' en testnet; el real al confirmarse). */
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  kycProvider?: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  kycApprovedAt?: Date | null;
+
   /**
    * Confidence score (0–100) of Lemon claims matching Self KYC fields.
    * +40 firstName, +40 lastName, +20 email. NULL = no Self data to compare.

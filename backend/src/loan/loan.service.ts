@@ -30,6 +30,7 @@ import {
 import { UserService } from 'src/user/user.service';
 import { SelfService } from 'src/self/self.service';
 import { normalizeWallet } from 'src/common/normalize-wallet';
+import { assertKycGate } from 'src/kyc/kyc-gate';
 
 import { LoanVerificationService } from './loan-verification.service';
 import { LoanRepaymentService } from './loan-repayment.service';
@@ -346,6 +347,10 @@ export class LoanService {
         message: 'Phone verification required before requesting loan',
       });
     }
+
+    // D1.3 (SCF #45): el gate de KYC guarda el borrow ademas del verify —
+    // "before `borrow` is enabled" es literal en el award
+    assertKycGate(user);
 
     const scoreNum = this.toNum(user.score);
     const pDefaultNum = this.toNum(user.riskPDefault);
