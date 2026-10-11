@@ -15,6 +15,7 @@ import { CreditPolicyService } from 'src/domain/services/credit-policy.service';
 import { UserService } from 'src/user/user.service';
 import { SelfService } from 'src/self/self.service';
 import { normalizeWallet } from 'src/common/normalize-wallet';
+import { assertKycGate } from 'src/kyc/kyc-gate';
 
 // On-chain defaults (1 score, 1 USDC)
 const DEFAULT_SCORE = 1;
@@ -92,6 +93,10 @@ export class LoanVerificationService {
         'Tenés que aceptar los Términos y Condiciones antes de habilitar tu crédito.',
       );
     }
+
+    // D1.3 (SCF #45): "a wallet must pass identity verification … before
+    // borrow is enabled" — gate por estado persistido, flag KYC_GATE_ENABLED
+    assertKycGate(user);
 
     await this.selfService.ensureSelfVerificationForPlatform(user);
 

@@ -32,6 +32,7 @@ import { WalletLinkNonce } from 'src/domain/entities/wallet-link-nonce.entity';
 import { SelfVerification } from 'src/domain/entities/self-verification.entity';
 
 import { UserModule } from 'src/user/user.module';
+import { KycModule } from 'src/kyc/kyc.module';
 import { ContractModule } from 'src/loan/loan.module';
 import { AuthModule } from 'src/auth/auth.module';
 import { AppController } from 'src/infrastructure/http/app.controller';
@@ -170,6 +171,7 @@ import { WalletLinkModule } from 'src/wallet-link/wallet-link.module';
     // Metric repo needed by AppController for /health/db-chain-parity.
     TypeOrmModule.forFeature([Metric]),
     UserModule,
+    KycModule,
     ContractModule,
     AuthModule,
     SelfModule,
