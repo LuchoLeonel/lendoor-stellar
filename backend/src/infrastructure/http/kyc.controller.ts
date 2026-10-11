@@ -5,8 +5,8 @@ import {
   ForbiddenException,
   Get,
   HttpCode,
+  Inject,
   Post,
-  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -25,7 +25,7 @@ import {
   KYC_PROVIDER,
   KycProviderPort,
 } from 'src/domain/ports/outbound/kyc-provider.port';
-import { Inject } from '@nestjs/common';
+import { SandboxDecisionDto } from 'src/kyc/dto/sandbox-decision.dto';
 
 /**
  * D1.3 — endpoints del KYC. La wallet SIEMPRE sale del token (CallerWallet):
@@ -65,10 +65,7 @@ export class KycController {
   @Post('sandbox/decision')
   @HttpCode(200)
   @ApiOperation({ summary: '[fake provider only] resolve a KYC session by hand' })
-  async sandboxDecision(
-    @Body() body: { sessionId: string; decision: 'approved' | 'rejected' },
-    @Query() _q: unknown,
-  ) {
+  async sandboxDecision(@Body() body: SandboxDecisionDto) {
     if (!(this.provider instanceof FakeKycProvider)) {
       throw new ForbiddenException('sandbox decisions only exist for the fake provider');
     }
