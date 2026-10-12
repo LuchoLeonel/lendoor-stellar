@@ -26,3 +26,14 @@
 ## Gates
 
 - `src/kyc`: **10 tests** ✅ · backend completo: **189/189** ✅ · `tsc --noEmit`: **0** ✅
+
+## Addendum post-merge (12/10) — hallazgo del boot real
+
+La review dejó anotado que el arranque real con DB quedaba pendiente. Se
+ejercitó en el demo de D1.3 (backend local + Postgres descartable) y encontró
+el bug que la suite unitaria no puede ver: `KycModule` usaba `AccessTokenGuard`
+sin importar `AuthModule` → `UnknownDependenciesException` en el boot. Fix
+mínimo en `kyc.module.ts` (mismo patrón que UserModule/ContractModule),
+verificado con el boot completo + la corrida entera del gate
+(`docs/deliverables/scf-tranche1/d1.3-kyc-evidencia.md`). Gates re-corridos:
+`tsc --noEmit` 0 · 189/189 con el flag en default.

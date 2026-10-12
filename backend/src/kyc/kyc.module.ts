@@ -2,6 +2,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { AuthModule } from 'src/auth/auth.module';
 import { User } from 'src/domain/entities/user.entity';
 import { KYC_PROVIDER } from 'src/domain/ports/outbound/kyc-provider.port';
 import { KycController } from 'src/infrastructure/http/kyc.controller';
@@ -15,7 +16,10 @@ import { KycService } from './kyc.service';
  * sin tocar nada mas (gate, service y controller son vendor-agnosticos).
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([User])],
+  // AuthModule provee AuthService para el AccessTokenGuard del controller
+  // (mismo patron que UserModule/ContractModule). Sin esto el boot real muere
+  // con UnknownDependenciesException aunque la suite unitaria pase.
+  imports: [TypeOrmModule.forFeature([User]), AuthModule],
   controllers: [KycController],
   providers: [
     FakeKycProvider,
