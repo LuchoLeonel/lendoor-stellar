@@ -23,6 +23,7 @@
  * the adapter pattern — instead of replacing it.
  */
 import {
+  hash,
   Keypair,
   Transaction,
   TransactionBuilder,
@@ -109,5 +110,37 @@ export function makePrivySigner(options: {
       attachRawSignature(tx, address, rawSig);
       return { signedTxXdr: tx.toXDR() };
     },
+  };
+}
+
+const SEP53_PREFIX = "Stellar Signed Message:\n";
+
+/**
+ * Hash SEP-53 del mensaje de auth, 0x-prefijado para `signRawHash`:
+ * sha256("Stellar Signed Message:\n" + mensaje) — la MISMA construccion que
+ * verifica el backend en /auth/stellar/verify (auth.service.ts). Si una punta
+ * cambia, el test de paridad de privy-signer.test.ts revienta.
+ */
+export function sep53MessageHashHexForPrivy(message: string): string {
+  const payload = Buffer.concat([
+    Buffer.from(SEP53_PREFIX, "utf8"),
+    Buffer.from(message, "utf8"),
+  ]);
+  return "0x" + hash(payload).toString("hex");
+}
+
+/**
+ * Firma de mensajes de auth con Privy — la misma reduccion que el sobre: el
+ * backend verifica ed25519 sobre el hash SEP-53, y firmar un hash crudo es
+ * exactamente lo que `signRawHash` sabe hacer. Devuelve base64, la forma que
+ * /auth/stellar/verify espera.
+ */
+export function makePrivyAuthMessageSigner(options: {
+  signRawHash: RawHashSigner;
+}): (message: string) => Promise<string> {
+  const { signRawHash } = options;
+  return async (message) => {
+    const raw = await signRawHash(sep53MessageHashHexForPrivy(message));
+    return normalizeRawSignature(raw).toString("base64");
   };
 }

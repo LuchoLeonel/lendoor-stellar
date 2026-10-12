@@ -37,7 +37,21 @@ function hasInjectedFreighterGlobal(): boolean {
   return !!freighterWindow.freighter || !!freighterWindow.freighterApi;
 }
 
+/**
+ * Opt-out explicito (VITE_FREIGHTER_DISABLED=true): fuerza el camino sin
+ * extension — el onboarding Privy del award — aunque Freighter este
+ * instalado en el browser (demos / e2e en maquinas con la extension).
+ */
+function freighterDisabledByEnv(): boolean {
+  return (
+    (import.meta.env.VITE_FREIGHTER_DISABLED as string | undefined)
+      ?.trim()
+      .toLowerCase() === "true"
+  );
+}
+
 async function isFreighterAvailable(): Promise<boolean> {
+  if (freighterDisabledByEnv()) return false;
   if (hasInjectedFreighterGlobal()) return true;
 
   try {
