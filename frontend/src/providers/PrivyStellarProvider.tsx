@@ -26,7 +26,7 @@ import {
   useSignRawHash,
 } from "@privy-io/react-auth/extended-chains";
 
-import { makePrivySigner } from "@/lib/privy-signer";
+import { makePrivyAuthMessageSigner, makePrivySigner } from "@/lib/privy-signer";
 import { setActiveStellarSigner } from "@/lib/stellar-signer-registry";
 import { isStellarMode } from "@/lib/stellar-wallet";
 
@@ -131,24 +131,38 @@ function PrivyStellarBridge({ children }: React.PropsWithChildren) {
       setActiveStellarSigner(null); // vuelve Freighter
       return;
     }
+    const signRawHashForWallet = async (hashHex0x: string) => {
+      const { signature } = await signRawHash({
+        address: privyAddress,
+        chainType: STELLAR_CHAIN_TYPE,
+        hash: hashHex0x as `0x${string}`,
+      });
+      return signature;
+    };
     const signer = makePrivySigner({
       address: privyAddress,
       networkPassphrase:
         (import.meta.env.VITE_STELLAR_NETWORK_PASSPHRASE as string | undefined) ??
         "Test SDF Network ; September 2015",
-      signRawHash: async (hashHex0x) => {
-        const { signature } = await signRawHash({
-          address: privyAddress,
-          chainType: STELLAR_CHAIN_TYPE,
-          hash: hashHex0x as `0x${string}`,
-        });
-        return signature;
-      },
+      signRawHash: signRawHashForWallet,
+    });
+    const signPrivyAuthMessage = makePrivyAuthMessageSigner({
+      signRawHash: signRawHashForWallet,
     });
     setActiveStellarSigner({
       kind: "privy",
       signTransaction: async (xdr, opts) =>
         (await signer.signTransaction(xdr, opts)).signedTxXdr,
+      signAuthMessage: (message, opts) => {
+        if (opts.address !== privyAddress) {
+          return Promise.reject(
+            new Error(
+              `Privy signer holds ${privyAddress}; asked to sign auth for ${opts.address}`,
+            ),
+          );
+        }
+        return signPrivyAuthMessage(message);
+      },
     });
     return () => setActiveStellarSigner(null);
   }, [privyAddress, signRawHash]);

@@ -13,7 +13,10 @@ import { useWallet } from "@/providers/WalletProvider";
 import { useTranslation } from "@/i18n/useTranslation";
 import { useAuthStore } from "@/stores/authStore";
 import { lendoorApi } from "@/lib/api";
-import { signFreighterMessage } from "@/lib/stellar-wallet";
+import {
+  getActiveStellarSignerKind,
+  signActiveStellarAuthMessage,
+} from "@/lib/stellar-signer-registry";
 import { normalizeWalletAddress } from "@/lib/wallet-address";
 import type { GetNonceResponse, VerifySiweResponse } from "@shared/types/api";
 
@@ -303,7 +306,7 @@ export function useRefreshAccessToken(): () => Promise<string | null> {
         return data.accessToken;
       }
 
-      // 2) STELLAR via Freighter
+      // 2) STELLAR — Freighter o Privy, via el registro de firmantes
       if (mode === "stellar") {
         if (stellarLoading) {
           return null;
@@ -315,7 +318,7 @@ export function useRefreshAccessToken(): () => Promise<string | null> {
           return null;
         }
 
-        console.log("[RefreshAccessToken] Using Stellar Freighter auth flow");
+        console.log("[RefreshAccessToken] Using Stellar auth flow");
 
         const nonceRes = await fetch(`${BACKEND_URL}/auth/nonce`, {
           method: "POST",
@@ -329,9 +332,14 @@ export function useRefreshAccessToken(): () => Promise<string | null> {
         const { nonce } = (await nonceRes.json()) as GetNonceResponse;
 
         const message = buildStellarAuthMessage(primaryWallet.address, nonce);
-        const signature = await signFreighterMessage(
-          message,
-          primaryWallet.address,
+        const signature = await signActiveStellarAuthMessage(message, {
+          address: primaryWallet.address,
+        });
+        // El kind se loguea DESPUES de firmar: leerlo al entrar al flujo puede
+        // adelantarse al registro del firmante de Privy (orden de efectos) y
+        // reportar "freighter" aunque firme Privy.
+        console.log(
+          `[RefreshAccessToken] auth message signed (signer=${getActiveStellarSignerKind()})`,
         );
 
         const verifyRes = await fetch(`${BACKEND_URL}/auth/stellar/verify`, {

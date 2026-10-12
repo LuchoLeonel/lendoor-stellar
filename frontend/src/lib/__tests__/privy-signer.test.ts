@@ -18,11 +18,14 @@ import {
   TransactionBuilder,
 } from "@stellar/stellar-sdk";
 import { Buffer } from "buffer";
+import { createHash } from "node:crypto";
 import {
   attachRawSignature,
   hashHexForPrivy,
+  makePrivyAuthMessageSigner,
   makePrivySigner,
   normalizeRawSignature,
+  sep53MessageHashHexForPrivy,
 } from "../privy-signer";
 
 const PASSPHRASE = Networks.TESTNET;
@@ -155,5 +158,43 @@ describe("makePrivySigner — la misma interfaz que el firmante de Freighter", (
     expect(kp.verify(back.hash(), back.signatures[0].signature() as Buffer)).toBe(
       true,
     );
+  });
+});
+
+describe("firma de mensajes de auth (SEP-53) con Privy", () => {
+  it("paridad con el backend: misma construccion de hash que auth.service.ts", () => {
+    const message = "lendoor quiere verificar tu wallet\nnonce=abc123";
+    // replica LITERAL de la verificacion del backend:
+    //   sha256("Stellar Signed Message:\n" + mensaje utf8)
+    const backendHash = createHash("sha256")
+      .update("Stellar Signed Message:\n", "utf8")
+      .update(Buffer.from(message, "utf8"))
+      .digest();
+    expect(sep53MessageHashHexForPrivy(message)).toBe(
+      "0x" + backendHash.toString("hex"),
+    );
+  });
+
+  it("la firma que produce verifica como la verifica el backend (ed25519 sobre el hash)", async () => {
+    const kp = Keypair.random();
+    const message = `auth wallet=${kp.publicKey()} nonce=zzz`;
+    const backendHash = createHash("sha256")
+      .update("Stellar Signed Message:\n", "utf8")
+      .update(Buffer.from(message, "utf8"))
+      .digest();
+
+    // "Privy" = firmar el hash crudo y devolver 0x-hex, igual que signRawHash
+    const signAuth = makePrivyAuthMessageSigner({
+      signRawHash: async (hashHex0x) => {
+        expect(hashHex0x).toBe("0x" + backendHash.toString("hex"));
+        return "0x" + kp.sign(backendHash).toString("hex");
+      },
+    });
+
+    const signatureB64 = await signAuth(message);
+    // base64 de 64 bytes — el formato que /auth/stellar/verify decodifica
+    const sig = Buffer.from(signatureB64, "base64");
+    expect(sig.length).toBe(64);
+    expect(kp.verify(backendHash, sig)).toBe(true);
   });
 });
