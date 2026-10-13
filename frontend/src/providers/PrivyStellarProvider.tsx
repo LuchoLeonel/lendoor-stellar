@@ -23,6 +23,7 @@ import * as React from "react";
 import { PrivyProvider, usePrivy } from "@privy-io/react-auth";
 import {
   useCreateWallet,
+  useExportWallet,
   useSignRawHash,
 } from "@privy-io/react-auth/extended-chains";
 
@@ -43,6 +44,12 @@ type PrivyStellarContextType = {
   privyEnabled: boolean;
   loginWithPrivy: () => void;
   logoutPrivy: () => Promise<void>;
+  /**
+   * Autocustodia (D1.2): abre el modal seguro de Privy para que el usuario
+   * copie la clave privada de su wallet embebida. La clave vive en un iframe
+   * de otro dominio — la app nunca la ve.
+   */
+  exportPrivyWallet: () => Promise<void>;
 };
 
 const PrivyStellarContext = React.createContext<PrivyStellarContextType>({
@@ -54,6 +61,9 @@ const PrivyStellarContext = React.createContext<PrivyStellarContextType>({
     console.warn("[PrivyStellar] provider not mounted (no app id / not stellar mode)");
   },
   logoutPrivy: async () => {},
+  exportPrivyWallet: async () => {
+    console.warn("[PrivyStellar] export: provider not mounted");
+  },
 });
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -92,6 +102,7 @@ function cleanOauthParams() {
 function PrivyStellarBridge({ children }: React.PropsWithChildren) {
   const { ready, authenticated, user, login, logout } = usePrivy();
   const { createWallet } = useCreateWallet();
+  const { exportWallet } = useExportWallet();
   const { signRawHash } = useSignRawHash();
   const [privyAddress, setPrivyAddress] = React.useState<string | null>(null);
   const creatingRef = React.useRef(false);
@@ -175,8 +186,14 @@ function PrivyStellarBridge({ children }: React.PropsWithChildren) {
       privyEnabled: true,
       loginWithPrivy: login,
       logoutPrivy: logout,
+      exportPrivyWallet: async () => {
+        if (!privyAddress) {
+          throw new Error("No hay wallet de Privy en sesion para exportar");
+        }
+        await exportWallet({ address: privyAddress });
+      },
     }),
-    [privyAddress, ready, authenticated, login, logout],
+    [privyAddress, ready, authenticated, login, logout, exportWallet],
   );
 
   return (
