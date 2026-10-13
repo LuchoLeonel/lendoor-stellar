@@ -33,7 +33,36 @@ export function Header() {
   const { t } = useTranslation();
 
   // Hide header entirely in mini-app mode — Lemon/Farcaster provide their own nav bar
-  if (isMiniApp || mode === 'stellar') return null;
+  if (isMiniApp) return null;
+
+  // Stellar (D1.2): header slim — marca + area de wallet (chip Privy/Freighter
+  // y "Exportar clave"). La nav y el area USDC del header son EVM-centricas y
+  // por eso el header completo seguia oculto en este modo.
+  if (mode === 'stellar') {
+    return (
+      <header className="border-b border-primary/20 bg-background/95 backdrop-blur-md sticky top-0 z-50 overflow-x-hidden">
+        <div className="max-w-7xl mx-auto px-3 md:px-6 py-2 md:py-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 md:gap-3 min-w-0">
+            <img
+              src="/favicon.png"
+              alt="favicon"
+              width={15}
+              height={15}
+              className="h-7 w-7 shrink-0 object-contain"
+            />
+            <div className="text-xl md:text-2xl font-bold text-primary mono-text truncate">
+              LENDOOR
+            </div>
+          </div>
+          <React.Suspense
+            fallback={<div className="h-10 w-28 rounded-xl bg-muted/50 animate-pulse" />}
+          >
+            <WebAuthArea mounted={mounted} />
+          </React.Suspense>
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header className="border-b border-primary/20 bg-background/95 backdrop-blur-md sticky top-0 z-50 overflow-x-hidden">
