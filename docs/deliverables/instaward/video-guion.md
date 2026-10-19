@@ -8,9 +8,9 @@
 ## Pestañas abiertas ANTES de grabar (en este orden)
 
 1. **Vault en stellar.expert:**
-   https://stellar.expert/explorer/testnet/contract/CDY27BWE7HYC26JRVU7NE7IC6GMKEUWMOTCB3B3MEPOZHXSWWLBQSBKA
+   https://stellar.expert/explorer/testnet/contract/CCXUEBC3VOOB57NVDFMQVAJRN52FUQN37EAPLVMAU7MLSPUBMZNBVT2Q
 2. **Loan Manager en stellar.expert:**
-   https://stellar.expert/explorer/testnet/contract/CA2H4UFGUADAL3GFU6DM7TBJ4DY6WIZXZ67A42K4RKVUWEY7YZXRGV4R
+   https://stellar.expert/explorer/testnet/contract/CB4QQU2JWC6264NQCUPE6WSVYQHJTJNJ5ZBVU7ZAOE7TYNJPYE26YVTD
 3. Las tx de la ceremonia, UNA pestaña por hash (de `README.md` §D3):
    borrow · repago parcial · repago con descuento · repay final · score update.
    En la del **repago parcial**, dejá expandido el evento `partpay` ANTES de
