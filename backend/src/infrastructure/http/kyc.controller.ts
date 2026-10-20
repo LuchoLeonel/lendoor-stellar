@@ -26,6 +26,7 @@ import {
   KycProviderPort,
 } from 'src/domain/ports/outbound/kyc-provider.port';
 import { SandboxDecisionDto } from 'src/kyc/dto/sandbox-decision.dto';
+import { kycGateEnabled } from 'src/kyc/kyc-gate';
 
 /**
  * D1.3 — endpoints del KYC. La wallet SIEMPRE sale del token (CallerWallet):
@@ -54,7 +55,9 @@ export class KycController {
   @ApiOperation({ summary: 'Current KYC status for the caller wallet (refreshes if pending)' })
   @ApiResponse({ status: 200, description: 'none | pending | approved | rejected' })
   async status(@CallerWallet() caller: string) {
-    return this.service.status(caller);
+    // `required` le dice al frontend si el gate está prendido: con el flag
+    // apagado no se le pide KYC a nadie aunque su estado no sea 'approved'.
+    return { ...(await this.service.status(caller)), required: kycGateEnabled() };
   }
 
   /**

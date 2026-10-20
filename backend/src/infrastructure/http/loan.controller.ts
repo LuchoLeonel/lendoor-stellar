@@ -54,6 +54,16 @@ export class LoanController {
     return this.creditPolicy.getLadder();
   }
 
+  /**
+   * Préstamos reales de la wallet del token (historial para la app).
+   */
+  @Get('history')
+  @ApiOperation({ summary: 'Loan history (newest first) for the caller wallet' })
+  @ApiResponse({ status: 200, description: 'Loan history returned' })
+  getHistory(@CallerWallet() caller: string) {
+    return this.service.getHistory(caller);
+  }
+
   @Post('verify')
   @HttpCode(200)
   @ApiOperation({ summary: 'Submit wallet for credit verification' })

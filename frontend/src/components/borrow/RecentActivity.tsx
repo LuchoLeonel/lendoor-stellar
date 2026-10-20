@@ -111,13 +111,24 @@ function ActivityRow({ tx }: { tx: Transaction }) {
 // ---------------------------------------------------------------------------
 
 interface RecentActivityProps {
-  /** Pass real transactions to override mock data */
+  /** Transacciones reales del usuario. */
   transactions?: Transaction[];
   onViewAll?: () => void;
+  /**
+   * Solo para maquetas de diseño: rellena con datos de ejemplo cuando no hay
+   * reales. Apagado por default — una cuenta nueva no tiene actividad, y
+   * mostrarle historial inventado la hace parecer usada.
+   */
+  showMockWhenEmpty?: boolean;
 }
 
-export function RecentActivity({ transactions, onViewAll }: RecentActivityProps) {
-  const items = transactions && transactions.length > 0 ? transactions : MOCK_TRANSACTIONS;
+export function RecentActivity({
+  transactions,
+  onViewAll,
+  showMockWhenEmpty = false,
+}: RecentActivityProps) {
+  const real = transactions ?? [];
+  const items = real.length > 0 ? real : showMockWhenEmpty ? MOCK_TRANSACTIONS : [];
 
   return (
     <div className="mx-auto w-full max-w-md px-4 mb-4">
@@ -135,9 +146,13 @@ export function RecentActivity({ transactions, onViewAll }: RecentActivityProps)
 
       {/* Rows container */}
       <div className="rounded-2xl border border-border/40 bg-card px-4">
-        {items.map((tx) => (
-          <ActivityRow key={tx.id} tx={tx} />
-        ))}
+        {items.length === 0 ? (
+          <p className="py-5 text-center text-[13px] text-muted-foreground">
+            Sin actividad todavía
+          </p>
+        ) : (
+          items.map((tx) => <ActivityRow key={tx.id} tx={tx} />)
+        )}
       </div>
     </div>
   );

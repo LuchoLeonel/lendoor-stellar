@@ -72,6 +72,8 @@ class LiveSoroban implements SorobanSubmitter {
       const r = await this.server.getTransaction(sent.hash);
       if (r.status === 'SUCCESS') {
         log(`${method} OK — tx ${sent.hash}`);
+        // Link clickeable (Cmd+click en Terminal) para mostrarlo en el explorer.
+        log(`   → https://stellar.expert/explorer/testnet/tx/${sent.hash}`);
         return { txHash: sent.hash };
       }
       if (r.status === 'FAILED') {
@@ -144,6 +146,8 @@ async function cmdBurn(): Promise<void> {
   const burn = await wallet.sendTransaction({ to: plan.tokenMessengerV2, data: plan.burnData });
   const receipt = await burn.wait();
   log(`burn OK — ${burn.hash} (block ${receipt?.blockNumber})`);
+  // Link clickeable (Cmd+click en Terminal) para mostrarlo en el explorer.
+  log(`   → https://sepolia.basescan.org/tx/${burn.hash}`);
   log(`siguiente paso: yarn cctp:demo deliver ${burn.hash}`);
 }
 

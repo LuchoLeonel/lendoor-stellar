@@ -29,6 +29,7 @@ import {
 
 import { makePrivyAuthMessageSigner, makePrivySigner } from "@/lib/privy-signer";
 import { setActiveStellarSigner } from "@/lib/stellar-signer-registry";
+import { ensureTestnetAccountReady } from "@/lib/stellar-account-activation";
 import { isStellarMode } from "@/lib/stellar-wallet";
 
 const APP_ID = (import.meta.env.VITE_PRIVY_APP_ID as string | undefined)?.trim();
@@ -150,11 +151,12 @@ function PrivyStellarBridge({ children }: React.PropsWithChildren) {
       });
       return signature;
     };
+    const networkPassphrase =
+      (import.meta.env.VITE_STELLAR_NETWORK_PASSPHRASE as string | undefined) ??
+      "Test SDF Network ; September 2015";
     const signer = makePrivySigner({
       address: privyAddress,
-      networkPassphrase:
-        (import.meta.env.VITE_STELLAR_NETWORK_PASSPHRASE as string | undefined) ??
-        "Test SDF Network ; September 2015",
+      networkPassphrase,
       signRawHash: signRawHashForWallet,
     });
     const signPrivyAuthMessage = makePrivyAuthMessageSigner({
@@ -175,7 +177,30 @@ function PrivyStellarBridge({ children }: React.PropsWithChildren) {
         return signPrivyAuthMessage(message);
       },
     });
-    return () => setActiveStellarSigner(null);
+
+    // Wallet recién creada: sin XLM ni trustline de USDC no puede pedir ni
+    // recibir un préstamo. En testnet la dejamos operable acá (no-op en
+    // mainnet y si ya está lista).
+    let cancelled = false;
+    void ensureTestnetAccountReady({
+      address: privyAddress,
+      networkPassphrase,
+      signTransaction: async (xdr) =>
+        (await signer.signTransaction(xdr, { networkPassphrase })).signedTxXdr,
+    })
+      .then((r) => {
+        if (!cancelled && r.kind === "ready" && (r.funded || r.trustlineAdded)) {
+          console.info("[PrivyStellar] wallet activada en testnet", r);
+        }
+      })
+      .catch((err: unknown) => {
+        console.error("[PrivyStellar] no se pudo activar la wallet en testnet", err);
+      });
+
+    return () => {
+      cancelled = true;
+      setActiveStellarSigner(null);
+    };
   }, [privyAddress, signRawHash]);
 
   const value = React.useMemo<PrivyStellarContextType>(
