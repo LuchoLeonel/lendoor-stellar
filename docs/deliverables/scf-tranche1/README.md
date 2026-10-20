@@ -14,7 +14,12 @@ CCTP que se ve es la tercera de `d1.1-cctp-evidencia.md`; la de Privy + KYC es l
 wallet `GCKBTP6U…W4ELE` (`d1.2-privy-evidencia.md` y `d1.3-kyc-app-evidencia.md`).
 
 **El hilo que une los tres:** el USDC que entró por CCTP en D1.1 es el mismo
-que el usuario de Privy deposita en D1.2, en el mismo vault; y D1.3 es el gate
+que el usuario de Privy deposita en D1.2, en el mismo vault (cadena verificable
+en la corrida del 2026-10-12: `deposit_from` [`4448e378…`](https://stellar.expert/explorer/testnet/tx/4448e3789623b2501e224bb6a8faf774f6e91568ac052c61007e3681d019a7f9)
+→ redeem [`fcc881f4…`](https://stellar.expert/explorer/testnet/tx/fcc881f4ffbd91c2bcb1b942116927c6d68f811647cc198d7a5547d4238113d7)
+→ pago de 0,9999999 USDC [`6959b14a…`](https://stellar.expert/explorer/testnet/tx/6959b14a3d52c5dca96908610f5935dacbb72f0f5b8e825777dceb5c861f9de2)
+→ `vault.deposit` firmado con Privy [`49ab280b…`](https://stellar.expert/explorer/testnet/tx/49ab280beb3db570f2bdf2a10f446f483a033d7973d234afe4d8cf414adbf5f3);
+la corrida grabada con `GCKBTP6U…` se fondeó con USDC de testnet); y D1.3 es el gate
 que hace no-sybileable la métrica final del award (préstamos a borrowers
 KYC-verificados).
 

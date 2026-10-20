@@ -93,6 +93,7 @@ flowchart TD
 ## 4. On-chain footprint (registered at award time)
 
 - **Stellar testnet (live now):** Vault `CDEJOQBQEZ7LUXSWXM4RF6EPBZLMJHMTGKC5GNWK5TNJR36TBHQLCULP` · Loan Manager `CDIHUCP6DWKW7B6IUECP3SCK5WCI3W5ITNQDZEK2TNI55WLXDM6Y4WJJ`.
+  - *Update (SCF #45 Tranche 1):* that pair settled in the native XLM asset contract as a USDC stand-in. The Tranche 1 deliverables run on a redeployed pair settling in Circle's testnet USDC: Vault `CCXUEBC3VOOB57NVDFMQVAJRN52FUQN37EAPLVMAU7MLSPUBMZNBVT2Q` · Loan Manager `CB4QQU2JWC6264NQCUPE6WSVYQHJTJNJ5ZBVU7ZAOE7TYNJPYE26YVTD` · USDC SAC `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` (see [`deliverables/scf-tranche1/`](deliverables/scf-tranche1/README.md)).
 - **Stellar mainnet (deployed in T3, IDs registered at deploy):** hardened + audited Vault and Loan Manager contract IDs, the USDC Stellar Asset Contract, the `operator` / `underwriter` accounts, and the admin multisig account.
 
 ---
