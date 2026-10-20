@@ -77,6 +77,27 @@ export class LoanService {
     );
   }
 
+  /**
+   * Préstamos de la wallet (más nuevo primero) para el historial de la app.
+   * Solo lectura; la wallet viene del token (CallerWallet), nadie lista el
+   * historial de otro.
+   */
+  async getHistory(wallet: string) {
+    const loans = await this.loanRepo.find({
+      where: { borrowerAddress: wallet },
+      order: { createdAt: 'DESC' },
+      take: 50,
+    });
+    return loans.map((l) => ({
+      id: l.id,
+      principal: Number(l.principal),
+      amountPaid: Number(l.amountPaid ?? 0),
+      status: l.status,
+      createdAt: new Date(l.createdAt).toISOString(),
+      closedAt: l.closedAt ? new Date(l.closedAt).toISOString() : null,
+    }));
+  }
+
   // ------------------ Shared helpers ------------------ //
 
   private normalizePlatform(p?: string | null): UserPlatform | null {
@@ -348,8 +369,9 @@ export class LoanService {
       });
     }
 
-    // D1.3 (SCF #45): el gate de KYC guarda el borrow ademas del verify —
-    // "before `borrow` is enabled" es literal en el award
+    // D1.3 (SCF #45): ÚNICO lugar donde corre el gate de KYC — "before
+    // `borrow` is enabled" es literal en el award. /loan/verify ya no gatea:
+    // hacerlo dejaba la UI sin línea de crédito para mostrar.
     assertKycGate(user);
 
     const scoreNum = this.toNum(user.score);

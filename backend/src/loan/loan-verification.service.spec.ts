@@ -89,6 +89,25 @@ describe('LoanVerificationService.verify', () => {
     expect(blockchain.giveCreditScoreAndLimit).toHaveBeenCalled();
   });
 
+  it('does not gate on KYC: verify sets up credit even with KYC_GATE_ENABLED and kycStatus none', async () => {
+    const prev = process.env.KYC_GATE_ENABLED;
+    process.env.KYC_GATE_ENABLED = 'true';
+    try {
+      const user = makeUser({ kycStatus: 'none' } as Partial<User>);
+      (userRepo.findOne as jest.Mock)
+        .mockResolvedValueOnce(user)
+        .mockResolvedValueOnce({ ...user, score: 1, creditLimit: 1 });
+
+      await expect(
+        service.verify({ walletAddress: wallet, platform: 'webapp' }),
+      ).resolves.toMatchObject({ verified: true });
+      expect(blockchain.giveCreditScoreAndLimit).toHaveBeenCalled();
+    } finally {
+      if (prev === undefined) delete process.env.KYC_GATE_ENABLED;
+      else process.env.KYC_GATE_ENABLED = prev;
+    }
+  });
+
   it('rejects credit setup when a waitlist limit exists and the user is not early', async () => {
     const user = makeUser();
     (userRepo.findOne as jest.Mock).mockResolvedValue(user);

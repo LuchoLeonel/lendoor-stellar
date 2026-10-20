@@ -14,6 +14,8 @@ import { NumericKeypad } from '@/components/common/NumericKeypad';
 import { useWallet } from '@/providers/WalletProvider';
 import { useTranslation } from '@/i18n/useTranslation';
 import { GridBackground } from '@/components/common/GridBackground';
+import { KycVerificationModal } from '@/components/borrow/KycVerificationModal';
+import { useApi } from '@/hooks/useApi';
 
 // ---------------------------------------------------------------------------
 // Terms screen — rendered once "Continuar" is tapped
@@ -346,6 +348,40 @@ export function PrestarTab({ setShowQR, onBackToInicio, isActive = true }: Prest
     setShowQR,
   });
 
+  // ── KYC gate (D1.3) ──
+  // El backend bloquea el borrow con 403 hasta kycStatus=approved cuando el
+  // gate está prendido. Al confirmar el préstamo preguntamos SIEMPRE al
+  // backend (sin cachear un "aprobado" en memoria): si no lo exige
+  // (`required: false`) o ya está aprobado, sigue; si no, abrimos el modal y
+  // reanudamos el borrow al aprobar. Ante un error de red también abrimos el
+  // modal: el backend igual va a rechazar el borrow sin KYC.
+  const api = useApi();
+  const [kycModalOpen, setKycModalOpen] = React.useState(false);
+  const pendingBorrowAction = React.useRef<(() => void) | null>(null);
+
+  const gateKyc = React.useCallback(
+    (action: () => void) => {
+      pendingBorrowAction.current = action;
+      api
+        .getKycStatus()
+        .then((r) => {
+          if (r.required === false || r.status === 'approved') {
+            pendingBorrowAction.current = null;
+            action();
+          } else {
+            setKycModalOpen(true);
+          }
+        })
+        .catch(() => setKycModalOpen(true));
+    },
+    [api],
+  );
+
+  const confirmTermAndBorrowGated = React.useCallback(
+    () => gateKyc(() => confirmTermAndBorrow()),
+    [gateKyc, confirmTermAndBorrow],
+  );
+
   // Sync slider amount into the usePullPanel hook's requestedUnits
   React.useEffect(() => {
     if (maxBorrowUnits > 0) {
@@ -443,12 +479,22 @@ export function PrestarTab({ setShowQR, onBackToInicio, isActive = true }: Prest
           loanTerms={loanTerms}
           selectedTermIndex={selectedTermIndex}
           setSelectedTermIndex={setSelectedTermIndex}
-          confirmTermAndBorrow={confirmTermAndBorrow}
+          confirmTermAndBorrow={confirmTermAndBorrowGated}
           isBorrowing={isBorrowing}
           loadingTerms={loadingTerms}
           baseAmountToShow={baseAmountToShow}
           handleDialogOpenChange={handleDialogOpenChange}
           isPreferentialRate={isPreferentialRate}
+        />
+        <KycVerificationModal
+          open={kycModalOpen}
+          onClose={() => setKycModalOpen(false)}
+          onApproved={() => {
+            // Reanuda el borrow que disparó el gate.
+            const act = pendingBorrowAction.current;
+            pendingBorrowAction.current = null;
+            setTimeout(() => act?.(), 80);
+          }}
         />
       </div>
     );

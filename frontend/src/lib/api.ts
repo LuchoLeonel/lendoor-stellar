@@ -30,6 +30,16 @@ import type {
   Platform,
 } from "@shared/types";
 
+/** Fila de /loan/history (montos en USDC humanos, fechas ISO). */
+export type LoanHistoryItem = {
+  id: number;
+  principal: number;
+  amountPaid: number;
+  status: string;
+  createdAt: string;
+  closedAt: string | null;
+};
+
 // ── Error classes ──
 
 export class ApiError extends Error {
@@ -240,6 +250,44 @@ export class LendoorApi {
 
   resendOtp(body: { walletAddress: string }): Promise<void> {
     return this.authedPost<void>("/user/resend-otp", body);
+  }
+
+  // ── KYC (D1.3) ──
+
+  /** Arranca (o reanuda) la verificación de identidad de la wallet del token. */
+  startKyc(): Promise<{
+    sessionId: string;
+    verificationUrl?: string;
+    status: string;
+  }> {
+    return this.authedPost<{
+      sessionId: string;
+      verificationUrl?: string;
+      status: string;
+    }>("/kyc/start");
+  }
+
+  /**
+   * Estado persistido del KYC (none | pending | approved | rejected) y si el
+   * backend lo exige (`required` = flag KYC_GATE_ENABLED).
+   */
+  getKycStatus(): Promise<{ status: string; required?: boolean }> {
+    return this.authedGet<{ status: string; required?: boolean }>("/kyc/status");
+  }
+
+  /** Solo sandbox (proveedor fake): resuelve la sesión a mano para el demo del gate. */
+  approveKycSandbox(sessionId: string): Promise<{ ok: boolean }> {
+    return this.authedPost<{ ok: boolean }>("/kyc/sandbox/decision", {
+      sessionId,
+      decision: "approved",
+    });
+  }
+
+  // ── Loan history ──
+
+  /** Préstamos reales de la wallet del token (más nuevo primero). */
+  getLoanHistory(): Promise<LoanHistoryItem[]> {
+    return this.authedGet<LoanHistoryItem[]>("/loan/history");
   }
 
   // ── Loan ──

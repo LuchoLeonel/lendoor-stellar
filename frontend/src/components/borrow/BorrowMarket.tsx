@@ -24,6 +24,8 @@ import { MiniAppFundsBox } from './MiniAppFundsBox';
 import { AchievementDialog } from './AchievementDialog';
 import { formatUSDCAmount2dp } from '@/lib/utils';
 import { useWallet } from '@/providers/WalletProvider';
+import { useApi } from '@/hooks/useApi';
+import type { LoanHistoryItem } from '@/lib/api';
 import { useFarcaster } from '@/providers/FarcasterProvider';
 import { HeaderUsdcArea } from '@/components/common/HeaderUsdcArea';
 import SlidingScreens from '@/components/common/SlidingScreens';
@@ -159,8 +161,49 @@ const ACTIVITY_MOCK: { type: 'borrow' | 'repay'; amount: string; date: string }[
   { type: 'borrow', amount: '1.50', date: 'Hace 1 mes' },
 ];
 
+// Relleno de diseño APAGADO: una cuenta nueva no tiene actividad, y mostrarle
+// historial inventado la hace parecer usada. Poner en true SOLO para probar el
+// scroll del historial con los datos de ejemplo de arriba.
+const SHOW_ACTIVITY_MOCK = false;
+const ACTIVITY: typeof ACTIVITY_MOCK = SHOW_ACTIVITY_MOCK ? ACTIVITY_MOCK : [];
+
+// "Hoy" / "Ayer" / "Hace N días|semanas|meses" a partir de una fecha ISO.
+function relativeDateLabel(iso: string): string {
+  const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.max(0, Math.round((day(new Date()) - day(new Date(iso))) / 86_400_000));
+  if (days === 0) return 'Hoy';
+  if (days === 1) return 'Ayer';
+  if (days < 7) return `Hace ${days} días`;
+  if (days < 30) {
+    const w = Math.floor(days / 7);
+    return w === 1 ? 'Hace 1 semana' : `Hace ${w} semanas`;
+  }
+  const m = Math.floor(days / 30);
+  return m === 1 ? 'Hace 1 mes' : `Hace ${m} meses`;
+}
+
+// Préstamos reales (más nuevo primero) → filas de actividad: cada préstamo
+// aporta su "borrow" y, si ya cerró, su "repay" (que es más reciente, va antes).
+function loansToActivity(loans: LoanHistoryItem[]): typeof ACTIVITY_MOCK {
+  const rows: typeof ACTIVITY_MOCK = [];
+  for (const l of loans) {
+    if (l.closedAt) {
+      rows.push({ type: 'repay', amount: Number(l.amountPaid).toFixed(2), date: relativeDateLabel(l.closedAt) });
+    }
+    rows.push({ type: 'borrow', amount: Number(l.principal).toFixed(2), date: relativeDateLabel(l.createdAt) });
+  }
+  return rows;
+}
+
 // Lista de actividad reutilizable (home muestra 5; cortina muestra todas).
 function ActivityList({ items }: { items: typeof ACTIVITY_MOCK }) {
+  if (items.length === 0) {
+    return (
+      <p className="py-5 text-center text-[13px]" style={{ color: '#6b7280' }}>
+        Sin actividad todavía
+      </p>
+    );
+  }
   return (
     <div className="flex flex-col">
       {items.map((a, i) => {
@@ -614,6 +657,31 @@ export function CreditMarket({ setShowQR, userEmail, userPhoneVerified, userPhon
   // el ConfigTab reporta su handler acá → la flecha del header vuelve a 'main'.
   const [configBack, setConfigBack] = React.useState<(() => void) | null>(null);
   const [showProgreso, setShowProgreso] = React.useState(false);
+
+  // Actividad REAL (préstamos de la wallet del token). Se recarga al cerrar un
+  // repago o al volver del flujo de borrow, así el crédito recién hecho aparece
+  // en el historial sin refrescar. Sin datos → cae a ACTIVITY (vacío).
+  const api = useApi();
+  const [realActivity, setRealActivity] = React.useState<typeof ACTIVITY_MOCK>([]);
+  React.useEffect(() => {
+    if (!isLoggedIn) {
+      setRealActivity([]);
+      return;
+    }
+    let alive = true;
+    api
+      .getLoanHistory()
+      .then((loans) => {
+        if (alive) setRealActivity(loansToActivity(loans));
+      })
+      .catch(() => {
+        if (alive) setRealActivity([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [api, isLoggedIn, repayTxState, subView]);
+  const activityItems = realActivity.length > 0 ? realActivity : ACTIVITY;
   const [progresoImprove, setProgresoImprove] = React.useState(false); // sub-vista "Mejorar score"
   const [progresoWalletConnect, setProgresoWalletConnect] = React.useState(false); // sub-vista "Conectar wallet"
   const [showHistorial, setShowHistorial] = React.useState(false); // cortina historial completo
@@ -890,11 +958,11 @@ export function CreditMarket({ setShowQR, userEmail, userPhoneVerified, userPhon
                 <h2 className="mb-1 text-[15px] font-semibold" style={{ color: '#1a1a1a' }}>
                   Actividad
                 </h2>
-                <ActivityList items={ACTIVITY_MOCK.slice(0, HOME_ACTIVITY_LIMIT)} />
+                <ActivityList items={activityItems.slice(0, HOME_ACTIVITY_LIMIT)} />
 
                 {/* "Ver historial completo" SOLO si hay más de las que mostramos
                     (si entran todas, no tiene sentido el link → se oculta). */}
-                {ACTIVITY_MOCK.length > HOME_ACTIVITY_LIMIT && (
+                {activityItems.length > HOME_ACTIVITY_LIMIT && (
                   <button
                     type="button"
                     onClick={() => setShowHistorial(true)}
@@ -964,7 +1032,7 @@ export function CreditMarket({ setShowQR, userEmail, userPhoneVerified, userPhon
         <BottomSheet open={showHistorial} onClose={() => setShowHistorial(false)}>
           <div className="mx-auto w-full max-w-md px-5 pt-4 pb-10">
             <h2 className="mb-2 text-[18px] font-bold" style={{ color: '#1a1a1a' }}>Historial</h2>
-            <ActivityList items={ACTIVITY_MOCK} />
+            <ActivityList items={activityItems} />
           </div>
         </BottomSheet>
 

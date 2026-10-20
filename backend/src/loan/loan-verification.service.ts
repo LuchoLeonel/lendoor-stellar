@@ -15,7 +15,6 @@ import { CreditPolicyService } from 'src/domain/services/credit-policy.service';
 import { UserService } from 'src/user/user.service';
 import { SelfService } from 'src/self/self.service';
 import { normalizeWallet } from 'src/common/normalize-wallet';
-import { assertKycGate } from 'src/kyc/kyc-gate';
 
 // On-chain defaults (1 score, 1 USDC)
 const DEFAULT_SCORE = 1;
@@ -95,8 +94,10 @@ export class LoanVerificationService {
     }
 
     // D1.3 (SCF #45): "a wallet must pass identity verification … before
-    // borrow is enabled" — gate por estado persistido, flag KYC_GATE_ENABLED
-    assertKycGate(user);
+    // borrow is enabled". El gate corre en la ACCIÓN de pedir el préstamo
+    // (LoanService.borrow), no acá: /loan/verify prepara la línea de crédito
+    // (y la escribe on-chain la primera vez), y gatearlo dejaba la UI sin
+    // límite que mostrar ni CTA de borrow que dispare el KYC.
 
     await this.selfService.ensureSelfVerificationForPlatform(user);
 
