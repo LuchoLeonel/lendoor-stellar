@@ -223,9 +223,9 @@ const CADENAS: Record<string, Cadena> = {
       nota: ["Contratos propios en Rust", "Our own contracts, in Rust"],
     },
     contratoUrl:
-      // El vault canónico (par B, el del award) — antes apuntaba al SAC de XLM,
-      // que es el token nativo, no nuestro contrato.
-      "https://stellar.expert/explorer/testnet/contract/CDEJOQBQEZ7LUXSWXM4RF6EPBZLMJHMTGKC5GNWK5TNJR36TBHQLCULP",
+      // El vault del par que liquida en USDC de Circle (SCF #45 Tranche 1).
+      // Antes apuntaba al par viejo, que usaba el SAC de XLM como USDC.
+      "https://stellar.expert/explorer/testnet/contract/CCXUEBC3VOOB57NVDFMQVAJRN52FUQN37EAPLVMAU7MLSPUBMZNBVT2Q",
     testnet: true,
   },
 };
