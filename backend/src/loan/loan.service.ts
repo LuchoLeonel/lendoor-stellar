@@ -31,6 +31,7 @@ import { UserService } from 'src/user/user.service';
 import { SelfService } from 'src/self/self.service';
 import { normalizeWallet } from 'src/common/normalize-wallet';
 import { assertKycGate } from 'src/kyc/kyc-gate';
+import { borrowCooldownError } from './borrow-cooldown';
 
 import { LoanVerificationService } from './loan-verification.service';
 import { LoanRepaymentService } from './loan-repayment.service';
@@ -332,6 +333,26 @@ export class LoanService {
 
   // ===================== BORROW ===================== //
 
+  private async assertNoBorrowCooldown(borrower: string): Promise<void> {
+    if (!this.blockchain.readNextBorrowTime) return;
+    let nextAt: number;
+    try {
+      nextAt = await this.blockchain.readNextBorrowTime(borrower);
+    } catch (e) {
+      // Si la lectura falla, el contrato sigue siendo la garantía: no bloquear.
+      this.logger.warn(
+        `[LoanService] borrow: readNextBorrowTime failed for ${borrower}: ${e instanceof Error ? e.message : String(e)}`,
+      );
+      return;
+    }
+    if (!nextAt) return;
+    const now =
+      (await this.blockchain.getChainBlockTimestamp()) ??
+      Math.floor(Date.now() / 1000);
+    const err = borrowCooldownError(nextAt, now);
+    if (err) throw err;
+  }
+
   async borrow(dto: BorrowLoanDto) {
     const { amountHuman, receiver, tenorDays } = dto;
 
@@ -373,6 +394,11 @@ export class LoanService {
     // `borrow` is enabled" es literal en el award. /loan/verify ya no gatea:
     // hacerlo dejaba la UI sin línea de crédito para mostrar.
     assertKycGate(user);
+
+    // Cooldown post-repago (min_hold del LoanManager): sin este chequeo el
+    // backend escribía una oferta on-chain que el contrato rechaza recién al
+    // firmar (Error #6 Cooldown), y el usuario veía un error opaco.
+    await this.assertNoBorrowCooldown(borrower);
 
     const scoreNum = this.toNum(user.score);
     const pDefaultNum = this.toNum(user.riskPDefault);

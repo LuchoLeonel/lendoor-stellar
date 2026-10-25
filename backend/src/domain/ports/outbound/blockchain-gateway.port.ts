@@ -47,6 +47,13 @@ export interface BlockchainGatewayPort {
   readCreditLimitOnChain(borrower: string): Promise<bigint>;
 
   /**
+   * Earliest unix timestamp (seconds) at which the borrower may open a new
+   * loan (the post-repay cooldown, `min_hold`). 0 = no cooldown. Optional:
+   * only gateways whose contract exposes it implement it.
+   */
+  readNextBorrowTime?(borrower: string): Promise<number>;
+
+  /**
    * Sets (or refreshes) the on-chain credit score and credit limit for a borrower.
    * Also sets validUntil to 30 days from now unless overridden.
    *

@@ -206,6 +206,14 @@ export class SorobanBlockchainGateway
     return value ?? 0n;
   }
 
+  async readNextBorrowTime(borrower: string): Promise<number> {
+    assertStellarAccount(borrower);
+    const value = await simulateLoanManagerCall<bigint>('next_borrow_time', [
+      scAddress(borrower),
+    ]);
+    return Number(value ?? 0n);
+  }
+
   async giveCreditScoreAndLimit(
     borrower: string,
     score: number = 1,
