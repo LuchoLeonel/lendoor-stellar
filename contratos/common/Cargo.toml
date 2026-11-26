@@ -1,0 +1,17 @@
+[package]
+name = "lendoor-common"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+description = "Shared governance (roles, pause, timelocked upgrade) and checked math for the Lendoor Soroban contracts (SCF #45 Tranche 2, D2.3)."
+
+[lib]
+crate-type = ["rlib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
