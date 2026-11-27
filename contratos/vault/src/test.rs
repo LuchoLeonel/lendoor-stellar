@@ -40,7 +40,7 @@ fn setup<'a>() -> Setup<'a> {
 
     // loan-manager with a placeholder vault, then rewire to the real vault id.
     let placeholder = Address::generate(&e);
-    let lm_id = e.register(LoanManager, (operator.clone(), placeholder));
+    let lm_id = e.register(LoanManager, (operator.clone(), operator.clone(), Address::generate(&e), placeholder, lendoor_common::gov::MIN_UPGRADE_DELAY));
     let lm = LoanManagerClient::new(&e, &lm_id);
 
     // D2.3: the constructor pulls an enforced seed deposit from `owner` (admin).
@@ -111,7 +111,7 @@ fn setup_no_mock<'a>() -> (Env, VaultClient<'a>) {
     let fee_recipient = Address::generate(&e);
     let sac = e.register_stellar_asset_contract_v2(operator.clone());
     let placeholder = Address::generate(&e);
-    let lm_id = e.register(LoanManager, (operator, placeholder));
+    let lm_id = e.register(LoanManager, (operator.clone(), operator.clone(), Address::generate(&e), placeholder, lendoor_common::gov::MIN_UPGRADE_DELAY));
     // The constructor needs the seed payer's auth: mint + mock ONLY that call,
     // so the rest of the test still runs with real auth enforcement.
     token::StellarAssetClient::new(&e, &sac.address())
@@ -167,7 +167,7 @@ fn constructor_rejects_seed_below_minimum() {
     let sac = e.register_stellar_asset_contract_v2(operator.clone());
     token::StellarAssetClient::new(&e, &sac.address()).mint(&admin, &SEED);
     let placeholder = Address::generate(&e);
-    let lm_id = e.register(LoanManager, (operator, placeholder));
+    let lm_id = e.register(LoanManager, (operator.clone(), operator.clone(), Address::generate(&e), placeholder, lendoor_common::gov::MIN_UPGRADE_DELAY));
     let mut p = init_params(&e, &admin, &sac.address(), &lm_id, &fee_recipient);
     p.seed_assets = SEED - 1;
     e.register(Vault, (p,));
@@ -2605,7 +2605,7 @@ fn constructor_rejects_upgrade_delay_below_floor() {
     let sac = e.register_stellar_asset_contract_v2(operator.clone());
     token::StellarAssetClient::new(&e, &sac.address()).mint(&admin, &SEED);
     let placeholder = Address::generate(&e);
-    let lm_id = e.register(LoanManager, (operator, placeholder));
+    let lm_id = e.register(LoanManager, (operator.clone(), operator.clone(), Address::generate(&e), placeholder, lendoor_common::gov::MIN_UPGRADE_DELAY));
     let mut p = init_params(&e, &admin, &sac.address(), &lm_id, &fee_recipient);
     p.upgrade_delay_secs = MIN_UPGRADE_DELAY - 1;
     e.register(Vault, (p,));

@@ -912,6 +912,7 @@ dependencies = [
 name = "lendoor-loan-manager"
 version = "0.1.0"
 dependencies = [
+ "lendoor-common",
  "soroban-sdk",
 ]
 
