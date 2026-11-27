@@ -103,6 +103,16 @@ pub enum Error {
     InvalidBeneficiary = 10,
     SeedTooSmall = 11,
     MathOverflow = 12,
+    // D2.2 strategy
+    NoStrategy = 13,
+    StrategyNotEmpty = 14,
+    StrategyAssetMismatch = 15,
+    StrategyShort = 16,
+    BadBuffer = 17,
+    NoPendingStrategy = 18,
+    StrategyNotReady = 19,
+    StrategyCallFailed = 20,
+    StrategyDisabled = 21,
 }
 
 #[contracttype]
@@ -136,12 +146,17 @@ pub enum DataKey {
     TotalBorrows,         // instance: i128 (outstanding principal)
     Shares(Address),      // persistent: i128 (LP share balance)
     WrittenOff(Address),  // persistent: i128 (principal already written off)
+    // D2.2
+    Strategy,             // instance: Address (DeFindex vault), absent = none
+    StrategyPos,          // instance: StrategyPos (cached position)
+    Buffer,               // instance: BufferCfg
+    PendingStrategy,      // instance: PendingStrategy (timelocked change)
 }
 
-fn bump_instance(e: &Env) {
+pub(crate) fn bump_instance(e: &Env) {
     e.storage().instance().extend_ttl(INSTANCE_THRESHOLD, INSTANCE_BUMP);
 }
-fn cfg(e: &Env) -> Config {
+pub(crate) fn cfg(e: &Env) -> Config {
     e.storage().instance().get(&DataKey::Config).unwrap_or_else(|| panic_with_error!(e, Error::NotInitialized))
 }
 fn total_shares(e: &Env) -> i128 {
@@ -177,17 +192,18 @@ fn set_written_off(e: &Env, a: &Address, v: i128) {
     }
 }
 
-fn usdc_client<'a>(e: &Env, c: &Config) -> token::Client<'a> {
+pub(crate) fn usdc_client<'a>(e: &Env, c: &Config) -> token::Client<'a> {
     token::Client::new(e, &c.usdc)
 }
-fn cash(e: &Env, c: &Config) -> i128 {
+pub(crate) fn cash(e: &Env, c: &Config) -> i128 {
     usdc_client(e, c).balance(&e.current_contract_address())
 }
-/// Single source of truth for the asset side of the share price.
+/// Single source of truth for the asset side of the share price:
+/// idle cash + outstanding principal + the CACHED DeFindex position (D2.2).
 fn total_assets_internal(e: &Env, c: &Config) -> i128 {
-    cash(e, c) + total_borrows(e)
+    cash(e, c) + total_borrows(e) + strategy::strategy_assets(e)
 }
-fn or_overflow(e: &Env, v: Option<i128>) -> i128 {
+pub(crate) fn or_overflow(e: &Env, v: Option<i128>) -> i128 {
     match v {
         Some(x) => x,
         None => panic_with_error!(e, Error::MathOverflow),
@@ -259,12 +275,13 @@ impl Vault {
         Self::to_shares(&e, &c, assets)
     }
     /// ERC-4626 `maxWithdraw`: what `account` can take out right now
-    /// (its position, capped by idle cash).
+    /// (its position, capped by the liquidity a withdraw can reach: idle cash
+    /// plus the cached strategy position, which `withdraw` pulls on demand).
     pub fn max_withdraw(e: Env, account: Address) -> i128 {
         let c = cfg(&e);
         let pos = Self::to_assets(&e, &c, shares_of(&e, &account));
-        let idle = cash(&e, &c);
-        if pos < idle { pos } else { idle }
+        let reachable = cash(&e, &c) + strategy::strategy_assets(&e);
+        if pos < reachable { pos } else { reachable }
     }
     pub fn decimals_offset(_e: Env) -> u32 {
         DECIMALS_OFFSET
@@ -310,6 +327,7 @@ impl Vault {
             panic_with_error!(&e, Error::ZeroAmount);
         }
         let c = cfg(&e);
+        strategy::soft_sync(&e); // price in any yield accrued since the last sync
         let shares = Self::to_shares(&e, &c, assets);
         // Inflation / first-depositor guard: never pull funds in exchange for 0
         // shares. With the decimals offset + the locked seed this can only trip
@@ -354,6 +372,7 @@ impl Vault {
             panic_with_error!(&e, Error::InvalidBeneficiary);
         }
         let c = cfg(&e);
+        strategy::soft_sync(&e);
         let shares = Self::to_shares(&e, &c, assets);
         if shares <= 0 {
             panic_with_error!(&e, Error::ZeroShares);
@@ -387,6 +406,8 @@ impl Vault {
             panic_with_error!(&e, Error::ZeroAmount);
         }
         let c = cfg(&e);
+        strategy::soft_sync(&e);
+        strategy::ensure_cash(&e, &c, assets); // D2.2: pull from the strategy on demand
         if assets > cash(&e, &c) {
             panic_with_error!(&e, Error::InsufficientCash); // not enough idle liquidity
         }
@@ -416,7 +437,9 @@ impl Vault {
             panic_with_error!(&e, Error::InsufficientShares);
         }
         let c = cfg(&e);
+        strategy::soft_sync(&e);
         let assets = Self::to_assets(&e, &c, shares);
+        strategy::ensure_cash(&e, &c, assets); // D2.2: pull from the strategy on demand
         if assets > cash(&e, &c) {
             panic_with_error!(&e, Error::InsufficientCash); // not enough idle liquidity
         }
@@ -444,6 +467,7 @@ impl Vault {
         if amount > lm.credit_limit(&borrower) {
             panic_with_error!(&e, Error::OverCreditLimit);
         }
+        strategy::ensure_cash(&e, &c, amount); // D2.2: the loan is served from the strategy if idle is short
         if amount > cash(&e, &c) {
             panic_with_error!(&e, Error::InsufficientCash);
         }
@@ -628,4 +652,9 @@ impl Vault {
 // common crate (codes 101–110).
 pub type GovernanceError = GovError;
 
+mod strategy;
+pub use strategy::{BufferCfg, DfAssetStrategySet, DfStrategy, PendingStrategy, StrategyPos};
+
+#[cfg(test)]
+mod test_mocks;
 mod test;

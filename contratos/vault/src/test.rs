@@ -2820,3 +2820,343 @@ fn admin_actions_emit_events() {
     s.vault.cancel_admin_transfer();                         // admincncl
     assert_eq!(one(&s), 1);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  D2.2 — STRATEGY: DeFindex idle-buffer routing against the test double
+// ═══════════════════════════════════════════════════════════════════════════
+use crate::test_mocks::{MockDefindex, MockDefindexClient};
+use crate::StrategyPos;
+
+struct Strat<'a> {
+    s: Setup<'a>,
+    df: MockDefindexClient<'a>,
+    pauser: Address,
+}
+
+/// Vault + mock DeFindex wired through the timelock, buffer configured.
+fn setup_with_strategy<'a>(idle_target: i128, tranche: i128) -> Strat<'a> {
+    let s = setup();
+    let df_id = s.e.register(MockDefindex, ());
+    let df = MockDefindexClient::new(&s.e, &df_id);
+    df.init(&s.usdc.address);
+    s.vault.propose_strategy(&Some(df_id.clone()));
+    s.e.ledger().with_mut(|li| li.timestamp += MIN_UPGRADE_DELAY);
+    s.vault.execute_strategy();
+    s.vault.set_buffer(&idle_target, &tranche, &9_900);
+    let pauser = s.vault.get_role(&Role::Pauser).unwrap();
+    Strat { s, df, pauser }
+}
+
+/// LP with 10 USDC in; SEED is 1 USDC. Buffer: keep 2 USDC idle, 3 USDC tranches.
+const LP_IN: i128 = 100_000_000;
+const IDLE: i128 = 20_000_000;
+const TRANCHE: i128 = 30_000_000;
+
+fn fund_lp(t: &Strat) -> (Address, i128) {
+    let lp = Address::generate(&t.s.e);
+    t.s.usdc_admin.mint(&lp, &LP_IN);
+    let sh = t.s.vault.deposit(&lp, &LP_IN);
+    (lp, sh)
+}
+
+#[test]
+fn strategy_change_is_timelocked_validated_and_vetoable() {
+    let s = setup();
+    let df_id = s.e.register(MockDefindex, ());
+    let df = MockDefindexClient::new(&s.e, &df_id);
+    df.init(&s.usdc.address);
+    assert_eq!(s.vault.strategy(), None);
+
+    let eta = s.vault.propose_strategy(&Some(df_id.clone()));
+    assert_eq!(eta, s.e.ledger().timestamp() + MIN_UPGRADE_DELAY);
+    assert_eq!(s.vault.try_execute_strategy(), Err(Ok(Error::StrategyNotReady.into())));
+    // veto by the pauser
+    let pauser = s.vault.get_role(&Role::Pauser).unwrap();
+    s.vault.cancel_strategy(&pauser);
+    assert!(s.vault.pending_strategy().is_none());
+    assert_eq!(s.vault.try_execute_strategy(), Err(Ok(Error::NoPendingStrategy.into())));
+
+    // a DeFindex vault on ANOTHER asset is refused (fail closed)
+    let other_asset = s.e.register_stellar_asset_contract_v2(Address::generate(&s.e)).address();
+    let wrong_id = s.e.register(MockDefindex, ());
+    MockDefindexClient::new(&s.e, &wrong_id).init(&other_asset);
+    s.vault.propose_strategy(&Some(wrong_id));
+    s.e.ledger().with_mut(|li| li.timestamp += MIN_UPGRADE_DELAY);
+    assert_eq!(s.vault.try_execute_strategy(), Err(Ok(Error::StrategyAssetMismatch.into())));
+
+    // the right one goes through after the delay
+    s.vault.propose_strategy(&Some(df_id.clone()));
+    s.e.ledger().with_mut(|li| li.timestamp += MIN_UPGRADE_DELAY);
+    s.vault.execute_strategy();
+    assert_eq!(s.vault.strategy(), Some(df_id));
+    assert_eq!(s.vault.strategy_position(), StrategyPos { shares: 0, assets: 0, last_sync: s.e.ledger().timestamp() });
+}
+
+#[test]
+fn set_buffer_validates_and_rebalance_needs_strategy_and_tranche() {
+    let s = setup();
+    assert_eq!(s.vault.try_set_buffer(&-1, &1, &9_900), Err(Ok(Error::BadBuffer.into())));
+    assert_eq!(s.vault.try_set_buffer(&1, &1, &8_999), Err(Ok(Error::BadBuffer.into())));
+    assert_eq!(s.vault.try_set_buffer(&1, &1, &10_001), Err(Ok(Error::BadBuffer.into())));
+    s.vault.set_buffer(&IDLE, &TRANCHE, &9_900);
+    assert_eq!(s.vault.buffer().tranche, TRANCHE);
+    // no strategy yet
+    assert_eq!(s.vault.try_rebalance(), Err(Ok(Error::NoStrategy.into())));
+    // strategy but routing disabled (tranche 0)
+    let t = setup_with_strategy(IDLE, 0);
+    assert_eq!(t.s.vault.try_rebalance(), Err(Ok(Error::StrategyDisabled.into())));
+}
+
+#[test]
+fn rebalance_invests_one_tranche_per_call_until_the_buffer_is_reached() {
+    let t = setup_with_strategy(IDLE, TRANCHE);
+    let (_lp, _sh) = fund_lp(&t);
+    let ta0 = t.s.vault.total_assets(); // seed + LP = 11 USDC, all idle
+    assert_eq!(ta0, SEED + LP_IN);
+
+    // cash 110M >= 20M + 30M -> push 30M; then 80M -> push; then 50M -> push; then 20M: hold.
+    assert_eq!(t.s.vault.rebalance(), TRANCHE);
+    assert_eq!(t.s.usdc.balance(&t.s.vault.address), SEED + LP_IN - TRANCHE);
+    assert_eq!(t.df.balance(&t.s.vault.address), TRANCHE); // first mint is 1:1 in the mock
+    assert_eq!(t.s.vault.strategy_position().shares, TRANCHE);
+    assert_eq!(t.s.vault.strategy_position().assets, TRANCHE);
+    assert_eq!(t.s.vault.total_assets(), ta0, "moving idle into the strategy does not change total assets");
+
+    assert_eq!(t.s.vault.rebalance(), TRANCHE);
+    assert_eq!(t.s.vault.rebalance(), TRANCHE);
+    assert_eq!(t.s.usdc.balance(&t.s.vault.address), IDLE);
+    assert_eq!(t.s.vault.rebalance(), 0, "within the band: nothing moves");
+    assert_eq!(t.s.vault.strategy_position().assets, 3 * TRANCHE);
+    assert_eq!(t.s.vault.total_assets(), ta0);
+}
+
+#[test]
+fn rebalance_requires_the_operator_signature() {
+    let (e, v) = setup_no_mock();
+    let stranger = Address::generate(&e);
+    assert!(v
+        .mock_auths(&[MockAuth {
+            address: &stranger,
+            invoke: &MockAuthInvoke { contract: &v.address, fn_name: "rebalance", args: ().into_val(&e), sub_invokes: &[] },
+        }])
+        .try_rebalance()
+        .is_err());
+}
+
+#[test]
+fn yield_shows_in_the_share_price_only_after_sync() {
+    let t = setup_with_strategy(IDLE, TRANCHE);
+    let (_lp, sh) = fund_lp(&t);
+    t.s.vault.rebalance();
+    let ta_before = t.s.vault.total_assets();
+    let value_before = t.s.vault.convert_to_assets(&sh);
+
+    // Blend pays: 10 % on the invested tranche lands in the DeFindex vault.
+    t.s.usdc_admin.mint(&t.df.address, &(TRANCHE / 10));
+    assert_eq!(t.s.vault.total_assets(), ta_before, "cached: nothing moves until a sync");
+
+    let synced = t.s.vault.sync_strategy();
+    assert_eq!(synced, TRANCHE + TRANCHE / 10);
+    assert_eq!(t.s.vault.total_assets(), ta_before + TRANCHE / 10);
+    assert!(t.s.vault.convert_to_assets(&sh) > value_before, "LP shares are worth more");
+    assert_eq!(t.s.vault.convert_to_assets(&sh), px_assets(&t.s, sh)); // same formula, new state
+}
+
+#[test]
+fn deposit_soft_syncs_so_a_late_depositor_cannot_capture_unsynced_yield() {
+    let t = setup_with_strategy(IDLE, TRANCHE);
+    let (_lp1, _sh1) = fund_lp(&t);
+    t.s.vault.rebalance();
+    t.s.usdc_admin.mint(&t.df.address, &(TRANCHE / 10)); // yield, NOT synced
+
+    let stale_quote = t.s.vault.convert_to_shares(&LP_IN); // view: stale price
+    let lp2 = Address::generate(&t.s.e);
+    t.s.usdc_admin.mint(&lp2, &LP_IN);
+    let sh2 = t.s.vault.deposit(&lp2, &LP_IN);
+    assert!(sh2 < stale_quote, "deposit priced in the yield first: fewer shares than the stale quote");
+    // and the pool now carries the yield in total_assets
+    assert_eq!(t.s.vault.strategy_position().assets, TRANCHE + TRANCHE / 10);
+    // lp2 gets back ~what it put in, not a slice of lp1's yield
+    let out2 = t.s.vault.redeem(&lp2, &sh2);
+    assert!(out2 <= LP_IN && out2 >= LP_IN - 2);
+}
+
+#[test]
+fn withdraw_pulls_a_tranche_from_the_strategy_when_idle_cash_is_short() {
+    let t = setup_with_strategy(IDLE, TRANCHE);
+    let (lp, _sh) = fund_lp(&t);
+    for _ in 0..3 {
+        t.s.vault.rebalance();
+    }
+    assert_eq!(t.s.usdc.balance(&t.s.vault.address), IDLE);
+    // LP wants 5 USDC: idle is 2 -> deficit 3 == one tranche comes back
+    let ta_before = t.s.vault.total_assets();
+    t.s.vault.withdraw(&lp, &50_000_000);
+    assert_eq!(t.s.usdc.balance(&lp), 50_000_000);
+    assert_eq!(t.s.usdc.balance(&t.s.vault.address), 0);
+    assert_eq!(t.s.vault.strategy_position().assets, 2 * TRANCHE);
+    assert_eq!(t.s.vault.total_assets(), ta_before - 50_000_000);
+    assert_eq!(t.s.vault.max_withdraw(&lp), px_assets(&t.s, t.s.vault.balance_of(&lp)));
+}
+
+#[test]
+fn redeem_pulls_from_the_strategy_too() {
+    let t = setup_with_strategy(IDLE, TRANCHE);
+    let (lp, sh) = fund_lp(&t);
+    for _ in 0..3 {
+        t.s.vault.rebalance();
+    }
+    let expected = px_assets(&t.s, sh); // ≈ 10 USDC, far above the 2 USDC idle
+    let out = t.s.vault.redeem(&lp, &sh);
+    assert_eq!(out, expected);
+    assert_eq!(t.s.usdc.balance(&lp), expected);
+    // the vault pulled what it needed (3 tranches), the seed keeps its slice
+    assert_eq!(t.s.vault.total_supply(), SEED_SHARES);
+    assert!(t.s.vault.total_assets() >= SEED);
+}
+
+#[test]
+fn borrow_is_served_from_the_strategy_in_the_same_transaction() {
+    let t = setup_with_strategy(IDLE, TRANCHE);
+    let (_lp, _sh) = fund_lp(&t);
+    for _ in 0..3 {
+        t.s.vault.rebalance();
+    }
+    let borrower = Address::generate(&t.s.e);
+    grant(&t.s, &borrower, 40_000_000); // 4 USDC > 2 USDC idle
+    let ta_before = t.s.vault.total_assets();
+    t.s.vault.borrow_with_term(&borrower, &40_000_000, &7, &500);
+    assert_eq!(t.s.usdc.balance(&borrower), 40_000_000);
+    assert_eq!(t.s.usdc.balance(&t.s.vault.address), IDLE + TRANCHE - 40_000_000); // 1 USDC idle left
+    assert_eq!(t.s.vault.strategy_position().assets, 2 * TRANCHE);
+    assert_eq!(t.s.vault.total_assets(), ta_before, "a borrow never changes total assets");
+    assert!(t.s.lm.get_loan(&borrower).active);
+}
+
+#[test]
+fn a_short_delivery_reverts_cleanly_and_keeps_state() {
+    let t = setup_with_strategy(IDLE, TRANCHE);
+    let (lp, sh) = fund_lp(&t);
+    for _ in 0..3 {
+        t.s.vault.rebalance();
+    }
+    t.df.set_haircut_bps(&500); // delivers 95 % < the 99 % floor
+    let pos_before = t.s.vault.strategy_position();
+    let r = t.s.vault.try_withdraw(&lp, &50_000_000);
+    assert_eq!(r, Err(Ok(Error::StrategyShort.into())));
+    assert_eq!(t.s.vault.strategy_position(), pos_before, "rolled back: nothing left the strategy");
+    assert_eq!(t.s.vault.balance_of(&lp), sh);
+    assert_eq!(t.s.usdc.balance(&lp), 0);
+    // within idle cash the LP can still exit
+    t.s.vault.withdraw(&lp, &IDLE);
+    assert_eq!(t.s.usdc.balance(&lp), IDLE);
+}
+
+#[test]
+fn strategy_down_lp_ops_keep_working_on_the_cache() {
+    let t = setup_with_strategy(IDLE, TRANCHE);
+    let (lp, _sh) = fund_lp(&t);
+    t.s.vault.rebalance();
+    let ta = t.s.vault.total_assets();
+    t.df.set_fail(&true); // DeFindex is down
+
+    // deposit: soft sync fails -> cache used, deposit succeeds
+    let lp2 = Address::generate(&t.s.e);
+    t.s.usdc_admin.mint(&lp2, &1_000_000);
+    assert!(t.s.vault.deposit(&lp2, &1_000_000) > 0);
+    assert_eq!(t.s.vault.total_assets(), ta + 1_000_000);
+    // withdraw within idle cash: fine
+    t.s.vault.withdraw(&lp, &1_000_000);
+    // withdraw beyond idle cash needs the strategy: fails cleanly, state intact
+    let pos = t.s.vault.strategy_position();
+    let idle = t.s.usdc.balance(&t.s.vault.address);
+    assert!(t.s.vault.try_withdraw(&lp, &(idle + 1)).is_err());
+    assert_eq!(t.s.vault.strategy_position(), pos);
+    // explicit sync reports the failure instead of silently keeping the cache
+    assert_eq!(t.s.vault.try_sync_strategy(), Err(Ok(Error::StrategyCallFailed.into())));
+}
+
+#[test]
+fn pause_blocks_investing_but_not_pulling_or_unwinding() {
+    // Smaller tranches (1 USDC) so an on-demand pull leaves part of the position.
+    let small = 10_000_000;
+    let t = setup_with_strategy(IDLE, small);
+    let (lp, _sh) = fund_lp(&t);
+    t.s.vault.rebalance();
+    t.s.vault.rebalance(); // position 2 USDC, idle 9 USDC
+    t.s.vault.pause(&t.pauser);
+    // push branch blocked (idle 90M >= 20M + 10M would push)
+    assert!(failed_with(t.s.vault.try_rebalance(), GovError::Paused));
+    // an LP exit that needs the strategy still works while paused:
+    // deficit 0.5 USDC < tranche -> one tranche (1 USDC) comes back
+    let idle = t.s.usdc.balance(&t.s.vault.address);
+    t.s.vault.withdraw(&lp, &(idle + 5_000_000));
+    assert_eq!(t.s.vault.strategy_position().assets, small);
+    assert_eq!(t.s.usdc.balance(&t.s.vault.address), small - 5_000_000);
+    // and the emergency unwind works while paused (pauser is allowed)
+    let back = t.s.vault.emergency_unwind(&t.pauser);
+    assert_eq!(back, small);
+    assert_eq!(t.s.vault.strategy_position().shares, 0);
+    assert_eq!(t.df.balance(&t.s.vault.address), 0);
+}
+
+#[test]
+fn emergency_unwind_brings_everything_home_even_with_a_haircut() {
+    let t = setup_with_strategy(IDLE, TRANCHE);
+    let (_lp, _sh) = fund_lp(&t);
+    for _ in 0..3 {
+        t.s.vault.rebalance();
+    }
+    t.df.set_haircut_bps(&500); // an emergency accepts what it can get
+    let stranger = Address::generate(&t.s.e);
+    assert!(failed_with(t.s.vault.try_emergency_unwind(&stranger), GovError::Unauthorized));
+    let back = t.s.vault.emergency_unwind(&t.s.owner);
+    assert_eq!(back, 3 * TRANCHE * 95 / 100);
+    assert_eq!(t.s.vault.strategy_position(), StrategyPos { shares: 0, assets: 0, last_sync: t.s.e.ledger().timestamp() });
+    assert_eq!(t.s.vault.total_assets(), SEED + LP_IN - 3 * TRANCHE * 5 / 100, "the loss is realized in the share price");
+}
+
+#[test]
+fn strategy_cannot_change_while_the_position_is_open() {
+    let t = setup_with_strategy(IDLE, TRANCHE);
+    let (_lp, _sh) = fund_lp(&t);
+    t.s.vault.rebalance();
+    t.s.vault.propose_strategy(&None);
+    t.s.e.ledger().with_mut(|li| li.timestamp += MIN_UPGRADE_DELAY);
+    assert_eq!(t.s.vault.try_execute_strategy(), Err(Ok(Error::StrategyNotEmpty.into())));
+    // unwind, then the removal goes through
+    t.s.vault.emergency_unwind(&t.s.owner);
+    t.s.vault.execute_strategy();
+    assert_eq!(t.s.vault.strategy(), None);
+    assert_eq!(t.s.vault.try_rebalance(), Err(Ok(Error::NoStrategy.into())));
+}
+
+#[test]
+fn rebalance_pulls_back_when_idle_falls_below_target() {
+    let t = setup_with_strategy(IDLE, TRANCHE);
+    let (lp, _sh) = fund_lp(&t);
+    for _ in 0..3 {
+        t.s.vault.rebalance();
+    }
+    // LP takes 1 USDC of the 2 idle -> idle 1 < target 2 -> next rebalance pulls the deficit (1 USDC)
+    t.s.vault.withdraw(&lp, &10_000_000);
+    let moved = t.s.vault.rebalance();
+    assert_eq!(moved, -10_000_000);
+    assert_eq!(t.s.usdc.balance(&t.s.vault.address), IDLE);
+    assert_eq!(t.s.vault.strategy_position().assets, 3 * TRANCHE - 10_000_000);
+}
+
+#[test]
+fn strategy_events_are_emitted_per_action() {
+    let t = setup_with_strategy(IDLE, TRANCHE);
+    let one = |t: &Strat| t.s.e.events().all().filter_by_contract(&t.s.vault.address).events().len();
+    let (_lp, _sh) = fund_lp(&t);
+    t.s.vault.rebalance(); // sync + stratin
+    assert_eq!(one(&t), 2);
+    t.s.vault.sync_strategy(); // sync
+    assert_eq!(one(&t), 1);
+    t.s.vault.set_buffer(&IDLE, &TRANCHE, &9_950); // bufset
+    assert_eq!(one(&t), 1);
+    t.s.vault.emergency_unwind(&t.s.owner); // unwind
+    assert_eq!(one(&t), 1);
+}
