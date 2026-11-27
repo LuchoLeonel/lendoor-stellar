@@ -919,6 +919,7 @@ dependencies = [
 name = "lendoor-vault"
 version = "0.1.0"
 dependencies = [
+ "lendoor-common",
  "lendoor-loan-manager",
  "soroban-sdk",
 ]
