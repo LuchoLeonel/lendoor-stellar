@@ -28,6 +28,7 @@ What we watch, where it comes from, what triggers an alert and what already exis
 | `sync → (old_assets, new_assets)`, `syncfail → cached_assets` | vault | position refresh / DeFindex unreachable |
 | `unwind → (received, shares_left)` | vault | emergency unwind |
 | `feerecip → addr`, `graceset → secs`, `minhold(tenor) → secs`, `vaultset → addr` | admin setters | config changes |
+| `feeclaim(recipient) → amount` | vault `claim_fees` | protocol fees pulled out (fees accrue in `fees_accrued()` until then) |
 
 Existing events keep their shape: `deposit`, `dep_from`, `withdraw`, `redeem`, `borrow`, `repay`,
 `partrepay`, `writeoff` (vault); `riskset`, `offerset`, `loanopen`, `loanclos`, `partpay`, `default`,
@@ -52,6 +53,7 @@ Existing events keep their shape: `deposit`, `dep_from`, `withdraw`, `redeem`, `
 | I13 | DeFindex strategy `paused == true` (`get_assets`) or our DeFindex vault `fetch_total_managed_funds` invested share < 90 % | state change | medium |
 | I14 | `riskset` count per hour from the underwriter | > 3× the 7-day median (possible key misuse) | high |
 | I15 | loan-manager `pending_upgrade` and vault `pending_upgrade` proposed by the same tx stream without a matching announcement | manual | — |
+| I16 | `fees_accrued()` growing without a `feeclaim` for > 7 days (the recipient's trustline may be broken: repayments are unaffected, but the fees are stuck until it is fixed) | > 7 days | low |
 
 ## 4. What exists today vs what Tranche 2 adds
 

@@ -214,6 +214,23 @@ _Pending: needs BlendUSDC (Blend testnet faucet) for the seed and for the demo
 LP. Create the DeFindex vault with `scripts/defindex-create-vault.sh`, then
 `DEFINDEX_VAULT=<id> ./deploy-testnet-t2.sh t2b`._
 
+### Interface changes vs Tranche 1 (for the app, the backend and the indexer)
+
+Removed: `set_owner`, `upgrade` (and the `ownerset` event). Changed signers: `manual_write_off` /
+`set_fee_recipient` = admin (2-of-3); every loan-manager risk / offer / premium / default write =
+underwriter; `pause`, `cancel_upgrade`, `cancel_strategy`, `emergency_unwind` take an explicit
+`caller`. New: `claim_fees` / `fees_accrued` (protocol fees accrue in the vault and are pulled;
+repayments no longer transfer to the fee recipient), `convert_to_assets` / `convert_to_shares` /
+`max_withdraw` / `decimals_offset`, the governance surface (`get_role`, `set_role`, `transfer_admin`,
+`accept_admin`, `cancel_admin_transfer`, `pause`, `unpause`, `propose_upgrade`, `execute_upgrade`,
+`cancel_upgrade`) and the strategy surface (`strategy`, `strategy_position`, `buffer`,
+`pending_strategy`, `set_buffer`, `propose_strategy`, `execute_strategy`, `cancel_strategy`,
+`rebalance`, `sync_strategy`, `emergency_unwind`). Event shapes of Tranche 1 are unchanged; new
+events are listed in `docs/security/monitoring-plan.md`.
+
+**Go/no-go before mainnet (review A2):** measure, on T2-B, the resource usage of one LP withdraw
+that crosses idle cash (soft sync + pull + Blend withdraw in one tx) and record it here.
+
 ### Operating the admin (2-of-3)
 
 Every admin-gated call needs two signatures: `scripts/admin-multisig-setup.sh

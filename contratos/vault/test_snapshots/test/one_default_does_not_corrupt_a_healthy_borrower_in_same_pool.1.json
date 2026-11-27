@@ -536,6 +536,7 @@
     [],
     [],
     [],
+    [],
     [
       [
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
@@ -601,6 +602,7 @@
         }
       ]
     ],
+    [],
     [],
     [],
     []
@@ -1623,6 +1625,18 @@
                             }
                           }
                         ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "FeesAccrued"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "i128": "0"
                       }
                     },
                     {

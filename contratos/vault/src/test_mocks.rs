@@ -31,6 +31,7 @@ pub enum MKey {
     Shares(Address),
     Haircut,
     Fail,
+    Sink, // where a haircut goes: value really LEAVES (fee receiver / Blend shortfall)
 }
 
 #[contract]
@@ -56,8 +57,9 @@ fn guard(e: &Env) {
 
 #[contractimpl]
 impl MockDefindex {
-    pub fn init(e: Env, asset: Address) {
+    pub fn init(e: Env, asset: Address, sink: Address) {
         e.storage().instance().set(&MKey::Asset, &asset);
+        e.storage().instance().set(&MKey::Sink, &sink);
     }
     pub fn set_haircut_bps(e: Env, bps: u32) {
         e.storage().instance().set(&MKey::Haircut, &bps);
@@ -96,7 +98,14 @@ impl MockDefindex {
         }
         e.storage().persistent().set(&MKey::Shares(from.clone()), &(have - df_amount));
         e.storage().instance().set(&MKey::Total, &(t - df_amount));
-        token::Client::new(&e, &asset(&e)).transfer(&e.current_contract_address(), &from, &paid);
+        let tok = token::Client::new(&e, &asset(&e));
+        tok.transfer(&e.current_contract_address(), &from, &paid);
+        if intended > paid {
+            // the haircut is a real loss for the withdrawer, not a gift to the
+            // remaining holders (mirrors a DeFindex fee / Blend shortfall)
+            let sink: Address = e.storage().instance().get(&MKey::Sink).unwrap();
+            tok.transfer(&e.current_contract_address(), &sink, &(intended - paid));
+        }
         vec![&e, intended]
     }
 

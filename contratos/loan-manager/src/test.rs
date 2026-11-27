@@ -1553,3 +1553,31 @@ fn admin_setters_emit_events() {
     r.c.set_role(&Role::Pauser, &r.admin);
     assert_eq!(one(&r), 1); // roleset
 }
+
+#[test]
+fn non_admin_cannot_execute_a_matured_upgrade_on_the_loan_manager() {
+    // (review) matured proposals stay admin-only to execute, and expire after the window.
+    let r = setup_roles();
+    let (e, c) = (&r.e, &r.c);
+    let h = soroban_sdk::BytesN::from_array(e, &[8u8; 32]);
+    c.propose_upgrade(&h);
+    advance(e, MIN_UPGRADE_DELAY + 1);
+    for who in [&r.underwriter, &r.pauser] {
+        e.mock_auths(&[MockAuth {
+            address: who,
+            invoke: &MockAuthInvoke { contract: &c.address, fn_name: "execute_upgrade", args: (h.clone(),).into_val(e), sub_invokes: &[] },
+        }]);
+        assert!(c.try_execute_upgrade(&h).is_err());
+    }
+    assert!(c.pending_upgrade().is_some());
+    e.mock_all_auths();
+    advance(e, lendoor_common::gov::PROPOSAL_WINDOW + 1);
+    assert!(failed_with(c.try_execute_upgrade(&h), GovError::ProposalExpired));
+}
+
+#[test]
+fn grace_period_is_bounded() {
+    let r = setup_roles();
+    assert_eq!(r.c.try_set_default_grace_period(&(366 * DAY)), Err(Ok(Error::InvalidParam.into())));
+    r.c.set_default_grace_period(&(30 * DAY));
+}

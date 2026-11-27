@@ -409,6 +409,7 @@
     [],
     [],
     [],
+    [],
     [
       [
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
@@ -1149,6 +1150,18 @@
                             }
                           }
                         ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "FeesAccrued"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "i128": "0"
                       }
                     },
                     {

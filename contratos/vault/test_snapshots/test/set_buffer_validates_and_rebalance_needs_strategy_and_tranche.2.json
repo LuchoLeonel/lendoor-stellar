@@ -1,6 +1,6 @@
 {
   "generators": {
-    "address": 11,
+    "address": 12,
     "nonce": 0,
     "mux_id": 0
   },
@@ -936,6 +936,18 @@
                       },
                       "val": {
                         "address": "CCABDO7UZXYE4W6GVSEGSNNZTKSLFQGKXXQTH6OX7M7GKZ4Z6CUJNGZN"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "Sink"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYRE5"
                       }
                     }
                   ]

@@ -33,7 +33,7 @@ Trust boundaries: user wallet ↔ frontend ↔ backend (SEP-53 auth) ↔ loan-ma
 | **T**: dust loss on withdraw | exact-asset withdraw burns too few shares and leaks value | `to_shares_ceil` on `withdraw` | `withdraw_ceil_rounds_up_at_price_above_one` |
 | **T**: math overflow | `assets * (ts + VS)` beyond i128 | all conversions and fees through `mul_div_floor/ceil` over I256; typed `MathOverflow` | `share_math_overflow_is_a_typed_error_not_a_trap`, `mul_div_no_intermediate_overflow` |
 | **D**oS: pause traps LP funds | governance pauses and LPs cannot exit | pause blocks only `deposit`, `deposit_from`, `borrow_with_term`, strategy push; `withdraw` / `redeem` / `repay*` / pull-on-demand / `emergency_unwind` stay open | `pause_blocks_new_exposure_but_never_exits_or_repayments`, `pause_blocks_investing_but_not_pulling_or_unwinding` |
-| **D**: fee transfer outside the footprint | a fee that simulates as 0 but executes > 0 fails the tx | fee transfers are unconditional | `repay_with_zero_interest_skips_fee_transfer` (asserts a 0-amount transfer succeeds) |
+| **D**: a repayment blocked by the fee path | a fee transfer that simulates as 0 but executes > 0 falls outside the footprint; a missing / deauthorized trustline on the fee recipient would fail every repay | fees **accrue** in the vault (`FeesAccrued`, excluded from `total_assets` and from all liquidity checks) and are pulled with `claim_fees()`; repayments never transfer to the recipient (review A3) | `fees_accrue_and_are_claimed_without_touching_lp_assets`, `accrued_fees_are_not_lendable_nor_withdrawable` |
 | **I**nformation disclosure | — (all state is public by design) | — | — |
 | **R**epudiation | admin actions without trace | every governance / strategy action emits an event (`roleset`, `adminprop`, `adminacc`, `pause`, `unpause`, `upgprop`, `upgexec`, `upgcancl`, `stratprop`, `stratexec`, `stratcncl`, `bufset`, `stratin`, `stratout`, `sync`, `syncfail`, `unwind`, `seeded`, `feerecip`) | `admin_actions_emit_events`, `strategy_events_are_emitted_per_action` |
 
@@ -102,6 +102,20 @@ Trust boundaries: user wallet ↔ frontend ↔ backend (SEP-53 auth) ↔ loan-ma
    monitoring; not eliminated.
 4. **Testnet-only artifacts**: the DeFindex strategy used on testnet settles in Blend's test USDC, so
    the D2.2 demo runs on a second instance of the same wasm (T2-B). On mainnet both are Circle USDC.
+5. **Resource budget of a pull-on-demand transaction** (review A2): an LP exit that crosses idle cash
+   runs up to two DeFindex view-writes plus a DeFindex→Blend withdraw in one transaction. Contract
+   panics on DeFindex's side are caught (`try_`), but budget exhaustion or archived DeFindex entries
+   fail the whole operation. The LP can always exit from idle cash, and `emergency_unwind` brings
+   funds home. Measuring the real budget on T2-B is a go/no-go item before mainnet.
+6. **Timelock scope** (review B13): the timelock on upgrades and strategy changes is **notice to exit
+   for LPs**, not a defense against a rogue admin; that is what the 2-of-3 admin is for. Role changes
+   (`set_role`) and the loan manager's `set_vault` are therefore instant and paged (monitoring I10).
+7. **Pause never blocks exits** (review B17): by design, so governance can never trap LP funds. The
+   cost is that a share-minting exploit could exit during an incident. The idle buffer, the
+   `ZeroShares` guard, the offset + seed and the invariants (I1–I4) limit that surface; an admin-only
+   `freeze_exits` with a short auto-expiry is a candidate for Tranche 3 after the Audit Bank review.
+8. **`manual_write_off` needs two admin signatures** (review B15): write-offs are rare, manual
+   accounting decisions; if volume grows the role moves to `operator`.
 
 ## 4. Audit plan (reviewer feedback, 2026-09-09)
 

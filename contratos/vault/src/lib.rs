@@ -33,8 +33,10 @@
 //!     pause and a timelocked upgrade come from `lendoor_common::gov`. Pause
 //!     blocks NEW exposure (deposit, deposit_from, borrow); it never blocks LP
 //!     exits (withdraw, redeem) nor repayments.
-//!   - Fee transfers are unconditional (a conditional transfer that simulates
-//!     as 0 and executes as > 0 falls outside the tx footprint).
+//!   - Protocol fees accrue inside the vault (`FeesAccrued`, excluded from
+//!     `total_assets`) and are pulled with `claim_fees`: repayments never
+//!     transfer to the fee recipient, so neither a footprint miss nor a broken
+//!     trustline can block them.
 
 use lendoor_common::gov::{self, GovError, PendingUpgrade, Role};
 use lendoor_common::math::{bps_of, mul_div_ceil, mul_div_floor};
@@ -113,6 +115,7 @@ pub enum Error {
     StrategyNotReady = 19,
     StrategyCallFailed = 20,
     StrategyDisabled = 21,
+    StrategyProposalExpired = 22,
 }
 
 #[contracttype]
@@ -151,6 +154,7 @@ pub enum DataKey {
     StrategyPos,          // instance: StrategyPos (cached position)
     Buffer,               // instance: BufferCfg
     PendingStrategy,      // instance: PendingStrategy (timelocked change)
+    FeesAccrued,          // instance: i128 (protocol fees waiting to be claimed; NOT LP assets)
 }
 
 pub(crate) fn bump_instance(e: &Env) {
@@ -198,10 +202,22 @@ pub(crate) fn usdc_client<'a>(e: &Env, c: &Config) -> token::Client<'a> {
 pub(crate) fn cash(e: &Env, c: &Config) -> i128 {
     usdc_client(e, c).balance(&e.current_contract_address())
 }
+pub(crate) fn fees_accrued(e: &Env) -> i128 {
+    e.storage().instance().get(&DataKey::FeesAccrued).unwrap_or(0)
+}
+fn set_fees_accrued(e: &Env, v: i128) {
+    e.storage().instance().set(&DataKey::FeesAccrued, &v);
+}
+/// Idle USDC that belongs to LPs: the token balance minus the protocol fees
+/// waiting to be claimed. Every liquidity check uses this, never `cash`.
+pub(crate) fn available_cash(e: &Env, c: &Config) -> i128 {
+    cash(e, c) - fees_accrued(e)
+}
 /// Single source of truth for the asset side of the share price:
-/// idle cash + outstanding principal + the CACHED DeFindex position (D2.2).
+/// LP cash + outstanding principal + the CACHED DeFindex position (D2.2).
+/// Accrued protocol fees sit in the same token balance but are excluded.
 fn total_assets_internal(e: &Env, c: &Config) -> i128 {
-    cash(e, c) + total_borrows(e) + strategy::strategy_assets(e)
+    available_cash(e, c) + total_borrows(e) + strategy::strategy_assets(e)
 }
 pub(crate) fn or_overflow(e: &Env, v: Option<i128>) -> i128 {
     match v {
@@ -275,13 +291,35 @@ impl Vault {
         Self::to_shares(&e, &c, assets)
     }
     /// ERC-4626 `maxWithdraw`: what `account` can take out right now
-    /// (its position, capped by the liquidity a withdraw can reach: idle cash
-    /// plus the cached strategy position, which `withdraw` pulls on demand).
+    /// (its position, capped by the liquidity a withdraw can reach: idle LP
+    /// cash plus the cached strategy position net of the slippage floor, which
+    /// `withdraw` pulls on demand).
     pub fn max_withdraw(e: Env, account: Address) -> i128 {
         let c = cfg(&e);
         let pos = Self::to_assets(&e, &c, shares_of(&e, &account));
-        let reachable = cash(&e, &c) + strategy::strategy_assets(&e);
+        let b = strategy::buffer(&e);
+        let strat_net = or_overflow(&e, bps_of(&e, strategy::strategy_assets(&e), b.min_out_bps as i128));
+        let reachable = available_cash(&e, &c) + strat_net;
         if pos < reachable { pos } else { reachable }
+    }
+    /// Protocol fees accrued and not yet claimed (excluded from `total_assets`).
+    pub fn fees_accrued(e: Env) -> i128 {
+        fees_accrued(&e)
+    }
+    /// Pull pattern for protocol fees (review A3): anyone can trigger it, the
+    /// money only ever goes to `fee_recipient`. Repayments never depend on the
+    /// recipient's trustline any more.
+    pub fn claim_fees(e: Env) -> i128 {
+        let c = cfg(&e);
+        let amt = fees_accrued(&e);
+        if amt <= 0 {
+            return 0;
+        }
+        set_fees_accrued(&e, 0);
+        usdc_client(&e, &c).transfer(&e.current_contract_address(), &c.fee_recipient, &amt);
+        bump_instance(&e);
+        e.events().publish((symbol_short!("feeclaim"), c.fee_recipient), amt);
+        amt
     }
     pub fn decimals_offset(_e: Env) -> u32 {
         DECIMALS_OFFSET
@@ -408,7 +446,7 @@ impl Vault {
         let c = cfg(&e);
         strategy::soft_sync(&e);
         strategy::ensure_cash(&e, &c, assets); // D2.2: pull from the strategy on demand
-        if assets > cash(&e, &c) {
+        if assets > available_cash(&e, &c) {
             panic_with_error!(&e, Error::InsufficientCash); // not enough idle liquidity
         }
         let shares = Self::to_shares_ceil(&e, &c, assets);
@@ -438,9 +476,12 @@ impl Vault {
         }
         let c = cfg(&e);
         strategy::soft_sync(&e);
+        let wanted = Self::to_assets(&e, &c, shares);
+        strategy::ensure_cash(&e, &c, wanted); // D2.2: pull from the strategy on demand
+        // (review B6) re-price AFTER the pull: a tolerated haircut on the way out
+        // is shared by everyone, the redeemer included, exactly like `withdraw`.
         let assets = Self::to_assets(&e, &c, shares);
-        strategy::ensure_cash(&e, &c, assets); // D2.2: pull from the strategy on demand
-        if assets > cash(&e, &c) {
+        if assets > available_cash(&e, &c) {
             panic_with_error!(&e, Error::InsufficientCash); // not enough idle liquidity
         }
         set_shares_of(&e, &from, bal - shares);
@@ -468,7 +509,7 @@ impl Vault {
             panic_with_error!(&e, Error::OverCreditLimit);
         }
         strategy::ensure_cash(&e, &c, amount); // D2.2: the loan is served from the strategy if idle is short
-        if amount > cash(&e, &c) {
+        if amount > available_cash(&e, &c) {
             panic_with_error!(&e, Error::InsufficientCash);
         }
 
@@ -506,9 +547,10 @@ impl Vault {
         usdc_client(&e, &c).transfer(&payer, &e.current_contract_address(), &pay);
         let (_principal_paid, interest_paid, _rem) = lm.apply_payment(&borrower, &pay);
         let fee = or_overflow(&e, bps_of(&e, interest_paid, PROTOCOL_FEE_BPS));
-        // Unconditional: a transfer that is skipped in simulation (fee 0) but
-        // executed on-chain (fee > 0) falls outside the footprint and fails.
-        usdc_client(&e, &c).transfer(&e.current_contract_address(), &c.fee_recipient, &fee);
+        // (review A3) fees ACCRUE in the vault and are pulled with `claim_fees`:
+        // no per-repay transfer, so neither the footprint nor the recipient's
+        // trustline can ever block a repayment.
+        set_fees_accrued(&e, fees_accrued(&e) + fee);
 
         // Reduce only the principal still counted in total_borrows (post-writeoff aware).
         let wo = written_off(&e, &borrower);
@@ -557,7 +599,7 @@ impl Vault {
         }
         let (principal_paid, interest_paid, remaining) = lm.apply_payment(&borrower, &pay);
         let fee = or_overflow(&e, bps_of(&e, interest_paid, PROTOCOL_FEE_BPS));
-        usdc_client(&e, &c).transfer(&e.current_contract_address(), &c.fee_recipient, &fee);
+        set_fees_accrued(&e, fees_accrued(&e) + fee); // (review A3) pull pattern, see `claim_fees`
         // (review PR #4) el clamp del write-off es UNIVERSAL: un payoff TOTAL
         // por este camino cierra prestamos defaulted (el LM solo bloquea los
         // parciales), y sin el clamp el principal ya descontado por

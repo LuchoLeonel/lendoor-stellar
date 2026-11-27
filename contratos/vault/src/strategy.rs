@@ -35,7 +35,7 @@ use soroban_sdk::{
     IntoVal, String, Symbol, Val, Vec,
 };
 
-use crate::{bump_instance, cash, cfg, or_overflow, Config, DataKey, Error, Vault, VaultArgs, VaultClient};
+use crate::{available_cash, bump_instance, cash, cfg, or_overflow, Config, DataKey, Error, Vault, VaultArgs, VaultClient};
 
 // ───────────────────────── types ─────────────────────────
 
@@ -137,8 +137,10 @@ pub(crate) fn sync(e: &Env, strict: bool) -> i128 {
         return 0;
     }
     let client = DefindexClient::new(e, &st);
+    // (review) an empty vector is NOT "zero assets": a misbehaving view must
+    // never collapse the share price. Only a 1-element answer counts.
     match client.try_get_asset_amounts_per_shares(&p.shares) {
-        Ok(Ok(v)) => {
+        Ok(Ok(v)) if v.len() == 1 => {
             let new_assets = v.get(0).unwrap_or(0);
             set_pos(e, &StrategyPos { shares: p.shares, assets: new_assets, last_sync: e.ledger().timestamp() });
             e.events().publish((symbol_short!("sync"),), (p.assets, new_assets));
@@ -196,8 +198,15 @@ fn push(e: &Env, c: &Config, st: &Address, amount: i128) -> i128 {
         panic_with_error!(e, Error::StrategyCallFailed);
     }
     let p = pos(e);
+    let assets_before = p.assets;
     set_pos(e, &StrategyPos { shares: p.shares + minted, assets: p.assets, last_sync: p.last_sync });
     let assets = sync(e, true);
+    // (review A1) value floor on the way IN too: a deposit fee or a lossy mint on
+    // DeFindex's side must not bleed LP price tranche after tranche.
+    let floor = or_overflow(e, bps_of(e, amount, buffer(e).min_out_bps as i128));
+    if assets - assets_before < floor {
+        panic_with_error!(e, Error::StrategyShort);
+    }
     e.events().publish((symbol_short!("stratin"),), (amount, minted, assets));
     amount
 }
@@ -212,8 +221,10 @@ fn pull(e: &Env, c: &Config, st: &Address, want: i128) -> i128 {
     if p.shares <= 0 || want <= 0 {
         return 0;
     }
-    // Fresh underlying value, so the share count we burn is right.
-    let fresh = sync(e, true);
+    // Fresh underlying value, so the share count we burn is right. If a sync
+    // already ran in this ledger (soft_sync at the top of the LP op) reuse it:
+    // one DeFindex view-write less in the hottest transaction (review A2).
+    let fresh = if p.last_sync == e.ledger().timestamp() && p.assets > 0 { p.assets } else { sync(e, true) };
     if fresh <= 0 {
         return 0;
     }
@@ -245,7 +256,7 @@ fn pull(e: &Env, c: &Config, st: &Address, want: i128) -> i128 {
 /// least the deficit (rounded up to a tranche) from the strategy. Never
 /// panics on its own when there is nothing to pull: the caller's check does.
 pub(crate) fn ensure_cash(e: &Env, c: &Config, needed: i128) {
-    let idle = cash(e, c);
+    let idle = available_cash(e, c);
     if needed <= idle {
         return;
     }
@@ -254,9 +265,12 @@ pub(crate) fn ensure_cash(e: &Env, c: &Config, needed: i128) {
         Some(s) if p.shares > 0 => s,
         _ => return,
     };
+    // (review B7) pull just the deficit, grossed up for the slippage floor, so a
+    // withdraw 1 unit above idle cannot drag a whole tranche home and back
+    // (the keeper restores the buffer in tranches on its own schedule).
     let deficit = needed - idle;
-    let tranche = buffer(e).tranche;
-    let want = if tranche > deficit { tranche } else { deficit };
+    let bps = buffer(e).min_out_bps as i128;
+    let want = or_overflow(e, mul_div_ceil(e, deficit, BPS, if bps > 0 { bps } else { BPS }));
     pull(e, c, &st, want);
 }
 
@@ -269,18 +283,21 @@ fn rebalance_step(e: &Env, c: &Config) -> i128 {
         None => panic_with_error!(e, Error::NoStrategy),
     };
     let b = buffer(e);
-    if b.tranche <= 0 {
-        panic_with_error!(e, Error::StrategyDisabled);
-    }
-    let idle = cash(e, c);
-    if idle >= b.idle_target + b.tranche {
+    let idle = available_cash(e, c);
+    let threshold = or_overflow(e, b.idle_target.checked_add(b.tranche));
+    if b.tranche > 0 && idle >= threshold {
         gov::require_not_paused(e); // investing is new exposure
         return push(e, c, &st, b.tranche);
     }
+    // (review B8) pulling back is allowed even with routing disabled (tranche 0):
+    // the operator can always drain the position towards the idle target.
     if idle < b.idle_target && pos(e).shares > 0 {
         let deficit = b.idle_target - idle;
-        let want = if deficit < b.tranche { deficit } else { b.tranche };
+        let want = if b.tranche > 0 && deficit > b.tranche { b.tranche } else { deficit };
         return -pull(e, c, &st, want);
+    }
+    if b.tranche <= 0 && pos(e).shares <= 0 {
+        panic_with_error!(e, Error::StrategyDisabled);
     }
     0
 }
@@ -304,10 +321,12 @@ impl Vault {
     }
 
     // ── admin: policy ──
-    /// Admin. `tranche == 0` disables routing. `min_out_bps` in [9_000, 10_000].
+    /// Admin. `tranche == 0` disables investing (pulls still work). `min_out_bps`
+    /// in [9_000, 9_999]: 10_000 would make every pull fail on DeFindex's
+    /// 1-stroop floor rounding (review A4).
     pub fn set_buffer(e: Env, idle_target: i128, tranche: i128, min_out_bps: u32) {
         gov::require_role(&e, Role::Admin);
-        if idle_target < 0 || tranche < 0 || min_out_bps < 9_000 || min_out_bps > BPS as u32 {
+        if idle_target < 0 || tranche < 0 || min_out_bps < 9_000 || min_out_bps >= BPS as u32 {
             panic_with_error!(&e, Error::BadBuffer);
         }
         e.storage().instance().set(&DataKey::Buffer, &BufferCfg { idle_target, tranche, min_out_bps });
@@ -320,6 +339,10 @@ impl Vault {
     /// after the upgrade delay and only while the position is empty.
     pub fn propose_strategy(e: Env, strategy: Option<Address>) -> u64 {
         gov::require_role(&e, Role::Admin);
+        if e.storage().instance().has(&DataKey::PendingStrategy) {
+            // replacing a pending proposal is a cancel + a new proposal for the indexer
+            e.events().publish((symbol_short!("stratcncl"),), gov::role(&e, Role::Admin));
+        }
         let eta = e.ledger().timestamp() + gov::upgrade_delay(&e);
         e.storage().instance().set(&DataKey::PendingStrategy, &PendingStrategy { strategy: strategy.clone(), eta });
         bump_instance(&e);
@@ -332,16 +355,23 @@ impl Vault {
             Some(p) => p,
             None => panic_with_error!(&e, Error::NoPendingStrategy),
         };
-        if e.ledger().timestamp() < pending.eta {
+        let now = e.ledger().timestamp();
+        if now < pending.eta {
             panic_with_error!(&e, Error::StrategyNotReady);
+        }
+        if now > pending.eta + gov::PROPOSAL_WINDOW {
+            panic_with_error!(&e, Error::StrategyProposalExpired); // (review B12) no sleeper proposals
         }
         if pos(&e).shares > 0 {
             panic_with_error!(&e, Error::StrategyNotEmpty);
         }
         if let Some(ref st) = pending.strategy {
-            // Fail closed: the DeFindex vault must settle in our asset.
+            // Fail closed: exactly ONE asset and it must be ours (review B11).
             let c = cfg(&e);
             let assets = DefindexClient::new(&e, st).get_assets();
+            if assets.len() != 1 {
+                panic_with_error!(&e, Error::StrategyAssetMismatch);
+            }
             let first = assets.get(0).unwrap_or_else(|| panic_with_error!(&e, Error::StrategyAssetMismatch));
             if first.address != c.usdc {
                 panic_with_error!(&e, Error::StrategyAssetMismatch);
@@ -390,16 +420,23 @@ impl Vault {
             None => panic_with_error!(&e, Error::NoStrategy),
         };
         let p = pos(&e);
-        if p.shares <= 0 {
-            return 0;
-        }
         let vault = me(&e);
         let client = DefindexClient::new(&e, &st);
+        // (review B10) withdraw what DeFindex says we hold, not the cache: a
+        // drifted cache must never make the unwind itself fail.
+        let held = client.balance(&vault);
+        if held <= 0 && p.shares <= 0 {
+            return 0;
+        }
         let cash_before = cash(&e, &c);
-        client.withdraw(&p.shares, &vec![&e, 0i128], &vault);
+        if held > 0 {
+            client.withdraw(&held, &vec![&e, 0i128], &vault);
+        }
         let received = cash(&e, &c) - cash_before;
         let left = client.balance(&vault);
-        set_pos(&e, &StrategyPos { shares: left, assets: 0, last_sync: e.ledger().timestamp() });
+        // fallback valuation for anything left: pro-rata of the last known value
+        let fallback = if left > 0 && held > 0 { or_overflow(&e, mul_div_floor(&e, p.assets, left, held)) } else { 0 };
+        set_pos(&e, &StrategyPos { shares: left, assets: fallback, last_sync: e.ledger().timestamp() });
         if left > 0 {
             sync(&e, false);
         }

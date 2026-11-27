@@ -21,6 +21,9 @@ use soroban_sdk::{contracterror, contracttype, panic_with_error, symbol_short, A
 /// Hard floor for the upgrade delay (10 min): enough to demo on testnet, and
 /// mainnet deploys use 48 h. A delay below this is a misconfiguration.
 pub const MIN_UPGRADE_DELAY: u64 = 600;
+/// A matured proposal stays executable for this long after `eta`; after that
+/// it must be re-proposed (no "sleeper" upgrades, review B12).
+pub const PROPOSAL_WINDOW: u64 = 7 * 86_400;
 
 /// Error codes 101–110 are reserved for governance so they never overlap the
 /// contracts' own enums (1–99).
@@ -37,7 +40,7 @@ pub enum GovError {
     UpgradeHashMismatch = 107,
     DelayTooShort = 108,
     RoleNotSet = 109,
-    MathOverflow = 110,
+    ProposalExpired = 110,
 }
 
 #[contracttype]
@@ -193,7 +196,11 @@ pub fn unpause(e: &Env) {
 // ───────────────────────── timelocked upgrade ─────────────────────────
 
 pub fn propose_upgrade(e: &Env, new_wasm_hash: &BytesN<32>) -> u64 {
-    require_role(e, Role::Admin);
+    let admin = require_role(e, Role::Admin);
+    if pending_upgrade(e).is_some() {
+        // replacing a pending proposal: tell the indexer the old one is gone
+        e.events().publish((symbol_short!("upgcancl"),), admin);
+    }
     let eta = e.ledger().timestamp() + upgrade_delay(e);
     e.storage().instance().set(
         &GovKey::PendingUpgrade,
@@ -214,8 +221,12 @@ pub fn execute_upgrade(e: &Env, expected_wasm_hash: &BytesN<32>) {
     if p.wasm_hash != *expected_wasm_hash {
         panic_with_error!(e, GovError::UpgradeHashMismatch);
     }
-    if e.ledger().timestamp() < p.eta {
+    let now = e.ledger().timestamp();
+    if now < p.eta {
         panic_with_error!(e, GovError::TimelockNotReady);
+    }
+    if now > p.eta + PROPOSAL_WINDOW {
+        panic_with_error!(e, GovError::ProposalExpired);
     }
     e.storage().instance().remove(&GovKey::PendingUpgrade);
     e.events().publish((symbol_short!("upgexec"),), p.wasm_hash.clone());

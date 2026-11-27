@@ -67,7 +67,8 @@ pub enum Error {
 
 // ───────────────────────────── Types ────────────────────────────────────
 /// Per-user risk profile written by the off-chain model. `limit` is in the
-/// asset's smallest unit (USDC = 6 decimals: 1_000_000 = $1).
+/// asset's smallest unit (Stellar classic assets, USDC included, use 7
+/// decimals: 10_000_000 = $1).
 #[contracttype]
 #[derive(Clone)]
 pub struct UserRisk {
@@ -283,6 +284,11 @@ impl LoanManager {
 
     pub fn set_default_grace_period(e: Env, secs: u64) {
         gov::require_role(&e, Role::Admin);
+        // (review B14) bounded so `due + grace` can never overflow the u64
+        // timestamp math of loans opened under it.
+        if secs > 365 * SECONDS_PER_DAY {
+            panic_with_error!(&e, Error::InvalidParam);
+        }
         let mut c = read_config(&e);
         c.default_grace_period = secs;
         e.storage().instance().set(&DataKey::Config, &c);
