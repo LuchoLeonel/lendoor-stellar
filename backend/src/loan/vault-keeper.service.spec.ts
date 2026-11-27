@@ -9,6 +9,7 @@ const base = (over: Partial<VaultSnapshot> = {}): VaultSnapshot => ({
   totalAssets: 110_000_000n, // 11 USDC
   totalSupply: 110_000_000_000n, // ×1000 share units (offset 3)
   cash: 20_000_000n,
+  feesAccrued: 0n,
   paused: false,
   pendingUpgrade: null,
   pendingStrategy: null,
@@ -54,6 +55,9 @@ describe('evaluateInvariants', () => {
 
   it('I5: idle below target only when routing is enabled', () => {
     expect(evaluateInvariants(base({ cash: 10_000_000n }), null).map((x) => x.id)).toEqual(['I5']);
+    // accrued protocol fees sit in the balance but are not idle (review A3)
+    expect(evaluateInvariants(base({ cash: 20_000_000n, feesAccrued: 1n }), null).map((x) => x.id)).toEqual(['I5']);
+    expect(evaluateInvariants(base({ cash: 20_000_001n, feesAccrued: 1n }), null)).toEqual([]);
     expect(
       evaluateInvariants(
         base({ cash: 10_000_000n, buffer: { idle_target: 20_000_000n, tranche: 0n, min_out_bps: 10_000 } }),

@@ -38,11 +38,11 @@ Existing events keep their shape: `deposit`, `dep_from`, `withdraw`, `redeem`, `
 
 | # | Check (every 10 min, keeper cadence) | Alert when | Severity |
 |---|---|---|---|
-| I1 | `total_assets == cash + total_borrows + strategy_position.assets` (recompute from reads) | mismatch ≠ 0 | critical |
+| I1 | `total_assets == (cash − fees_accrued) + total_borrows + strategy_position.assets` (recompute from reads; `total_borrows` has no public view yet, so today I1 is checked from the indexed loans — a `total_borrows` view is a Tranche 3 candidate) | mismatch ≠ 0 | critical |
 | I2 | share price `total_assets / total_supply` vs previous sample | drop not explained by a `writeoff` or `stratout.received < want` in the same window | critical |
 | I3 | `strategy_position.assets` vs a fresh `get_asset_amounts_per_shares(shares)` read (simulation) | drift > 20 bps, or `last_sync` older than 1 h while `shares > 0` | high |
 | I4 | `strategy_position.shares` vs DeFindex `balance(vault)` | different | critical |
-| I5 | `cash < buffer.idle_target` | sustained for > 3 samples (keeper not pulling) | medium |
+| I5 | `cash − fees_accrued < buffer.idle_target` | sustained for > 3 samples (keeper not pulling) | medium |
 | I6 | any `syncfail` event | first occurrence | high |
 | I7 | any `stratout` with `received < want * min_out_bps / 10_000` | should be impossible (the tx reverts); any occurrence = bug | critical |
 | I8 | `is_paused() == true` | state change | high (page) |

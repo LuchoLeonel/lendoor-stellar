@@ -35,6 +35,8 @@ export type VaultSnapshot = {
   totalAssets: bigint;
   totalSupply: bigint;
   cash: bigint;
+  /** Protocol fees accrued inside the vault balance (review A3): not LP assets, not idle. */
+  feesAccrued: bigint;
   paused: boolean;
   pendingUpgrade: { eta: bigint; wasm_hash: unknown } | null;
   pendingStrategy: { eta: bigint; strategy: string | null } | null;
@@ -101,12 +103,14 @@ export function evaluateInvariants(
     if (s.position.last_sync > 0n && age > STALE_SYNC_SECS) {
       out.push({ id: 'I3', severity: 'high', message: `last strategy sync ${age}s ago` });
     }
-    // I5 — idle below the target the admin configured.
-    if (s.buffer.tranche > 0n && s.cash < s.buffer.idle_target) {
+    // I5 — idle (net of accrued protocol fees, which the contract never lends
+    // nor counts) below the target the admin configured.
+    const available = s.cash - s.feesAccrued;
+    if (s.buffer.tranche > 0n && available < s.buffer.idle_target) {
       out.push({
         id: 'I5',
         severity: 'medium',
-        message: `idle cash ${s.cash} below target ${s.buffer.idle_target}`,
+        message: `idle cash ${available} (balance ${s.cash} - fees ${s.feesAccrued}) below target ${s.buffer.idle_target}`,
       });
     }
   }
@@ -158,7 +162,7 @@ export class VaultKeeperService {
   private previousPrice: number | null = null;
 
   async snapshot(): Promise<VaultSnapshot> {
-    const [totalAssets, totalSupply, paused, pendingUpgrade, pendingStrategy, strategy, position, buffer, cash] =
+    const [totalAssets, totalSupply, paused, pendingUpgrade, pendingStrategy, strategy, position, buffer, cash, feesAccrued] =
       await Promise.all([
         simulateVaultCall<bigint>('total_assets'),
         simulateVaultCall<bigint>('total_supply'),
@@ -169,6 +173,7 @@ export class VaultKeeperService {
         simulateVaultCall<StrategyPos>('strategy_position'),
         simulateVaultCall<BufferCfg>('buffer'),
         simulateContractCall<bigint>(SOROBAN_USDC_SAC, 'balance', [scAddress(SOROBAN_VAULT)]),
+        simulateVaultCall<bigint>('fees_accrued'),
       ]);
     let defindexShares: bigint | null = null;
     let defindexAssets: bigint | null = null;
@@ -188,6 +193,7 @@ export class VaultKeeperService {
       totalAssets,
       totalSupply,
       cash,
+      feesAccrued,
       paused,
       pendingUpgrade: pendingUpgrade ?? null,
       pendingStrategy: pendingStrategy ?? null,
@@ -216,7 +222,7 @@ export class VaultKeeperService {
     }
     if (findings.length === 0) {
       this.logger.log(
-        `[VaultInvariants] ok: ta=${s.totalAssets} ts=${s.totalSupply} cash=${s.cash} strat=${s.position.assets}`,
+        `[VaultInvariants] ok: ta=${s.totalAssets} ts=${s.totalSupply} cash=${s.cash} fees=${s.feesAccrued} strat=${s.position.assets}`,
       );
     }
     return findings;
