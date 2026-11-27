@@ -56,6 +56,35 @@ export class ChainSyncScheduler implements OnApplicationBootstrap {
       },
     );
 
+    // SCF #45 Tranche 2 (soroban only). D2.4: read-only invariants of the
+    // vault every 10 min (docs/security/monitoring-plan.md). D2.2: the
+    // strategy keeper (sync + one tranche of rebalance) only when
+    // VAULT_KEEPER_ENABLED=true (pair T2-B with a DeFindex strategy).
+    if (process.env.BLOCKCHAIN_GATEWAY === 'soroban') {
+      await this.queue.add(
+        'vault-invariants',
+        {},
+        {
+          repeat: { every: 10 * 60 * 1000 },
+          jobId: 'chain-vault-invariants',
+          removeOnComplete: 100,
+          removeOnFail: 200,
+        },
+      );
+      if (process.env.VAULT_KEEPER_ENABLED === 'true') {
+        await this.queue.add(
+          'strategy-keeper',
+          {},
+          {
+            repeat: { every: 10 * 60 * 1000 },
+            jobId: 'chain-strategy-keeper',
+            removeOnComplete: 100,
+            removeOnFail: 200,
+          },
+        );
+      }
+    }
+
     // One-time startup job: renew expired offers after 10 seconds
     await this.queue.add(
       'renew-offers',

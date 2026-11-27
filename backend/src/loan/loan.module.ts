@@ -8,6 +8,7 @@ import { LoanController } from 'src/infrastructure/http/loan.controller';
 import { PublicStatsController } from './public-stats.controller';
 import { CreditPolicyService } from 'src/domain/services/credit-policy.service';
 import { ChainSyncService } from './chain-sync.service';
+import { VaultKeeperService } from './vault-keeper.service';
 import { LoanCalculationsService } from './loan-calculations.service';
 import { ChainSyncProcessor } from 'src/infrastructure/queue/chain-sync.processor';
 import { ChainSyncScheduler } from 'src/infrastructure/queue/chain-sync.scheduler';
@@ -42,6 +43,7 @@ const blockchainGatewayProvider =
     LoanService,
     CreditPolicyService,
     ChainSyncService,
+    VaultKeeperService,
     ChainSyncProcessor,
     ChainSyncScheduler,
     BlockchainProcessor,

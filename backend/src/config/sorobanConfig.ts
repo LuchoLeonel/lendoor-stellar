@@ -341,3 +341,85 @@ export async function sendLoanManagerCall(
     return confirmed;
   }, priority);
 }
+
+// ───────────────────────── Vault (SCF #45 Tranche 2) ─────────────────────────
+// Reads and keeper writes against the vault and against arbitrary contracts
+// (our DeFindex vault, the USDC SAC). Writes are signed by the KEEPER key,
+// which holds the vault's `operator` role (D2.3 role split); it falls back to
+// the operator/underwriter secret when STELLAR_KEEPER_SECRET is not set
+// (testnet, where both roles are the same identity).
+
+function keeperSecret(): string {
+  return process.env.STELLAR_KEEPER_SECRET || operatorSecret();
+}
+
+export function keeperKeypair() {
+  return stellar().Keypair.fromSecret(keeperSecret());
+}
+
+async function buildTxFor(
+  contractId: string,
+  method: string,
+  args: StellarScVal[],
+  sourcePublicKey: string,
+): Promise<StellarTransaction> {
+  const sdk = stellar();
+  const server = sorobanServer();
+  const account = await server.getAccount(sourcePublicKey);
+  const contract = new sdk.Contract(contractId);
+  return new sdk.TransactionBuilder(account, {
+    fee: sdk.BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(contract.call(method, ...args))
+    .setTimeout(30)
+    .build();
+}
+
+/** Simulation-only read on any contract (no signature, no fee). */
+export async function simulateContractCall<T = unknown>(
+  contractId: string,
+  method: string,
+  args: StellarScVal[] = [],
+): Promise<T> {
+  assertSorobanContractId(contractId, 'contractId');
+  const server = sorobanServer();
+  const tx = await buildTxFor(contractId, method, args, keeperKeypair().publicKey());
+  const sim = await server.simulateTransaction(tx);
+  if (isSimulationError(sim)) {
+    throw new Error(`Soroban simulation failed for ${method}@${contractId.slice(0, 8)}: ${sim.error}`);
+  }
+  const result = sim.result;
+  if (!result) return null as T;
+  return fromScVal<T>(result.retval);
+}
+
+export async function simulateVaultCall<T = unknown>(
+  method: string,
+  args: StellarScVal[] = [],
+): Promise<T> {
+  assertSorobanContractId(SOROBAN_VAULT, 'SOROBAN_VAULT');
+  return simulateContractCall<T>(SOROBAN_VAULT, method, args);
+}
+
+/** Keeper write on the vault (`rebalance`, `sync_strategy`). */
+export async function sendVaultCall(
+  method: string,
+  args: StellarScVal[],
+  purpose: string,
+  priority: TxPriority = 'low',
+) {
+  assertSorobanContractId(SOROBAN_VAULT, 'SOROBAN_VAULT');
+  return enqueueSoroban(async () => {
+    const server = sorobanServer();
+    const keypair = keeperKeypair();
+    const tx = await buildTxFor(SOROBAN_VAULT, method, args, keypair.publicKey());
+    const prepared = await server.prepareTransaction(tx);
+    prepared.sign(keypair);
+    const sent = await sendPreparedTransaction(prepared, `${purpose}:send`);
+    logger.log(`[${purpose}] tx hash=${sent.hash}`);
+    const confirmed = await waitForTransactionWithRetry(sent.hash, purpose);
+    logger.log(`[${purpose}] confirmed ledger=${confirmed.ledger}`);
+    return confirmed;
+  }, priority);
+}

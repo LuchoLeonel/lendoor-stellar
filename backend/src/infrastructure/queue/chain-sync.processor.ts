@@ -2,13 +2,17 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { ChainSyncService } from 'src/loan/chain-sync.service';
+import { VaultKeeperService } from 'src/loan/vault-keeper.service';
 import { Logger } from '@nestjs/common';
 
 @Processor('chain-sync', { concurrency: 1 })
 export class ChainSyncProcessor extends WorkerHost {
   private readonly logger = new Logger(ChainSyncProcessor.name);
 
-  constructor(private readonly chainSync: ChainSyncService) {
+  constructor(
+    private readonly chainSync: ChainSyncService,
+    private readonly vaultKeeper: VaultKeeperService,
+  ) {
     super();
   }
 
@@ -41,6 +45,12 @@ export class ChainSyncProcessor extends WorkerHost {
         break;
       case 'sync-late-fees':
         await this.chainSync.syncLateFeesSnapshot();
+        break;
+      case 'vault-invariants':
+        await this.vaultKeeper.checkInvariants();
+        break;
+      case 'strategy-keeper':
+        await this.vaultKeeper.runStrategyKeeper();
         break;
       default:
         this.logger.warn(`Unknown job: ${job.name}`);
