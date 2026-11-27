@@ -902,9 +902,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "lendoor-common"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "lendoor-loan-manager"
 version = "0.1.0"
 dependencies = [
+ "lendoor-common",
  "soroban-sdk",
 ]
 
@@ -912,6 +920,7 @@ dependencies = [
 name = "lendoor-vault"
 version = "0.1.0"
 dependencies = [
+ "lendoor-common",
  "lendoor-loan-manager",
  "soroban-sdk",
 ]

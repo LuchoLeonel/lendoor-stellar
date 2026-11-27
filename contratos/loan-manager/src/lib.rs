@@ -1,4 +1,5 @@
 #![no_std]
+#![allow(deprecated)] // events().publish: same topic/data shape the indexer already parses; #[contractevent] migration is a separate task
 //! Lendoor Loan Manager (Credit Limit Manager) — Soroban port of `LoanManagerV3`.
 //!
 //! Source of truth for *who can borrow*, *how much*, *under what terms*, and
@@ -7,12 +8,19 @@
 //! calls `open_loan` / `close_loan` to register loan state changes).
 //!
 //! Differences vs the EVM version, by design:
-//!   - No proxy: Soroban contracts upgrade in place (`upgrade`, admin-gated).
+//!   - No proxy: Soroban contracts upgrade in place — behind a timelock
+//!     (`propose_upgrade` / `execute_upgrade`, admin-gated; SCF #45 T2 D2.3).
+//!   - Roles (D2.3): `admin` (config, roles, upgrade), `underwriter` (the
+//!     off-chain risk engine's key: risk, offers, premiums, defaults), `pauser`
+//!     (can pause, cannot unpause). Pause blocks `open_loan` and `set_loan_offer`
+//!     (new exposure) and nothing else: repayments and reads keep working.
 //!   - No `RiskManagerUncollat` contract: the `owed <= credit_limit` check lives
 //!     inline in the vault's borrow path (Soroban calls are atomic, no EVC).
 //!   - `msg.sender` -> explicit `Address` + `require_auth()`.
 //!   - State lives in typed persistent/instance storage with explicit TTL bumps.
 
+use lendoor_common::gov::{self, PendingUpgrade, Role};
+use lendoor_common::math::mul_div_floor;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
     BytesN, Env,
@@ -54,11 +62,13 @@ pub enum Error {
     TooEarlyToDefault = 16,
     Underpaid = 17,
     InvalidParam = 18,
+    MathOverflow = 19,
 }
 
 // ───────────────────────────── Types ────────────────────────────────────
 /// Per-user risk profile written by the off-chain model. `limit` is in the
-/// asset's smallest unit (USDC = 6 decimals: 1_000_000 = $1).
+/// asset's smallest unit (Stellar classic assets, USDC included, use 7
+/// decimals: 10_000_000 = $1).
 #[contracttype]
 #[derive(Clone)]
 pub struct UserRisk {
@@ -116,7 +126,6 @@ pub struct Config {
 // ─────────────────────────── Storage keys ───────────────────────────────
 #[contracttype]
 pub enum DataKey {
-    Owner,             // instance: Address (operator = Lendoor backend signer)
     Config,            // instance: Config
     MinHold(u32),      // instance: u64 seconds, keyed by tenor_days
     Risk(Address),     // persistent: UserRisk
@@ -129,13 +138,6 @@ pub enum DataKey {
 // ─────────────────────────── Storage helpers ────────────────────────────
 fn bump_instance(e: &Env) {
     e.storage().instance().extend_ttl(INSTANCE_THRESHOLD, INSTANCE_BUMP);
-}
-
-fn read_owner(e: &Env) -> Address {
-    e.storage()
-        .instance()
-        .get(&DataKey::Owner)
-        .unwrap_or_else(|| panic_with_error!(e, Error::NotInitialized))
 }
 
 fn read_config(e: &Env) -> Config {
@@ -201,13 +203,17 @@ pub struct LoanManager;
 
 #[contractimpl]
 impl LoanManager {
-    /// One-time constructor. `owner` = operator (Lendoor backend signer);
+    /// One-time constructor. `admin` = governance (multisig account);
+    /// `underwriter` = the Lendoor backend signer (risk, offers, premiums,
+    /// defaults); `pauser` = on-call key (pause / veto only);
     /// `vault` = the only contract allowed to call open_loan/close_loan.
-    pub fn __constructor(e: Env, owner: Address, vault: Address) {
-        if e.storage().instance().has(&DataKey::Owner) {
+    pub fn __constructor(e: Env, admin: Address, underwriter: Address, pauser: Address, vault: Address, upgrade_delay_secs: u64) {
+        if e.storage().instance().has(&DataKey::Config) {
             panic_with_error!(&e, Error::AlreadyInitialized);
         }
-        e.storage().instance().set(&DataKey::Owner, &owner);
+        gov::init(&e, &admin, upgrade_delay_secs);
+        e.storage().instance().set(&gov::GovKey::Role(Role::Underwriter), &underwriter);
+        e.storage().instance().set(&gov::GovKey::Role(Role::Pauser), &pauser);
         e.storage().instance().set(
             &DataKey::Config,
             &Config { vault, default_grace_period: SECONDS_PER_DAY, default_late_period: 15 * SECONDS_PER_DAY },
@@ -221,16 +227,54 @@ impl LoanManager {
         bump_instance(&e);
     }
 
-    // ───────── admin (operator) ─────────
-    pub fn set_owner(e: Env, new_owner: Address) {
-        read_owner(&e).require_auth();
-        e.storage().instance().set(&DataKey::Owner, &new_owner);
+    // ───────── governance (admin) ─────────
+    pub fn get_role(e: Env, role: Role) -> Option<Address> {
+        gov::role(&e, role)
+    }
+    pub fn is_paused(e: Env) -> bool {
+        gov::is_paused(&e)
+    }
+    pub fn pending_upgrade(e: Env) -> Option<PendingUpgrade> {
+        gov::pending_upgrade(&e)
+    }
+    pub fn upgrade_delay(e: Env) -> u64 {
+        gov::upgrade_delay(&e)
+    }
+    /// Admin: assign `underwriter` or `pauser`; `admin` moves only via the
+    /// two-step transfer.
+    pub fn set_role(e: Env, role: Role, account: Address) {
+        gov::set_role(&e, role, &account);
         bump_instance(&e);
-        e.events().publish((symbol_short!("ownerset"),), new_owner);
+    }
+    pub fn transfer_admin(e: Env, new_admin: Address) {
+        gov::transfer_admin(&e, &new_admin);
+    }
+    pub fn accept_admin(e: Env) -> Address {
+        gov::accept_admin(&e)
+    }
+    pub fn cancel_admin_transfer(e: Env) {
+        gov::cancel_admin_transfer(&e);
+    }
+    /// `caller` must be the admin or the pauser.
+    pub fn pause(e: Env, caller: Address) {
+        gov::pause(&e, &caller);
+    }
+    /// Admin only.
+    pub fn unpause(e: Env) {
+        gov::unpause(&e);
+    }
+    pub fn propose_upgrade(e: Env, new_wasm_hash: BytesN<32>) -> u64 {
+        gov::propose_upgrade(&e, &new_wasm_hash)
+    }
+    pub fn execute_upgrade(e: Env, new_wasm_hash: BytesN<32>) {
+        gov::execute_upgrade(&e, &new_wasm_hash);
+    }
+    pub fn cancel_upgrade(e: Env, caller: Address) {
+        gov::cancel_upgrade(&e, &caller);
     }
 
     pub fn set_vault(e: Env, vault: Address) {
-        read_owner(&e).require_auth();
+        gov::require_role(&e, Role::Admin);
         let mut c = read_config(&e);
         c.vault = vault.clone();
         e.storage().instance().set(&DataKey::Config, &c);
@@ -239,31 +283,31 @@ impl LoanManager {
     }
 
     pub fn set_default_grace_period(e: Env, secs: u64) {
-        read_owner(&e).require_auth();
+        gov::require_role(&e, Role::Admin);
+        // (review B14) bounded so `due + grace` can never overflow the u64
+        // timestamp math of loans opened under it.
+        if secs > 365 * SECONDS_PER_DAY {
+            panic_with_error!(&e, Error::InvalidParam);
+        }
         let mut c = read_config(&e);
         c.default_grace_period = secs;
         e.storage().instance().set(&DataKey::Config, &c);
         bump_instance(&e);
+        e.events().publish((symbol_short!("graceset"),), secs);
     }
 
     pub fn set_min_hold_for_tenor(e: Env, tenor_days: u32, min_hold_days: u32) {
-        read_owner(&e).require_auth();
-        e.storage()
-            .instance()
-            .set(&DataKey::MinHold(tenor_days), &(min_hold_days as u64 * SECONDS_PER_DAY));
+        gov::require_role(&e, Role::Admin);
+        let secs = min_hold_days as u64 * SECONDS_PER_DAY; // u32 → u64: cannot overflow
+        e.storage().instance().set(&DataKey::MinHold(tenor_days), &secs);
         bump_instance(&e);
-    }
-
-    /// Upgrade the contract Wasm (Soroban-native, replaces UUPS). Owner-gated.
-    pub fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
-        read_owner(&e).require_auth();
-        e.deployer().update_current_contract_wasm(new_wasm_hash);
+        e.events().publish((symbol_short!("minhold"), tenor_days), secs);
     }
 
     // ───────── risk profile ─────────
     /// Write the off-chain model's verdict for a user.
     pub fn set_user_risk(e: Env, account: Address, score: u32, kyc_ok: bool, valid_until: u64, limit: i128) {
-        read_owner(&e).require_auth();
+        gov::require_role(&e, Role::Underwriter);
         if limit < 0 {
             panic_with_error!(&e, Error::InvalidParam);
         }
@@ -309,7 +353,8 @@ impl LoanManager {
 
     // ───────── offers ─────────
     pub fn set_loan_offer(e: Env, borrower: Address, tenor_days: u32, fee_bps: u32, valid_until: u64, max_amount: i128) {
-        read_owner(&e).require_auth();
+        gov::require_role(&e, Role::Underwriter);
+        gov::require_not_paused(&e);
         if tenor_days == 0 || fee_bps == 0 || max_amount <= 0 {
             panic_with_error!(&e, Error::InvalidParam);
         }
@@ -329,6 +374,7 @@ impl LoanManager {
     pub fn open_loan(e: Env, borrower: Address, principal: i128, tenor_days: u32, fee_bps: u32) {
         let cfg = read_config(&e);
         cfg.vault.require_auth(); // only the registered vault
+        gov::require_not_paused(&e);
         if principal <= 0 {
             panic_with_error!(&e, Error::ZeroPrincipal);
         }
@@ -376,10 +422,15 @@ impl LoanManager {
         // es gratis), y el ancla de devengo (last_accrued) salta ese primer
         // dia ya cobrado: el total al vencimiento queda EXACTO en
         // principal * (1 + fee_bps), igual que antes.
-        let full_fee = principal * fee_bps as i128 / BPS_DENOM;
+        // D2.3: checked math — a typed MathOverflow instead of an opaque trap.
+        let full_fee = mul_div_floor(&e, principal, fee_bps as i128, BPS_DENOM)
+            .unwrap_or_else(|| panic_with_error!(&e, Error::MathOverflow));
         let f = full_fee / tenor_days as i128;
         let one_day_floor = if f > 0 { f } else { full_fee };
-        let due_ts = now + tenor_days as u64 * SECONDS_PER_DAY;
+        let due_ts = (tenor_days as u64)
+            .checked_mul(SECONDS_PER_DAY)
+            .and_then(|t| now.checked_add(t))
+            .unwrap_or_else(|| panic_with_error!(&e, Error::MathOverflow));
         // (review PR #4) si el fee es tan chico que el piso diario floorea a 0,
         // el fallback cobra el fee COMPLETO al abrir — y entonces el ancla va
         // directo al due, o ese mismo fee se devengaria OTRA vez por el camino
@@ -390,7 +441,9 @@ impl LoanManager {
         } else {
             due_ts
         };
-        let amount_due = principal + one_day_floor;
+        let amount_due = principal
+            .checked_add(one_day_floor)
+            .unwrap_or_else(|| panic_with_error!(&e, Error::MathOverflow));
         l = Loan {
             principal,
             amount_due,
@@ -428,7 +481,7 @@ impl LoanManager {
     /// Mark a loan defaulted (admin flag). Does NOT touch vault accounting — the
     /// vault's `manual_write_off` does that (and checks is_defaulted first).
     pub fn mark_default(e: Env, borrower: Address) {
-        read_owner(&e).require_auth();
+        gov::require_role(&e, Role::Underwriter);
         let mut l = read_loan(&e, &borrower);
         if !l.active {
             panic_with_error!(&e, Error::NoActiveLoan);
@@ -466,7 +519,7 @@ impl LoanManager {
 
     // ───────── late fees ─────────
     pub fn set_premium_config(e: Env, borrower: Address, premium_rate_per_sec_wad: i128, late_rate_per_sec_wad: i128) {
-        read_owner(&e).require_auth();
+        gov::require_role(&e, Role::Underwriter);
         if premium_rate_per_sec_wad < 0 || late_rate_per_sec_wad < 0 {
             panic_with_error!(&e, Error::InvalidParam);
         }
@@ -555,7 +608,9 @@ impl LoanManager {
             if let (Some(hi), Some(lo)) = (cum(int_to), cum(from)) {
                 let delta = hi - lo;
                 if delta > 0 {
-                    l.amount_due += delta;
+                    if let Some(v) = l.amount_due.checked_add(delta) {
+                        l.amount_due = v;
+                    }
                 }
             }
         }
@@ -575,8 +630,9 @@ impl LoanManager {
                     .checked_mul(t_late)
                     .and_then(|x| x.checked_mul(l.amount_due))
                     .map(|x| x / WAD)
+                    .and_then(|extra| l.amount_due.checked_add(extra))
                 {
-                    l.amount_due += extra;
+                    l.amount_due = extra;
                 }
             }
         }

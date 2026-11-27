@@ -17,13 +17,13 @@ export const SOROBAN_RPC_URL =
   process.env.SOROBAN_RPC_URL ?? 'https://soroban-testnet.stellar.org';
 export const SOROBAN_LOAN_MANAGER =
   process.env.SOROBAN_LOAN_MANAGER ??
-  'CDIHUCP6DWKW7B6IUECP3SCK5WCI3W5ITNQDZEK2TNI55WLXDM6Y4WJJ';
+  'CCJTYVKKRD5MQI7BLHF4BYAYFXZS5S5J3SZ33ZXTJC4SA55V27NUBGX2';
 export const SOROBAN_VAULT =
   process.env.SOROBAN_VAULT ??
-  'CDEJOQBQEZ7LUXSWXM4RF6EPBZLMJHMTGKC5GNWK5TNJR36TBHQLCULP';
+  'CA23BR7WLIPAA2SGYXTGCFSWJEIIFM2YI2QWN2ES6EJQ5VGROM5W4BZ3';
 export const SOROBAN_USDC_SAC =
   process.env.SOROBAN_USDC_SAC ??
-  'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC';
+  'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA';
 export const NETWORK_PASSPHRASE =
   process.env.NETWORK_PASSPHRASE ?? 'Test SDF Network ; September 2015';
 
@@ -335,6 +335,88 @@ export async function sendLoanManagerCall(
 
     const sent = await sendPreparedTransaction(prepared, `${purpose}:send`);
 
+    logger.log(`[${purpose}] tx hash=${sent.hash}`);
+    const confirmed = await waitForTransactionWithRetry(sent.hash, purpose);
+    logger.log(`[${purpose}] confirmed ledger=${confirmed.ledger}`);
+    return confirmed;
+  }, priority);
+}
+
+// ───────────────────────── Vault (SCF #45 Tranche 2) ─────────────────────────
+// Reads and keeper writes against the vault and against arbitrary contracts
+// (our DeFindex vault, the USDC SAC). Writes are signed by the KEEPER key,
+// which holds the vault's `operator` role (D2.3 role split); it falls back to
+// the operator/underwriter secret when STELLAR_KEEPER_SECRET is not set
+// (testnet, where both roles are the same identity).
+
+function keeperSecret(): string {
+  return process.env.STELLAR_KEEPER_SECRET || operatorSecret();
+}
+
+export function keeperKeypair() {
+  return stellar().Keypair.fromSecret(keeperSecret());
+}
+
+async function buildTxFor(
+  contractId: string,
+  method: string,
+  args: StellarScVal[],
+  sourcePublicKey: string,
+): Promise<StellarTransaction> {
+  const sdk = stellar();
+  const server = sorobanServer();
+  const account = await server.getAccount(sourcePublicKey);
+  const contract = new sdk.Contract(contractId);
+  return new sdk.TransactionBuilder(account, {
+    fee: sdk.BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(contract.call(method, ...args))
+    .setTimeout(30)
+    .build();
+}
+
+/** Simulation-only read on any contract (no signature, no fee). */
+export async function simulateContractCall<T = unknown>(
+  contractId: string,
+  method: string,
+  args: StellarScVal[] = [],
+): Promise<T> {
+  assertSorobanContractId(contractId, 'contractId');
+  const server = sorobanServer();
+  const tx = await buildTxFor(contractId, method, args, keeperKeypair().publicKey());
+  const sim = await server.simulateTransaction(tx);
+  if (isSimulationError(sim)) {
+    throw new Error(`Soroban simulation failed for ${method}@${contractId.slice(0, 8)}: ${sim.error}`);
+  }
+  const result = sim.result;
+  if (!result) return null as T;
+  return fromScVal<T>(result.retval);
+}
+
+export async function simulateVaultCall<T = unknown>(
+  method: string,
+  args: StellarScVal[] = [],
+): Promise<T> {
+  assertSorobanContractId(SOROBAN_VAULT, 'SOROBAN_VAULT');
+  return simulateContractCall<T>(SOROBAN_VAULT, method, args);
+}
+
+/** Keeper write on the vault (`rebalance`, `sync_strategy`). */
+export async function sendVaultCall(
+  method: string,
+  args: StellarScVal[],
+  purpose: string,
+  priority: TxPriority = 'low',
+) {
+  assertSorobanContractId(SOROBAN_VAULT, 'SOROBAN_VAULT');
+  return enqueueSoroban(async () => {
+    const server = sorobanServer();
+    const keypair = keeperKeypair();
+    const tx = await buildTxFor(SOROBAN_VAULT, method, args, keypair.publicKey());
+    const prepared = await server.prepareTransaction(tx);
+    prepared.sign(keypair);
+    const sent = await sendPreparedTransaction(prepared, `${purpose}:send`);
     logger.log(`[${purpose}] tx hash=${sent.hash}`);
     const confirmed = await waitForTransactionWithRetry(sent.hash, purpose);
     logger.log(`[${purpose}] confirmed ledger=${confirmed.ledger}`);

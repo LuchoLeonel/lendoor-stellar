@@ -46,7 +46,7 @@ Explorer:
   (`CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC`) as a stand-in for
   USDC, only to exercise the money path. On mainnet pass the real **USDC SAC** as
   the vault's `usdc` constructor arg.
-- 🔴 Stellar **testnet resets on 2026-12-16** and every contract above dies with
+- ⚠️ Stellar testnet resets wipe every contract above. **Correction (2026-11-26): the official networks page says there are no more resets scheduled for 2026**; the 2026-12-16 date noted here earlier is stale. Resets are announced ≥ 2 weeks ahead, so evidence is still captured as screenshots, not only links. Original note: every contract above dies with
   it. Capture evidence (tx hashes, explorer links, recordings) before then.
 
 ### ⚠️ Deploy checklist — seed the vault first
@@ -177,3 +177,64 @@ _Not deployed yet._
 > de `deposit_from` contra beneficiary==vault y al doble evento deposit/dep_from.
 > Su evidencia ya esta capturada; NO se re-deploya por esto. Todo par nuevo sale
 > con ambos fixes.
+
+
+## Stellar Testnet — SCF #45 Tranche 2 pairs (hardened contracts, 2026-11-27)
+
+Same wasm, two instances (see `deploy-testnet-t2.sh`). D2.3 role model: `admin`
+(2-of-3 multisig account), `underwriter` (backend signer), `operator` (keeper),
+`pauser` (on-call). Upgrades and strategy changes are timelocked (`upgrade_delay`
+600 s on testnet; 48 h planned for mainnet). Enforced seed of 1 USDC whose
+shares are locked in the vault itself; decimals offset 3 (1 asset unit = 1 000
+share units at par).
+
+### T2-A — Circle testnet USDC (app / D2.1 / D2.3)
+
+| Piece | Value |
+|---|---|
+| Vault | `CA23BR7WLIPAA2SGYXTGCFSWJEIIFM2YI2QWN2ES6EJQ5VGROM5W4BZ3` |
+| Loan Manager | `CCJTYVKKRD5MQI7BLHF4BYAYFXZS5S5J3SZ33ZXTJC4SA55V27NUBGX2` |
+| Settlement asset | Circle testnet USDC SAC `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` (7 dp) |
+| Admin (multisig account) | `GCOFNXHCQGA7EQL5PEPAGMZI53GQP7GA2VAHPDJIE3AVZ3FYX4ADF5UI` — master weight 1 + signers `GATMGUDZ…QOWA`, `GC7XAO52…MED7` weight 1; thresholds low/med/high = 2 |
+| Underwriter / Operator | `GA6DMHI54NH3IEA7CLO43SVQMAFEG7BASELZL3NOLVOJ4OML2MKJYAGR` (testnet identity `instaward-op`) |
+| Pauser | `GAUNCZDC2WS45ERG4TZIZTAFVKBCQ3EBXJSUHGRNYFWPTSL6TVXN7GOS` |
+| Fee recipient | `GABED6S3K5L2U5F2FTSLWYYCUGKUMQGPW3JX7WLU4KB5B4K3TC3PJ3T4` (has the USDC trustline) |
+| Seed | 1 USDC paid by `GAXU6PIN…7I3M` → 10 000 000 000 share units held by the vault address |
+| Wiring tx | `set_vault` `2fc83d8c0dc7e699447c257daf0414e0718f116a7e0de8ee1ae3622522a1eb3e` |
+| Strategy | none (`strategy = null`, buffer disabled) — this instance keeps everything idle |
+| Wasm (current) | vault `3ca45c07f266cbb24d90425b8e147fe4ff746466161cb9aef5caa80a038e9a5b`, loan manager `8c44b921bf045952923ea3d17fec139d478dd12f3733555ea6a0634c6676effe` (post-review, applied by timelocked upgrade on 2026-11-27: txs `1bfa9f4e…` / `026562ee…`; first deploy ran `9d91a27f…`) |
+| Result file | `contratos/result-t2a-testnet.json` |
+
+Verified right after deploy: `usdc()` = the SAC above, `decimals_offset` 3,
+`total_supply` 10 000 000 000 = `balance_of(vault)`, `total_assets` 10 000 000,
+`is_paused` false, `upgrade_delay` 600.
+
+### T2-B — BlendUSDC + Lendoor's own DeFindex vault (D2.2)
+
+_Pending: needs BlendUSDC (Blend testnet faucet) for the seed and for the demo
+LP. Create the DeFindex vault with `scripts/defindex-create-vault.sh`, then
+`DEFINDEX_VAULT=<id> ./deploy-testnet-t2.sh t2b`._
+
+### Interface changes vs Tranche 1 (for the app, the backend and the indexer)
+
+Removed: `set_owner`, `upgrade` (and the `ownerset` event). Changed signers: `manual_write_off` /
+`set_fee_recipient` = admin (2-of-3); every loan-manager risk / offer / premium / default write =
+underwriter; `pause`, `cancel_upgrade`, `cancel_strategy`, `emergency_unwind` take an explicit
+`caller`. New: `claim_fees` / `fees_accrued` (protocol fees accrue in the vault and are pulled;
+repayments no longer transfer to the fee recipient), `convert_to_assets` / `convert_to_shares` /
+`max_withdraw` / `decimals_offset`, the governance surface (`get_role`, `set_role`, `transfer_admin`,
+`accept_admin`, `cancel_admin_transfer`, `pause`, `unpause`, `propose_upgrade`, `execute_upgrade`,
+`cancel_upgrade`) and the strategy surface (`strategy`, `strategy_position`, `buffer`,
+`pending_strategy`, `set_buffer`, `propose_strategy`, `execute_strategy`, `cancel_strategy`,
+`rebalance`, `sync_strategy`, `emergency_unwind`). Event shapes of Tranche 1 are unchanged; new
+events are listed in `docs/security/monitoring-plan.md`.
+
+**Go/no-go before mainnet (review A2):** measure, on T2-B, the resource usage of one LP withdraw
+that crosses idle cash (soft sync + pull + Blend withdraw in one tx) and record it here.
+
+### Operating the admin (2-of-3)
+
+Every admin-gated call needs two signatures: `scripts/admin-multisig-setup.sh
+invoke <contract> <fn> [args]` (builds, signs with the master key and signer 2,
+sends). `deploy-testnet-t2.sh` does this automatically once the thresholds are
+raised. The pauser and the underwriter are single keys.

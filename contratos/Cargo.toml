@@ -11,7 +11,7 @@
 # stellar-contracts (vault math, ownable, upgradeable).
 [workspace]
 resolver = "2"
-members = ["loan-manager", "vault"]
+members = ["common", "loan-manager", "vault"]
 
 [workspace.dependencies]
 soroban-sdk = "26"

@@ -15,7 +15,7 @@ import {
  * Wiring del mercado de Lend (/lend) contra el vault de Soroban — el equivalente
  * Stellar de useApproveAndDepositUSDC + useWithdrawUSDC + useVaultStats +
  * useVaultShares + useUsdcBalance. Lee TVL / share price / shares del user y el
- * balance de la wallet; depositar/retirar firman con Freighter.
+ * balance de la wallet; depositar/retirar firman con el firmante Stellar activo (Freighter o la wallet embebida de Privy, D1.2/D2.1).
  */
 export function useStellarLend() {
   const { mode, primaryWallet } = useWallet();
@@ -27,6 +27,7 @@ export function useStellarLend() {
   const [positionAssets, setPositionAssets] = React.useState<bigint | null>(null);
   const [totalAssets, setTotalAssets] = React.useState<bigint | null>(null);
   const [totalSupply, setTotalSupply] = React.useState<bigint | null>(null);
+  const [decimalsOffset, setDecimalsOffset] = React.useState<number>(0);
   const [loading, setLoading] = React.useState(true);
   const [submittingDeposit, setSubmittingDeposit] = React.useState(false);
   const [submittingWithdraw, setSubmittingWithdraw] = React.useState(false);
@@ -44,6 +45,7 @@ export function useStellarLend() {
       setPositionAssets(vault.assets);
       setTotalAssets(vault.totalAssets);
       setTotalSupply(vault.totalSupply);
+      setDecimalsOffset(vault.decimalsOffset);
     } catch (e) {
       console.error('[useStellarLend] read', e);
     } finally {
@@ -55,11 +57,18 @@ export function useStellarLend() {
     if (enabled) void refresh();
   }, [enabled, refresh]);
 
-  // Share price = total_assets / total_supply (misma escala → ratio adimensional).
+  // D2.3: las shares llevan `decimals_offset` decimales mas que el asset (3 en
+  // los pares del Tranche 2: 1 unidad de USDC = 1_000 unidades de share a la
+  // par). Para la UI se expresan en "share-USDC" (shares / 10^offset) y el
+  // precio por esa unidad = total_assets / total_supply * 10^offset, asi
+  // `userShares * sharePrice` sigue dando el valor en USDC y el label muestra
+  // ~1.00xx como siempre.
+  const shareScale = 10n ** BigInt(decimalsOffset);
   const sharePrice =
     totalSupply != null && totalSupply > 0n && totalAssets != null
-      ? Number(totalAssets) / Number(totalSupply)
+      ? (Number(totalAssets) / Number(totalSupply)) * Number(shareScale)
       : 1;
+  const sharesInAssetScale = sharesRaw != null ? sharesRaw / shareScale : null;
 
   const submitDeposit = React.useCallback(
     async (amountStr: string): Promise<boolean> => {
@@ -116,9 +125,12 @@ export function useStellarLend() {
     loading,
     /** Balance del token en la wallet (label "balance" del depósito). */
     walletUsdcDisplay: walletRaw != null ? formatUSDCAmount2dp(walletRaw) : '—',
-    /** Posición del user en el vault. */
-    userSharesRaw: sharesRaw,
-    userSharesDisplay: sharesRaw != null ? formatUSDCAmount2dp(sharesRaw) : '—',
+    /** Posición del user en el vault, en escala del asset (shares / 10^offset). */
+    userSharesRaw: sharesInAssetScale,
+    userSharesDisplay: sharesInAssetScale != null ? formatUSDCAmount2dp(sharesInAssetScale) : '—',
+    /** Shares crudas tal como las guarda el contrato (para debug / repay de shares exactas). */
+    userSharesOnChain: sharesRaw,
+    decimalsOffset,
     /** USDC retirable (posición valuada) — para el label "available" del retiro. */
     availableUi:
       positionAssets != null ? Number(positionAssets) / 10 ** DECIMALS : 0,

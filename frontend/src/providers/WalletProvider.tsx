@@ -23,6 +23,7 @@ import {
 } from '@/lib/stellar-wallet'
 import { normalizeWalletAddress } from '@/lib/wallet-address'
 import { usePrivyStellar } from '@/providers/PrivyStellarProvider'
+import { getActiveStellarSignerKind } from '@/lib/stellar-signer-registry'
 import { dedupeToast as toast } from '@/lib/dedupeToast'
 
 export type { WalletMode }
@@ -173,8 +174,14 @@ export function WalletProvider({ children }: PropsWithChildren) {
 
   // - Lemon mini-app: loggedIn siempre true
   // - Web / Farcaster: loggedIn solo cuando wagmi está "connected"
-  // Freighter manda si esta; si no, la wallet embebida de Privy (D1.2)
-  const stellarAddress = stellarStatus?.address ?? privyAddress ?? null
+  // D2.1: la cuenta primaria tiene que ser la del firmante ACTIVO. Si hay una
+  // sesion de Privy registrada en el signer registry, su wallet embebida manda
+  // aunque Freighter tambien este instalada (antes Freighter ganaba y la app
+  // firmaba con Privy para una direccion que no era la suya).
+  const privyIsActive = !!privyAddress && getActiveStellarSignerKind() === 'privy'
+  const stellarAddress = privyIsActive
+    ? privyAddress
+    : (stellarStatus?.address ?? privyAddress ?? null)
   const isLoggedIn =
     isLemonMiniApp || (stellarMode ? !!stellarAddress : status === 'connected')
 

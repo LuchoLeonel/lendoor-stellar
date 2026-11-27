@@ -9,8 +9,9 @@
 //!            mark_default, set_premium_config, accrue_late
 //!   auth   : owner-gated admin, vault-gated loan lifecycle
 use crate::{Error, LoanManager, LoanManagerClient};
+use lendoor_common::gov::{GovError, Role, MIN_UPGRADE_DELAY};
 use soroban_sdk::{
-    testutils::{Address as _, Ledger},
+    testutils::{Address as _, Events, Ledger},
     Address, Env,
 };
 
@@ -22,7 +23,10 @@ fn setup() -> (Env, Address, Address, LoanManagerClient<'static>) {
     e.mock_all_auths();
     let owner = Address::generate(&e);
     let vault = Address::generate(&e);
-    let id = e.register(LoanManager, (owner.clone(), vault.clone()));
+    // D2.3: `owner` holds BOTH admin and underwriter so the historical
+    // owner-gated tests keep their meaning; the pauser is a separate key.
+    let pauser = Address::generate(&e);
+    let id = e.register(LoanManager, (owner.clone(), owner.clone(), pauser, vault.clone(), MIN_UPGRADE_DELAY));
     let client = LoanManagerClient::new(&e, &id);
     (e, owner, vault, client)
 }
@@ -32,9 +36,37 @@ fn setup_no_mock() -> (Env, Address, Address, LoanManagerClient<'static>) {
     let e = Env::default();
     let owner = Address::generate(&e);
     let vault = Address::generate(&e);
-    let id = e.register(LoanManager, (owner.clone(), vault.clone()));
+    let pauser = Address::generate(&e);
+    let id = e.register(LoanManager, (owner.clone(), owner.clone(), pauser, vault.clone(), MIN_UPGRADE_DELAY));
     let client = LoanManagerClient::new(&e, &id);
     (e, owner, vault, client)
+}
+
+/// Distinct admin / underwriter / pauser, mocked auths (for role-split tests).
+struct Roles {
+    e: Env,
+    admin: Address,
+    underwriter: Address,
+    pauser: Address,
+    vault: Address,
+    c: LoanManagerClient<'static>,
+}
+fn setup_roles() -> Roles {
+    let e = Env::default();
+    e.mock_all_auths();
+    let admin = Address::generate(&e);
+    let underwriter = Address::generate(&e);
+    let pauser = Address::generate(&e);
+    let vault = Address::generate(&e);
+    let id = e.register(LoanManager, (admin.clone(), underwriter.clone(), pauser.clone(), vault.clone(), MIN_UPGRADE_DELAY));
+    let c = LoanManagerClient::new(&e, &id);
+    Roles { e, admin, underwriter, pauser, vault, c }
+}
+fn failed_with<T, E>(
+    r: Result<Result<T, E>, Result<soroban_sdk::Error, soroban_sdk::InvokeError>>,
+    g: GovError,
+) -> bool {
+    matches!(r, Err(Ok(e)) if e == g.into())
 }
 
 fn advance(e: &Env, secs: u64) {
@@ -602,16 +634,15 @@ fn late_fees_compound_across_accruals() {
 
 #[test]
 fn set_owner_rotates_admin_control() {
-    // Owner rotation must persist the NEW owner. Under mocked auths the call
-    // succeeds; we then assert an owner-gated write succeeds (the new owner's
-    // auth is mocked too) and that the stored owner actually changed by driving
-    // a follow-up admin write that reads read_owner internally.
-    let (e, _owner, _vault, c) = setup();
+    // D2.3: admin rotation is TWO-STEP (transfer + accept). The new admin then
+    // rotates the underwriter, and underwriter-gated writes keep working.
+    let (e, owner, _vault, c) = setup();
     let new_owner = Address::generate(&e);
-    c.set_owner(&new_owner);
-    // After rotation, owner-gated writes still work (require_auth resolves to the
-    // new owner, which is mock-authorized). A regression that wrote the wrong key
-    // would surface as NotInitialized / wrong-owner panics on these calls.
+    c.transfer_admin(&new_owner);
+    assert_eq!(c.get_role(&Role::Admin), Some(owner.clone()), "nothing moves until accept");
+    assert_eq!(c.accept_admin(), new_owner.clone());
+    assert_eq!(c.get_role(&Role::Admin), Some(new_owner.clone()));
+    c.set_role(&Role::Underwriter, &new_owner);
     let user = Address::generate(&e);
     c.set_user_risk(&user, &600, &true, &0, &(25 * USDC));
     assert_eq!(c.get_user_risk(&user).limit, 25 * USDC);
@@ -619,10 +650,13 @@ fn set_owner_rotates_admin_control() {
 
 #[test]
 fn set_owner_requires_owner_auth() {
-    // The OLD owner must sign to rotate ownership; with no mocked auth it bites.
+    // The admin must sign to start a rotation; with no mocked auth it bites,
+    // and `accept_admin` with nothing pending is a typed governance error.
     let (e, _owner, _vault, c) = setup_no_mock();
     let attacker = Address::generate(&e);
-    assert!(c.try_set_owner(&attacker).is_err());
+    assert!(c.try_transfer_admin(&attacker).is_err());
+    assert!(failed_with(c.try_accept_admin(), GovError::NoPendingAdmin));
+    assert!(c.try_set_role(&Role::Underwriter, &attacker).is_err());
 }
 
 #[test]
@@ -671,11 +705,13 @@ fn set_min_hold_for_tenor_requires_owner_auth() {
 
 #[test]
 fn upgrade_requires_owner_auth() {
-    // upgrade replaces the contract Wasm; the require_auth gate must fire before
-    // update_current_contract_wasm. With no mocked auth this returns Err.
+    // D2.3: the upgrade is a timelocked pair; both halves are admin-gated and
+    // fire before update_current_contract_wasm. With no mocked auth: Err.
     let (e, _owner, _vault, c) = setup_no_mock();
     let hash = soroban_sdk::BytesN::from_array(&e, &[0u8; 32]);
-    assert!(c.try_upgrade(&hash).is_err());
+    assert!(c.try_propose_upgrade(&hash).is_err());
+    assert!(c.try_execute_upgrade(&hash).is_err());
+    assert!(c.pending_upgrade().is_none());
 }
 
 // ─────────────────────────── boundary: credit_limit expiry ─────────────────
@@ -1207,28 +1243,49 @@ fn attacker_signature_cannot_satisfy_vault_gate_on_open_loan() {
 // ── Owner rotation REVOKES the old owner ─────────────────────────────────────
 #[test]
 fn old_owner_loses_control_after_set_owner_and_new_owner_gains_it() {
+    // D2.3 two-step: old admin proposes, new admin accepts; from then on the
+    // old admin's signature no longer satisfies admin gates, and once the new
+    // admin rotates the underwriter, the old key loses risk writes as well.
     let (e, owner, _vault, c) = setup_no_mock();
     let new_owner = Address::generate(&e);
     let user = Address::generate(&e);
 
-    // Old owner signs the rotation.
     e.mock_auths(&[MockAuth {
         address: &owner,
-        invoke: &MockAuthInvoke { contract: &c.address, fn_name: "set_owner",
+        invoke: &MockAuthInvoke { contract: &c.address, fn_name: "transfer_admin",
             args: (new_owner.clone(),).into_val(&e), sub_invokes: &[] },
     }]);
-    c.set_owner(&new_owner);
+    c.transfer_admin(&new_owner);
+    e.mock_auths(&[MockAuth {
+        address: &new_owner,
+        invoke: &MockAuthInvoke { contract: &c.address, fn_name: "accept_admin",
+            args: ().into_val(&e), sub_invokes: &[] },
+    }]);
+    assert_eq!(c.accept_admin(), new_owner.clone());
 
-    // Old owner now signs an owner-gated write -> must be REJECTED (revoked).
+    // Old admin signs an admin-gated write -> REJECTED (revoked).
+    e.mock_auths(&[MockAuth {
+        address: &owner,
+        invoke: &MockAuthInvoke { contract: &c.address, fn_name: "set_role",
+            args: (Role::Underwriter, new_owner.clone()).into_val(&e), sub_invokes: &[] },
+    }]);
+    assert!(c.try_set_role(&Role::Underwriter, &new_owner).is_err(),
+        "old admin must lose control after the accept");
+    // New admin rotates the underwriter to itself.
+    e.mock_auths(&[MockAuth {
+        address: &new_owner,
+        invoke: &MockAuthInvoke { contract: &c.address, fn_name: "set_role",
+            args: (Role::Underwriter, new_owner.clone()).into_val(&e), sub_invokes: &[] },
+    }]);
+    c.set_role(&Role::Underwriter, &new_owner);
+
+    // Old key signs a risk write -> rejected; new key -> succeeds.
     e.mock_auths(&[MockAuth {
         address: &owner,
         invoke: &MockAuthInvoke { contract: &c.address, fn_name: "set_user_risk",
             args: (user.clone(), 500u32, true, 0u64, 25i128 * USDC).into_val(&e), sub_invokes: &[] },
     }]);
-    assert!(c.try_set_user_risk(&user, &500, &true, &0, &(25 * USDC)).is_err(),
-        "old owner must lose control after rotation");
-
-    // New owner signs the same write -> succeeds.
+    assert!(c.try_set_user_risk(&user, &500, &true, &0, &(25 * USDC)).is_err());
     e.mock_auths(&[MockAuth {
         address: &new_owner,
         invoke: &MockAuthInvoke { contract: &c.address, fn_name: "set_user_risk",
@@ -1349,4 +1406,178 @@ fn set_loan_offer_overwrites_prior_offer() {
     let l = c.get_loan(&user);
     assert_eq!(l.tenor_days, 14);
     assert_eq!(l.fee_bps, 300);
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  D2.3 — GOVERNANCE on the loan-manager: role split, pause scope, timelock, math
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn constructor_assigns_three_roles_and_delay() {
+    let r = setup_roles();
+    assert_eq!(r.c.get_role(&Role::Admin), Some(r.admin.clone()));
+    assert_eq!(r.c.get_role(&Role::Underwriter), Some(r.underwriter.clone()));
+    assert_eq!(r.c.get_role(&Role::Pauser), Some(r.pauser.clone()));
+    assert_eq!(r.c.get_role(&Role::Operator), None); // not a loan-manager role
+    assert_eq!(r.c.upgrade_delay(), MIN_UPGRADE_DELAY);
+    assert!(!r.c.is_paused());
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #108)")]
+fn constructor_rejects_short_upgrade_delay() {
+    let e = Env::default();
+    let a = Address::generate(&e);
+    e.register(LoanManager, (a.clone(), a.clone(), a.clone(), a, MIN_UPGRADE_DELAY - 1));
+}
+
+#[test]
+fn underwriter_cannot_do_admin_things_and_admin_cannot_write_risk() {
+    // Distinct keys, no mocked auth: each gate names exactly one role holder.
+    let e = Env::default();
+    let admin = Address::generate(&e);
+    let underwriter = Address::generate(&e);
+    let pauser = Address::generate(&e);
+    let vault = Address::generate(&e);
+    let id = e.register(LoanManager, (admin.clone(), underwriter.clone(), pauser.clone(), vault, MIN_UPGRADE_DELAY));
+    let c = LoanManagerClient::new(&e, &id);
+    let user = Address::generate(&e);
+    let hash = soroban_sdk::BytesN::from_array(&e, &[2u8; 32]);
+    let other = Address::generate(&e);
+
+    // underwriter signs admin-gated calls -> rejected
+    assert!(c.mock_auths(&[MockAuth { address: &underwriter, invoke: &MockAuthInvoke { contract: &c.address, fn_name: "set_vault", args: (other.clone(),).into_val(&e), sub_invokes: &[] } }])
+        .try_set_vault(&other).is_err());
+    assert!(c.mock_auths(&[MockAuth { address: &underwriter, invoke: &MockAuthInvoke { contract: &c.address, fn_name: "propose_upgrade", args: (hash.clone(),).into_val(&e), sub_invokes: &[] } }])
+        .try_propose_upgrade(&hash).is_err());
+    assert!(c.mock_auths(&[MockAuth { address: &underwriter, invoke: &MockAuthInvoke { contract: &c.address, fn_name: "set_role", args: (Role::Pauser, other.clone()).into_val(&e), sub_invokes: &[] } }])
+        .try_set_role(&Role::Pauser, &other).is_err());
+    // admin signs an underwriter-gated call -> rejected (least privilege cuts both ways)
+    assert!(c.mock_auths(&[MockAuth { address: &admin, invoke: &MockAuthInvoke { contract: &c.address, fn_name: "set_user_risk", args: (user.clone(), 600u32, true, 0u64, 25i128 * USDC).into_val(&e), sub_invokes: &[] } }])
+        .try_set_user_risk(&user, &600, &true, &0, &(25 * USDC)).is_err());
+    // the right keys pass
+    c.mock_auths(&[MockAuth { address: &underwriter, invoke: &MockAuthInvoke { contract: &c.address, fn_name: "set_user_risk", args: (user.clone(), 600u32, true, 0u64, 25i128 * USDC).into_val(&e), sub_invokes: &[] } }])
+        .set_user_risk(&user, &600, &true, &0, &(25 * USDC));
+    assert_eq!(c.get_user_risk(&user).limit, 25 * USDC);
+    c.mock_auths(&[MockAuth { address: &admin, invoke: &MockAuthInvoke { contract: &c.address, fn_name: "set_default_grace_period", args: (2u64 * DAY,).into_val(&e), sub_invokes: &[] } }])
+        .set_default_grace_period(&(2 * DAY));
+}
+
+#[test]
+fn pause_blocks_open_loan_and_new_offers_but_not_repayment_or_accrual() {
+    let r = setup_roles();
+    let (e, c) = (&r.e, &r.c);
+    let user = Address::generate(e);
+    let now = e.ledger().timestamp();
+    c.set_user_risk(&user, &600, &true, &0, &(25 * USDC));
+    c.set_loan_offer(&user, &7, &500, &(now + DAY), &(25 * USDC));
+    c.open_loan(&user, &(10 * USDC), &7, &500);
+
+    c.pause(&r.pauser);
+    assert!(c.is_paused());
+    // new exposure is blocked
+    let user2 = Address::generate(e);
+    c.set_user_risk(&user2, &600, &true, &0, &(25 * USDC)); // risk writes stay open (no exposure by themselves)
+    assert!(failed_with(c.try_set_loan_offer(&user2, &7, &500, &(now + DAY), &(25 * USDC)), GovError::Paused));
+    assert!(failed_with(c.try_open_loan(&user2, &(1 * USDC), &7, &500), GovError::Paused));
+    // the live loan keeps accruing and can be repaid while paused
+    advance(e, 7 * DAY);
+    c.accrue_late(&user);
+    let owed = c.preview_owed(&user);
+    assert_eq!(owed, 10 * USDC * 10_500 / 10_000);
+    let (pp, ip, rem) = c.apply_payment(&user, &owed);
+    assert_eq!((pp, ip, rem), (10 * USDC, owed - 10 * USDC, 0));
+    assert!(!c.get_loan(&user).active);
+    // only the admin resumes
+    assert!(failed_with(c.try_pause(&Address::generate(e)), GovError::Unauthorized));
+    c.unpause();
+    c.set_loan_offer(&user2, &7, &500, &(e.ledger().timestamp() + DAY), &(25 * USDC));
+    assert_eq!(c.credit_limit(&user2), 25 * USDC);
+}
+
+#[test]
+fn pauser_cannot_unpause_loan_manager() {
+    let (e, _owner, _vault, c) = setup_no_mock();
+    let pauser = c.get_role(&Role::Pauser).unwrap();
+    c.mock_auths(&[MockAuth { address: &pauser, invoke: &MockAuthInvoke { contract: &c.address, fn_name: "pause", args: (pauser.clone(),).into_val(&e), sub_invokes: &[] } }])
+        .pause(&pauser);
+    assert!(c.is_paused());
+    assert!(c.mock_auths(&[MockAuth { address: &pauser, invoke: &MockAuthInvoke { contract: &c.address, fn_name: "unpause", args: ().into_val(&e), sub_invokes: &[] } }])
+        .try_unpause().is_err());
+    assert!(c.is_paused());
+}
+
+#[test]
+fn timelock_on_loan_manager_upgrade() {
+    let r = setup_roles();
+    let (e, c) = (&r.e, &r.c);
+    let h = soroban_sdk::BytesN::from_array(e, &[5u8; 32]);
+    let eta = c.propose_upgrade(&h);
+    assert_eq!(eta, e.ledger().timestamp() + MIN_UPGRADE_DELAY);
+    assert!(failed_with(c.try_execute_upgrade(&h), GovError::TimelockNotReady));
+    c.cancel_upgrade(&r.pauser); // veto by the on-call key
+    assert!(c.pending_upgrade().is_none());
+    c.propose_upgrade(&h);
+    advance(e, MIN_UPGRADE_DELAY);
+    let res = c.try_execute_upgrade(&h);
+    assert!(res.is_err()); // unknown wasm: fails at the host, past every gate
+    assert!(!failed_with(c.try_execute_upgrade(&h), GovError::TimelockNotReady));
+}
+
+#[test]
+fn open_loan_math_overflow_is_typed() {
+    // principal + floor overflows i128 -> MathOverflow (19), not an opaque trap.
+    let (e, _owner, _vault, c) = setup();
+    let user = Address::generate(&e);
+    let now = e.ledger().timestamp();
+    c.set_user_risk(&user, &600, &true, &0, &i128::MAX);
+    c.set_loan_offer(&user, &7, &500, &(now + DAY), &i128::MAX);
+    assert_eq!(
+        c.try_open_loan(&user, &i128::MAX, &7, &500),
+        Err(Ok(Error::MathOverflow.into()))
+    );
+    assert!(!c.get_loan(&user).active);
+}
+
+#[test]
+fn admin_setters_emit_events() {
+    let r = setup_roles();
+    let one = |r: &Roles| r.e.events().all().filter_by_contract(&r.c.address).events().len();
+    r.c.set_default_grace_period(&(2 * DAY));
+    assert_eq!(one(&r), 1); // graceset
+    r.c.set_min_hold_for_tenor(&7, &9);
+    assert_eq!(one(&r), 1); // minhold
+    r.c.set_vault(&r.vault);
+    assert_eq!(one(&r), 1); // vaultset
+    r.c.set_role(&Role::Pauser, &r.admin);
+    assert_eq!(one(&r), 1); // roleset
+}
+
+#[test]
+fn non_admin_cannot_execute_a_matured_upgrade_on_the_loan_manager() {
+    // (review) matured proposals stay admin-only to execute, and expire after the window.
+    let r = setup_roles();
+    let (e, c) = (&r.e, &r.c);
+    let h = soroban_sdk::BytesN::from_array(e, &[8u8; 32]);
+    c.propose_upgrade(&h);
+    advance(e, MIN_UPGRADE_DELAY + 1);
+    for who in [&r.underwriter, &r.pauser] {
+        e.mock_auths(&[MockAuth {
+            address: who,
+            invoke: &MockAuthInvoke { contract: &c.address, fn_name: "execute_upgrade", args: (h.clone(),).into_val(e), sub_invokes: &[] },
+        }]);
+        assert!(c.try_execute_upgrade(&h).is_err());
+    }
+    assert!(c.pending_upgrade().is_some());
+    e.mock_all_auths();
+    advance(e, lendoor_common::gov::PROPOSAL_WINDOW + 1);
+    assert!(failed_with(c.try_execute_upgrade(&h), GovError::ProposalExpired));
+}
+
+#[test]
+fn grace_period_is_bounded() {
+    let r = setup_roles();
+    assert_eq!(r.c.try_set_default_grace_period(&(366 * DAY)), Err(Ok(Error::InvalidParam.into())));
+    r.c.set_default_grace_period(&(30 * DAY));
 }

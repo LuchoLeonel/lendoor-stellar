@@ -267,6 +267,9 @@ export type StellarVaultBalance = {
   assets: bigint;
   totalAssets: bigint;
   totalSupply: bigint;
+  /** OZ virtual-shares decimals offset of the vault (3 on the Tranche 2 pairs:
+   *  1 asset unit = 1_000 share units at par; 0 on the older pairs). */
+  decimalsOffset: number;
 };
 
 /**
@@ -291,14 +294,22 @@ export async function stellarReadVaultBalance(
     client.total_assets(options),
     client.total_supply(options),
   ]);
-  const s = shares.result;
-  const ta = totalAssets.result;
-  const ts = totalSupply.result;
+  // Older pairs (Tranche 1) do not expose decimals_offset: treat as 0.
+  let decimalsOffset = 0;
+  try {
+    decimalsOffset = Number((await client.decimals_offset(options)).result);
+  } catch {
+    decimalsOffset = 0;
+  }
+  const s: bigint = shares.result;
+  const ta: bigint = totalAssets.result;
+  const ts: bigint = totalSupply.result;
+  // Ratio of two share-scaled numbers: independent of the decimals offset.
   const assets = ts > 0n ? (s * ta) / ts : 0n;
-  return { shares: s, assets, totalAssets: ta, totalSupply: ts };
+  return { shares: s, assets, totalAssets: ta, totalSupply: ts, decimalsOffset };
 }
 
-/** Deposit `assets` USDC into the vault from the user's wallet (Freighter-signed). */
+/** Deposit `assets` USDC into the vault from the user's wallet (signed by the active Stellar signer (Freighter or Privy)). */
 export async function stellarDeposit(params: {
   from: string;
   assets: bigint;
@@ -312,7 +323,7 @@ export async function stellarDeposit(params: {
   return vaultTxHash(sent);
 }
 
-/** Withdraw an EXACT `assets` USDC amount from the vault (Freighter-signed). */
+/** Withdraw an EXACT `assets` USDC amount from the vault (signed by the active Stellar signer (Freighter or Privy)). */
 export async function stellarWithdraw(params: {
   from: string;
   assets: bigint;

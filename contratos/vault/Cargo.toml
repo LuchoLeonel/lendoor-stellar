@@ -14,6 +14,7 @@ testutils = ["soroban-sdk/testutils"]
 
 [dependencies]
 soroban-sdk = { workspace = true }
+lendoor-common = { path = "../common" }
 
 # Only a dev-dependency: tests register the real loan-manager contract. The vault
 # itself calls it through a local interface client (see lib.rs) so their exported

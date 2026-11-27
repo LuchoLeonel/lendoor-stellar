@@ -79,5 +79,7 @@ Código (contratos Soroban en Rust, app, backend):
 `https://github.com/LuchoLeonel/lendoor-stellar` · evidencia de la ceremonia
 con pago parcial y crédito revolvente en `docs/deliverables/instaward/README.md`.
 
+> ⚠️ **Corrección (2026-11-26):** la página oficial de redes de Stellar dice que no hay más resets programados para 2026; la fecha de abajo quedó desactualizada. Los resets se anuncian con ≥ 2 semanas de aviso, por eso la evidencia está también en capturas.
+>
 > Testnet de Stellar se resetea el **2026-12-16**: estas direcciones y txs
 > mueren con el reset; esta evidencia queda como registro.

@@ -30,5 +30,7 @@ la corrida grabada con `GCKBTP6U…` se fondeó con USDC de testnet); y D1.3 es 
 que hace no-sybileable la métrica final del award (préstamos a borrowers
 KYC-verificados).
 
+⚠️ **Corrección (2026-11-26):** la página oficial de redes de Stellar dice que no hay más resets programados para 2026; la fecha de abajo quedó desactualizada. Los resets se anuncian con ≥ 2 semanas de aviso, por eso la evidencia está también en capturas.
+
 🔴 Testnet de Stellar se resetea el **2026-12-16**: los contratos y txs de
 Stellar mueren con el reset (los links de Basescan sobreviven).
