@@ -202,6 +202,7 @@ share units at par).
 | Seed | 1 USDC paid by `GAXU6PIN…7I3M` → 10 000 000 000 share units held by the vault address |
 | Wiring tx | `set_vault` `2fc83d8c0dc7e699447c257daf0414e0718f116a7e0de8ee1ae3622522a1eb3e` |
 | Strategy | none (`strategy = null`, buffer disabled) — this instance keeps everything idle |
+| Wasm (current) | vault `3ca45c07f266cbb24d90425b8e147fe4ff746466161cb9aef5caa80a038e9a5b`, loan manager `8c44b921bf045952923ea3d17fec139d478dd12f3733555ea6a0634c6676effe` (post-review, applied by timelocked upgrade on 2026-11-27: txs `1bfa9f4e…` / `026562ee…`; first deploy ran `9d91a27f…`) |
 | Result file | `contratos/result-t2a-testnet.json` |
 
 Verified right after deploy: `usdc()` = the SAC above, `decimals_offset` 3,
